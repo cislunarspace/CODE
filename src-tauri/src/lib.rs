@@ -154,7 +154,7 @@ pub fn run() {
             assistant_cmd::assistant_clear_history,
             assistant_cmd::assistant_new_session,
             assistant_cmd::assistant_switch_session,
-            assistant_cmd::assistant_set_thinking_level,
+            assistant_cmd::assistant_set_config_option,
             assistant_cmd::assistant_open_omp_setup
         ])
         .run(tauri::generate_context!())

@@ -19,7 +19,14 @@ import json
 import sys
 import threading
 
-state = {"next_session": 0, "thinking": "medium", "cancel_requested": False, "cwd": ""}
+state = {
+    "next_session": 0,
+    "thinking": "medium",
+    "model": "zhipu/glm-4.7",
+    "mode": "default",
+    "cancel_requested": False,
+    "cwd": "",
+}
 write_lock = threading.Lock()
 
 
@@ -43,8 +50,38 @@ def reply_err(mid, code, message):
 
 def config_options():
     return [
-        {"id": "mode", "currentValue": "default"},
-        {"id": "thinking", "currentValue": state["thinking"]},
+        {
+            "id": "mode",
+            "name": "Mode",
+            "category": "mode",
+            "type": "select",
+            "currentValue": state["mode"],
+            "options": [
+                {"value": "default", "name": "Default"},
+                {"value": "plan", "name": "Plan"},
+            ],
+        },
+        {
+            "id": "model",
+            "name": "Model",
+            "category": "model",
+            "type": "select",
+            "currentValue": state["model"],
+            "options": [
+                {"value": "zhipu/glm-4.7", "name": "GLM 4.7"},
+                {"value": "deepseek/deepseek-v4-flash", "name": "DeepSeek V4 Flash"},
+            ],
+        },
+        {
+            "id": "thinking",
+            "name": "Thinking",
+            "category": "thinking",
+            "type": "select",
+            "currentValue": state["thinking"],
+            "options": [
+                {"value": v, "name": v} for v in ["off", "auto", "minimal", "low", "medium", "high"]
+            ],
+        },
     ]
 
 
@@ -172,7 +209,10 @@ def handle_prompt(mid, params):
                 },
             },
         )
-        decision = request_elicitation(mid, tool)
+        decision = request_elicitation(
+            mid,
+            f'Allow tool: write\nPath: xd://mcp__tod_{tool}\nContent: {{"filename": "demo"}}',
+        )
         if decision == "Approve":
             status = "completed"
             content = [
@@ -197,6 +237,50 @@ def handle_prompt(mid, params):
             update["content"] = content
         notify("session/update", {"sessionId": session_id, "update": update})
 
+    if "EVALTOOL:" in text or "EVALREAD:" in text:
+        # eval 包装形态（omp ≥18.1.12 实测）：审批是通用 eval 表单，真实
+        # 工具在 Code 里（tool.<name>(args)）；tool_call 无 path
+        marker = "EVALTOOL:" if "EVALTOOL:" in text else "EVALREAD:"
+        tool = text.split(marker, 1)[1].strip().split(maxsplit=1)[0]
+        code = f'await tool.{tool}({{"filename": "demo"}})'
+        notify(
+            "session/update",
+            {
+                "sessionId": session_id,
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": f"call-{mid}",
+                    "kind": "execute",
+                    "status": "pending",
+                    "rawInput": {"language": "js", "code": code},
+                },
+            },
+        )
+        decision = request_elicitation(mid, f"Allow tool: eval\nLanguage: js\nCode:\n{code}")
+        if decision == "Approve":
+            content = [
+                {
+                    "type": "content",
+                    "content": {
+                        "type": "text",
+                        "text": 'display[1]:\n{"status":"ok","data":{"record_id":"rec-eval"}}',
+                    },
+                }
+            ]
+            status = "completed"
+        else:
+            content = None
+            status = "failed"
+        update = {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": f"call-{mid}",
+            "status": status,
+            "rawOutput": {"content": [{"type": "text", "text": "用户已拒绝"}]},
+        }
+        if content:
+            update["content"] = content
+        notify("session/update", {"sessionId": session_id, "update": update})
+
     notify(
         "session/update",
         {
@@ -210,7 +294,7 @@ def handle_prompt(mid, params):
     reply(mid, {"stopReason": "end_turn", "usage": {"totalTokens": 100}})
 
 
-def request_elicitation(prompt_id, tool):
+def request_elicitation(prompt_id, message):
     """同步等一次 elicitation/create 的应答（阻塞读一条客户端消息）。"""
     rid = 1000 + prompt_id if isinstance(prompt_id, int) else 1000
     send(
@@ -221,10 +305,7 @@ def request_elicitation(prompt_id, tool):
             "params": {
                 "mode": "form",
                 "sessionId": "any",
-                "message": (
-                    f"Allow tool: write\nPath: xd://mcp__tod_{tool}\n"
-                    'Content: {"filename": "demo"}'
-                ),
+                "message": message,
                 "requestedSchema": {"type": "object"},
             },
         }
@@ -277,6 +358,18 @@ def main():
                 reply_err(mid, -32000, "会话文件损坏")
                 continue
             replay(params.get("sessionId", "?"))
+            reply(mid, {"configOptions": config_options()})
+        elif method == "session/set_config_option":
+            cid = params.get("configId", "")
+            value = params.get("value", "")
+            opt = next((o for o in config_options() if o["id"] == cid), None)
+            if opt is None:
+                reply_err(mid, -32603, f"Unknown ACP config option: {cid}")
+                continue
+            if not any(x["value"] == value for x in opt["options"]):
+                reply_err(mid, -32603, f"Unknown value for {cid}: {value}")
+                continue
+            state[cid] = value
             reply(mid, {"configOptions": config_options()})
         elif method == "session/list":
             reply(

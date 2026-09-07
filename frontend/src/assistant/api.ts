@@ -6,8 +6,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-/// 思考等级三档（UI 展示；后端映射 omp 原生值 off/medium/high）。
-export type ThinkingLevel = "off" | "standard" | "deep";
+/** omp configOptions 单项（模型/思考/模式等 select；值域原样透传）。 */
+export interface AssistantConfigOption {
+  id: string;
+  name: string;
+  category?: string;
+  type?: string;
+  currentValue?: string | null;
+  options?: { value: string; name: string; description?: string }[];
+}
 
 /** 会话索引行（session/list 过滤本应用 cwd 后的传输形状） */
 export interface SessionMeta {
@@ -25,8 +32,8 @@ export interface AssistantInfo {
   /** 当前会话 id（null = 尚未建立会话，首条消息时懒创建） */
   sessionId: string | null;
   sessions: SessionMeta[];
-  /** 当前生效的思考等级 */
-  thinkingLevel: ThinkingLevel;
+  /** 会话配置面（omp configOptions 原样：模型/思考/模式选项与当前值） */
+  configOptions: AssistantConfigOption[];
   /** 是否有回复进行中或未决审批 */
   running: boolean;
   /** omp 可执行路径（设置分区展示） */
@@ -105,9 +112,12 @@ export async function assistantSwitchSession(sessionId: string): Promise<void> {
   await invoke("assistant_switch_session", { sessionId });
 }
 
-/** 设当前会话的思考等级（三档；后端映射 omp 原生 thinking 值） */
-export async function assistantSetThinkingLevel(level: ThinkingLevel): Promise<void> {
-  await invoke("assistant_set_thinking_level", { level });
+/** 设置一项会话配置（model/thinking/mode…；值域由 omp configOptions 决定） */
+export async function assistantSetConfigOption(
+  configId: string,
+  value: string,
+): Promise<void> {
+  await invoke("assistant_set_config_option", { configId, value });
 }
 
 /** 打开 omp 原生配置流程（终端运行 `omp setup`）；失败带 stderr/原因 */

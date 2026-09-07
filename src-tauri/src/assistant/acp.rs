@@ -19,7 +19,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::sync::{mpsc, oneshot, Notify};
+use tokio::sync::{mpsc, oneshot};
 
 /// 服务端 → 客户端请求的应答通道：回调持有它择机应答，恰好一次。
 #[derive(Clone)]
@@ -77,7 +77,6 @@ enum Outgoing {
 #[derive(Clone)]
 pub struct AcpConn {
     tx: mpsc::UnboundedSender<Outgoing>,
-    closed: Arc<Notify>,
     alive: Arc<AtomicBool>,
 }
 
@@ -91,7 +90,6 @@ impl AcpConn {
         W: AsyncWrite + Unpin + Send + 'static,
     {
         let (tx, rx) = mpsc::unbounded_channel();
-        let closed = Arc::new(Notify::new());
         let alive = Arc::new(AtomicBool::new(true));
         // 回调应答服务端请求也走同一写出通道：给 io_loop 留一份发送端
         let responder_tx = tx.clone();
@@ -101,10 +99,9 @@ impl AcpConn {
             rx,
             responder_tx,
             handlers,
-            Arc::clone(&closed),
             Arc::clone(&alive),
         ));
-        Self { tx, closed, alive }
+        Self { tx, alive }
     }
 
     /// 发请求并等响应（响应乱序到达按 id 路由）。
@@ -139,7 +136,6 @@ async fn io_loop<R, W>(
     mut rx: mpsc::UnboundedReceiver<Outgoing>,
     responder_tx: mpsc::UnboundedSender<Outgoing>,
     handlers: Arc<dyn AcpHandlers>,
-    closed: Arc<Notify>,
     alive: Arc<AtomicBool>,
 ) where
     R: AsyncRead + Unpin,
@@ -208,7 +204,6 @@ async fn io_loop<R, W>(
     for (_, tx) in pending.drain() {
         let _ = tx.send(Err(anyhow!("ACP_CONNECTION_CLOSED")));
     }
-    closed.notify_waiters();
 }
 
 

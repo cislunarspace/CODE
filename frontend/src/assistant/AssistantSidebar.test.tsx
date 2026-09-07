@@ -20,14 +20,20 @@ import {
   assistantCancel,
   type AssistantEventPayload,
 } from "./api";
-
 vi.mock("./api", () => ({
   assistantGetState: vi.fn().mockResolvedValue({
     ompConfigured: true,
     connected: true,
     sessionId: "s1",
     sessions: [{ id: "s1", title: null, updatedAt: null, messageCount: null }],
-    thinkingLevel: "standard",
+    configOptions: [
+      {
+        id: "model",
+        name: "Model",
+        currentValue: "zhipu/glm-4.7",
+        options: [{ value: "zhipu/glm-4.7", name: "GLM 4.7" }],
+      },
+    ],
     running: false,
     ompPath: "/usr/bin/omp",
   }),
@@ -41,7 +47,7 @@ vi.mock("./api", () => ({
   assistantClearHistory: vi.fn().mockResolvedValue(undefined),
   assistantNewSession: vi.fn().mockResolvedValue("s2"),
   assistantSwitchSession: vi.fn().mockResolvedValue(undefined),
-  assistantSetThinkingLevel: vi.fn().mockResolvedValue(undefined),
+  assistantSetConfigOption: vi.fn().mockResolvedValue(undefined),
   assistantOpenOmpSetup: vi.fn().mockResolvedValue(""),
 }));
 
@@ -226,7 +232,7 @@ describe("AssistantSidebar omp 空态", () => {
       connected: false,
       sessionId: null,
       sessions: [],
-      thinkingLevel: "standard",
+      configOptions: [],
       running: false,
       ompPath: null,
       legacyConfig: false,

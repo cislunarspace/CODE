@@ -26,8 +26,8 @@ pub struct AssistantInfo {
     pub session_id: Option<String>,
     /// 会话索引（本应用 cwd 过滤，最近活动倒序由 omp 保证）。
     pub sessions: Vec<Value>,
-    /// 当前生效的思考等级（用户三档）。
-    pub thinking_level: String,
+    /// 会话配置面（omp configOptions 原样：model/thinking/mode 供 UI 渲染）。
+    pub config_options: Vec<Value>,
     /// 是否有回复进行中或未决审批。
     pub running: bool,
     /// omp 可执行路径（设置分区展示；无则 null）。
@@ -46,7 +46,7 @@ pub async fn assistant_get_state(
         connected: state.connected().await,
         session_id: state.current_session(),
         sessions: state.sessions(),
-        thinking_level: state.thinking_level(),
+        config_options: state.config_options(),
         running: state.busy(),
         omp_path: omp::OmpState::configured_command().map(|c| c[0].clone()),
         legacy_config: crate::assistant::host_tools::config_dir()
@@ -112,14 +112,15 @@ pub async fn assistant_switch_session(
         .map_err(|e| e.to_string())
 }
 
-/// 设当前会话的思考等级（三档；适配层映射 omp 原生值 off/medium/high）。
+/// 设置一项会话配置（model/thinking/mode…；值域由 omp configOptions 决定）。
 #[tauri::command]
-pub async fn assistant_set_thinking_level(
+pub async fn assistant_set_config_option(
     state: State<'_, AssistantState>,
-    level: String,
+    config_id: String,
+    value: String,
 ) -> Result<(), String> {
     state
-        .set_thinking_level(&level)
+        .set_config_option(&config_id, &value)
         .await
         .map_err(|e| e.to_string())
 }

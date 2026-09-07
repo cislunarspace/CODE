@@ -9,6 +9,8 @@
 - **AI 会话以 omp 为基座（ADR 0030）**：助手边栏的会话、模型调用、思考过程与 agent loop 改由随应用分发的 omp（ACP 协议）承载——模型服务与 API key 由 omp 原生配置管理，应用不再保存 base URL/model/key（旧 assistant.json/assistant.key 只检测存在并提示迁移）；多会话历史由 omp 会话目录管理（应用侧不再维护会话 JSONL）；中断为真 ACP 取消（cancelled），废除"插入普通消息续跑"假中断；思考三档固定映射 omp 原生值（off/medium/high）。
 - **工具桥接**：omp 经应用二进制的 MCP 桥接模式发现并调用 e2m2e 工具与宿主情景工具（scenario_write/scenario_list 语义不变）；只读白名单（catalog_query/catalog_get/scenario_list）免确认直跑，其余工具一律审批卡片（Approve/Deny）；审批协议不携带改后参数，改参入口随协议事实移除（参数全文展示供审阅）。
 - **助手中文领域指令**：每轮 session/prompt 正文前置固定中文领域指令（角色边界、工具纪律、结果与引用规范，始终简体中文回答）；omp 回放的用户气泡在事件转换层剥离指令与画布选择信封，只显示原始消息。
+- **助手配置条（模型/思考/模式）**：输入区上方新增配置条，模型、思考档、模式（默认/规划）三项的选项与当前值全部来自 omp 会话配置面（configOptions），与原生命令行同源——omp 里新装的 provider/模型自动出现，切换经标准 set_config_option 即时生效（取代自建三档思考映射）；会话切换器下拉行显示标题、消息数与相对时间。
+- **适配 omp 18.1.12 工具暴露漂移**：ACP 会话里 MCP 工具经 eval 的 tool.* 包装时审批表单解析出真实工具名与参数出卡片（eval 是任意代码执行，自动批准仅限整段就是一次调用的只读白名单工具）；eval 终态从 display 文本提取结果信封；领域指令引导模型直调挂载设备路径（xd://mcp__tod_<工具名>）。
 - **界面固定简体中文（ADR 0031）**：删除中英语言切换与英文词典（顶栏切换按钮、tod-lang 持久化一并移除），`<html lang>` 恒为 zh-CN；工具卡片拒绝态随协议事实收敛为失败态（Deny 走 failed 终态并显示拒绝原因）。
 
 ### 工程

@@ -42,7 +42,7 @@ const BUSY_MSG: &str = "有回复进行中或工具确认未决，请等待完�
 
 /// 发给 omp 的固定中文领域指令：角色边界、工具纪律、结果与引用规范
 ///（每轮 prompt 正文前置注入；omp 侧无应用可控的系统提示词接口）。
-const DOMAIN_INSTRUCTION: &str = "你是 Transfer Orbit Design 的轨道设计助手。始终使用简体中文回答，专业名词、工具名、字段名和协议名可保留必要的英文缩写。\n你只能协助本项目的轨道库、轨道计算、轨道预报、转移设计、坐标转换、分区分析和情景管理；超出范围时明确说明，不编造结果、记录、参数或工具返回值。\n处理任务时先理解用户目标，再使用已有工具获取事实；需要查询轨道库或情景时优先查询，不凭记忆猜测记录内容。工具参数必须符合工具 schema，缺少关键参数或存在多个合理解释时先向用户说明需要补充的信息。\n只读查询用于确认事实；会改变轨道库或情景的操作必须通过工具审批后执行。工具返回错误时说明错误原因和可行的下一步，不掩盖错误，不把未完成操作说成已完成。\n涉及计算结果时给出使用的输入、关键假设、单位、适用的数据系和结果摘要；引用轨道库记录、产物或情景时优先使用真实 record_id 或 scenario_file。不要输出冗长的内部思考过程，只给出对用户有用的结论、依据和下一步。";
+const DOMAIN_INSTRUCTION: &str = "你是 Transfer Orbit Design 的轨道设计助手。始终使用简体中文回答，专业名词、工具名、字段名和协议名可保留必要的英文缩写。\n你只能协助本项目的轨道库、轨道计算、轨道预报、转移设计、坐标转换、分区分析和情景管理；超出范围时明确说明，不编造结果、记录、参数或工具返回值。\n本项目工具在 omp 里挂载为 xd://mcp__tod_<工具名> 设备；发起工具调用时直接调用该设备路径或工具名，不要经 eval/代码执行包装（工具不经 tool.* 命名空间）。\n处理任务时先理解用户目标，再使用已有工具获取事实；需要查询轨道库或情景时优先查询，不凭记忆猜测记录内容。工具参数必须符合工具 schema，缺少关键参数或存在多个合理解释时先向用户说明需要补充的信息。\n只读查询用于确认事实；会改变轨道库或情景的操作必须通过工具审批后执行。工具返回错误时说明错误原因和可行的下一步，不掩盖错误，不把未完成操作说成已完成。\n涉及计算结果时给出使用的输入、关键假设、单位、适用的数据系和结果摘要；引用轨道库记录、产物或情景时优先使用真实 record_id 或 scenario_file。不要输出冗长的内部思考过程，只给出对用户有用的结论、依据和下一步。";
 
 /// 组装发给 omp 的 prompt 正文：领域指令 → 用户消息 → 可选画布选择。
 /// 选择 JSON 只进正文不进气泡事件（见 run_prompt）。
@@ -101,10 +101,10 @@ struct Inner {
     running: AtomicBool,
     /// 静默装载（重连后重开会话：转换器照常维护关联，但不外发事件）。
     quiet: AtomicBool,
-    /// 用户三档思考等级（会话建立前缓存，建立/切换时应用）。
-    desired_thinking: parking_lot::Mutex<String>,
-    /// 会话实际生效的 omp thinking 值（configOptions currentValue）。
-    actual_thinking: parking_lot::Mutex<Option<String>>,
+    /// 用户期望的会话配置（config_id → value；会话建立前缓存，建立时应用）。
+    desired_config: parking_lot::Mutex<HashMap<String, String>>,
+    /// 会话当前生效的配置面（omp configOptions 原样：model/thinking/mode…）。
+    config_options: parking_lot::Mutex<Vec<Value>>,
     /// 待确认审批：审批键（服务端请求 id 字符串化）→ 用户决定通道。
     confirmations: parking_lot::Mutex<HashMap<String, oneshot::Sender<bool>>>,
     /// 会话事件日志（UI 渲染缓存）：本进程内每条已外发事件的追加记录。
@@ -130,8 +130,8 @@ impl AssistantState {
             session: parking_lot::Mutex::new(None),
             running: AtomicBool::new(false),
             quiet: AtomicBool::new(false),
-            desired_thinking: parking_lot::Mutex::new("standard".into()),
-            actual_thinking: parking_lot::Mutex::new(None),
+            desired_config: parking_lot::Mutex::new(HashMap::new()),
+            config_options: parking_lot::Mutex::new(Vec::new()),
             confirmations: parking_lot::Mutex::new(HashMap::new()),
             replay_cache: parking_lot::Mutex::new(HashMap::new()),
             replay_capture: parking_lot::Mutex::new(None),
@@ -165,13 +165,9 @@ impl AssistantState {
         !self.inner.confirmations.lock().is_empty()
     }
 
-    /// 当前生效的思考等级（用户三档；会话未建立时为期望值）。
-    pub fn thinking_level(&self) -> String {
-        let actual = self.inner.actual_thinking.lock().clone();
-        match actual.as_deref().and_then(events::omp_to_thinking) {
-            Some(level) => level.to_string(),
-            None => self.inner.desired_thinking.lock().clone(),
-        }
+    /// 当前配置面（omp configOptions 原样；UI 据此渲染模型/思考/模式下拉）。
+    pub fn config_options(&self) -> Vec<Value> {
+        self.inner.config_options.lock().clone()
     }
 
     /// ACP 进程是否存活（不为查询而拉起；首次使用才懒启动）。
@@ -387,7 +383,7 @@ impl AssistantState {
             .to_string();
         capture_config_options(&self.inner, &result);
         self.inner.replay_cache.lock().insert(sid.clone(), Vec::new());
-        self.send_thinking(conn, &sid).await;
+        self.apply_desired_config(conn, &sid).await;
         if emit_reset {
             self.publish_reset();
         }
@@ -464,66 +460,87 @@ impl AssistantState {
         self.new_session().await.map(|_| ())
     }
 
-    /// 设思考等级（用户三档）。会话存在时即时下发 omp 原生配置，否则缓存
-    /// 到会话建立。档位不可用回退 medium 一次并显式报错，不静默重试。
-    pub async fn set_thinking_level(&self, level: &str) -> Result<()> {
-        let mapped = events::thinking_to_omp(level)
-            .ok_or_else(|| anyhow!("未知思考等级：{level}"))?;
-        *self.inner.desired_thinking.lock() = level.to_string();
+    /// 设置一项会话配置（model/thinking/mode…）。值先对照当前配置面校验
+    ///（select 必须在选项内，防止垃圾值进期望缓存）；会话存在时即时下发
+    /// omp 并刷新配置面，不存在时缓存到会话建立。omp 侧错误原样上抛。
+    pub async fn set_config_option(&self, config_id: &str, value: &str) -> Result<()> {
+        let opts = self.inner.config_options.lock().clone();
+        if let Some(opt) = opts.iter().find(|o| o.get("id") == Some(&json!(config_id))) {
+            let valid = opt
+                .get("options")
+                .and_then(Value::as_array)
+                .map(|xs| xs.iter().any(|x| x.get("value") == Some(&json!(value))))
+                .unwrap_or(false);
+            if !valid {
+                anyhow::bail!("配置 {config_id} 不支持取值 {value}");
+            }
+        }
+        self.inner
+            .desired_config
+            .lock()
+            .insert(config_id.to_string(), value.to_string());
         let current = self.inner.session.lock().clone();
         if let Some(sid) = current {
             let conn = self.ensure_conn().await?;
-            self.send_thinking_value(&conn, &sid, mapped, level).await;
+            self.apply_config_option(&conn, &sid, config_id, value)
+                .await?;
         }
         Ok(())
     }
 
-    /// 把用户期望档位下发到会话（create_session 与 set_thinking_level 共用）。
-    async fn send_thinking(&self, conn: &AcpConn, sid: &str) {
-        let level = self.inner.desired_thinking.lock().clone();
-        let Some(mapped) = events::thinking_to_omp(&level) else { return };
-        self.send_thinking_value(conn, sid, mapped, &level).await;
+    /// 把一项配置下发到会话并捕获刷新后的配置面。
+    async fn apply_config_option(
+        &self,
+        conn: &AcpConn,
+        sid: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<()> {
+        let v = conn
+            .request(
+                "session/set_config_option",
+                json!({"sessionId": sid, "configId": config_id, "value": value}),
+            )
+            .await
+            .map_err(|e| anyhow!("设置 {config_id} 失败：{e}"))?;
+        capture_config_options(&self.inner, &v);
+        Ok(())
     }
 
-    async fn send_thinking_value(&self, conn: &AcpConn, sid: &str, mapped: &str, label: &str) {
-        let request = |value: &str| {
-            conn.request(
-                "session/set_config_option",
-                json!({"sessionId": sid, "configId": "thinking", "value": value}),
-            )
-        };
-        match request(mapped).await {
-            Ok(v) => capture_config_options(&self.inner, &v),
-            Err(e) => {
-                // 档位不可用：回退 medium 一次并显式报错，不做静默多次重试
-                if mapped != "medium" {
-                    if let Ok(v) = request("medium").await {
-                        capture_config_options(&self.inner, &v);
-                    }
-                }
+    /// 把用户期望的全部配置应用到会话（create_session 用）。某项失败：
+    /// 丢弃该项（避免每次建会话都撞同一错误）并显式报错，其余继续。
+    async fn apply_desired_config(&self, conn: &AcpConn, sid: &str) {
+        let desired: Vec<(String, String)> = self
+            .inner
+            .desired_config
+            .lock()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        for (id, value) in desired {
+            if let Err(e) = self.apply_config_option(conn, sid, &id, &value).await {
+                self.inner.desired_config.lock().remove(&id);
                 self.publish(json!({
                     "kind": "error",
-                    "message": format!("思考等级 {label} 不可用，已回退标准档：{e}")
+                    "message": format!("会话配置 {id}={value} 应用失败，已丢弃：{e}")
                 }));
             }
         }
     }
-}
 
-fn session_cwd_json() -> Value {
-    omp::OmpState::session_cwd()
-        .map(|c| json!(c.to_string_lossy().into_owned()))
-        .unwrap_or(Value::Null)
 }
 
 fn capture_config_options(inner: &Inner, result: &Value) {
     if let Some(opts) = result.get("configOptions").and_then(Value::as_array) {
-        if let Some(thinking) = opts.iter().find(|o| o.get("id") == Some(&json!("thinking"))) {
-            if let Some(current) = thinking.get("currentValue").and_then(Value::as_str) {
-                *inner.actual_thinking.lock() = Some(current.to_string());
-            }
-        }
+        *inner.config_options.lock() = opts.to_vec();
     }
+}
+
+/// 会话 cwd（session/new 与 session/load 共用；配置目录未解析时为 null）。
+fn session_cwd_json() -> Value {
+    omp::OmpState::session_cwd()
+        .map(|c| json!(c.to_string_lossy().into_owned()))
+        .unwrap_or(Value::Null)
 }
 
 /// 转换器的事件出口：静默期丢弃、捕获期入缓存、正常期外发。
@@ -565,6 +582,23 @@ impl AcpHandlers for ConnHandlers {
             return;
         }
         let Some(update) = params.get("update") else { return };
+        // omp 主动改配置时（如会话内命令）更新配置面：整体替换或按 id 合并
+        if update.get("sessionUpdate") == Some(&json!("config_option_update")) {
+            let mut guard = self.0.config_options.lock();
+            if let Some(opts) = update.get("configOptions").and_then(Value::as_array) {
+                *guard = opts.to_vec();
+            } else if let Some(opt) = update.get("configOption").cloned() {
+                let id = opt.get("id").and_then(Value::as_str).unwrap_or("");
+                if let Some(slot) = guard
+                    .iter_mut()
+                    .find(|o| o.get("id").and_then(Value::as_str) == Some(id))
+                {
+                    *slot = opt;
+                } else if !id.is_empty() {
+                    guard.push(opt);
+                }
+            }
+        }
         self.0.converter.lock().on_update(update);
     }
 
@@ -572,6 +606,17 @@ impl AcpHandlers for ConnHandlers {
         let inner = &self.0;
         let full = json!({"id": responder.id().clone(), "params": params});
         if inner.converter.lock().on_request(method, &full) {
+            let key = responder.id().to_string();
+            // 只读白名单（eval 包装形态下 overlay 键失效）：客户端直接批准，
+            // 不挂起等用户、不出审批卡片
+            if inner.converter.lock().auto_decision(&key) == Some(true) {
+                if let Some(v) = inner.converter.lock().decision_response(&key, true) {
+                    responder.ok(v);
+                } else {
+                    responder.err(-32603, "审批已失效（会话已重置）");
+                }
+                return;
+            }
             // 审批：挂起等用户。无超时——确认是用户动作；中断经
             // session/cancel 触发 omp 侧 abort，挂起应答自动失效。
             let key = responder.id().to_string();
@@ -661,18 +706,20 @@ mod tests {
         assert!(state.busy());
     }
 
-    /// configOptions 里 thinking 档位的读取。
+    /// configOptions 整面捕获：omp 原样存取（model/thinking/mode…）。
     #[test]
-    fn captures_thinking_from_config_options() {
+    fn captures_full_config_options() {
         let state = AssistantState::new();
-        capture_config_options(
-            &state.inner,
-            &json!({"configOptions": [
-                {"id": "mode", "currentValue": "default"},
-                {"id": "thinking", "currentValue": "high"}
-            ]}),
-        );
-        assert_eq!(state.thinking_level(), "deep");
+        let opts = json!([
+            {"id": "mode", "currentValue": "default"},
+            {"id": "thinking", "currentValue": "high"},
+            {"id": "model", "currentValue": "zhipu/glm", "options": [{"value": "zhipu/glm"}]}
+        ]);
+        capture_config_options(&state.inner, &json!({"configOptions": opts}));
+        assert_eq!(json!(state.config_options()), opts);
+        // 无 configOptions 字段的响应不覆盖现状
+        capture_config_options(&state.inner, &json!({}));
+        assert_eq!(state.config_options().len(), 3);
     }
 
     /// 验证构建发送给 ACP 的 prompt 时，包含固定的中文领域指令与用户输入。

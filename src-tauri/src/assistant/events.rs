@@ -61,11 +61,15 @@ pub fn mcp_tool_name(tool: &str) -> String {
 /// 一次挂起的审批（elicitation 或 request_permission）。卡片参数在
 /// tool_proposed 事件里已外发，这里只留应答所需状态。
 pub struct PendingApproval {
-    /// omp 侧工具标识（xd 设备路径，如 `xd://mcp__tod_catalog_query`）；
+    /// omp 侧工具标识：直接形态为 xd 设备路径（xd://mcp__tod_catalog_query），
+    /// eval 包装形态（omp ≥18.1.12 的 ACP 会话）为合成路径 eval://<工具名>；
     /// tool_call 到达时按它关联。
     pub path: String,
     /// 是否按 request_permission 语义应答（否则 elicitation 语义）。
     permission_style: bool,
+    /// 只读白名单工具（eval 包装下 overlay 键失效）：客户端直接批准，
+    /// 不出审批卡片。仅当已成功解析出工具名时置位。
+    auto: bool,
 }
 
 /// 事件发射器（mod.rs 注入 AppHandle 包装；测试注入收集器）。
@@ -113,9 +117,9 @@ impl UpdateConverter {
             _ => false,
         }
     }
-
-    /// omp 的审批表单：message 形如
-    /// `Allow tool: write\nPath: xd://mcp__tod_catalog_query\nContent: {...}`。
+    /// omp 的审批表单，两种形态（omp 版本漂移实测）：
+    /// 直接（≤18.1.11）：`Allow tool: write\nPath: xd://mcp__tod_catalog_query\nContent: {...}`；
+    /// eval 包装（18.1.12+）：`Allow tool: eval\nLanguage: python\nCode:\nresult = await tool.catalog_query({...})`。
     fn on_elicitation(&self, params: &Value) -> bool {
         let Some(id) = params.get("id") else { return false };
         let key = id.to_string();
@@ -129,36 +133,63 @@ impl UpdateConverter {
         };
         let tool = display_tool_name(&path);
         let call_id = key.clone();
+        let auto = path.starts_with("eval://")
+            && READ_ONLY_TOOLS.contains(&tool.as_str())
+            && eval_code_of_message(message).is_some_and(|c| is_pure_single_call(c, &tool));
         self.pending.lock().insert(
             key.clone(),
-            Arc::new(PendingApproval { path, permission_style: false }),
+            Arc::new(PendingApproval { path, permission_style: false, auto }),
         );
-        (self.sink)(&json!({"kind": "tool_proposed", "callId": call_id, "tool": tool, "arguments": args}));
+        // 白名单工具不打扰用户：不出卡片，由 mod.rs 直接批准
+        if !auto {
+            (self.sink)(&json!({"kind": "tool_proposed", "callId": call_id, "tool": tool, "arguments": args}));
+        }
         true
     }
 
-    /// ACP 标准 permission 请求（omp 18.1.11 的 MCP 工具走 elicitation，
-    /// 此路径为协议完备性实现）。
+    /// 白名单自动批准：返回 Some(true) 表示该键可立即 Approve（不入用户卡片）。
+    pub fn auto_decision(&self, key: &str) -> Option<bool> {
+        self.pending
+            .lock()
+            .get(key)
+            .filter(|p| p.auto)
+            .map(|_| true)
+    }
+
+    /// ACP 标准 permission 请求。eval 包装形态下 rawInput.code 里是
+    /// `tool.<name>(<args>)`，同样解析真实工具并走白名单自动批准。
     fn on_permission(&self, params: &Value) -> bool {
         let Some(id) = params.get("id") else { return false };
         let key = id.to_string();
         let p = params.get("params").cloned().unwrap_or(Value::Null);
         let call = p.get("toolCall").cloned().unwrap_or(Value::Null);
-        let tool = call
-            .get("toolName")
-            .and_then(Value::as_str)
-            .or_else(|| call.get("title").and_then(Value::as_str))
-            .unwrap_or("tool")
-            .to_string();
-        let args = call.get("rawInput").cloned().unwrap_or(Value::Null);
+        let raw = call.get("rawInput").cloned().unwrap_or(Value::Null);
+        let code = raw.get("code").and_then(Value::as_str).map(str::to_string);
+        let (tool, args, path) = code
+            .as_deref()
+            .and_then(parse_eval_tool_call)
+            .map(|(name, args)| (name.clone(), args, format!("eval://{name}")))
+            .unwrap_or_else(|| {
+                (
+                    call.get("toolName")
+                        .and_then(Value::as_str)
+                        .or_else(|| call.get("title").and_then(Value::as_str))
+                        .unwrap_or("tool")
+                        .to_string(),
+                    raw,
+                    String::new(),
+                )
+            });
+        let auto = path.starts_with("eval://")
+            && READ_ONLY_TOOLS.contains(&tool.as_str())
+            && code.as_deref().is_some_and(|c| is_pure_single_call(c, &tool));
         self.pending.lock().insert(
             key.clone(),
-            Arc::new(PendingApproval {
-                path: String::new(),
-                permission_style: true,
-            }),
+            Arc::new(PendingApproval { path, permission_style: true, auto }),
         );
-        (self.sink)(&json!({"kind": "tool_proposed", "callId": key, "tool": tool, "arguments": args}));
+        if !auto {
+            (self.sink)(&json!({"kind": "tool_proposed", "callId": key, "tool": tool, "arguments": args}));
+        }
         true
     }
 
@@ -211,9 +242,20 @@ impl UpdateConverter {
     fn on_tool_call(&self, update: &Value) {
         let Some(call_id) = update.get("toolCallId").and_then(Value::as_str) else { return };
         let raw_input = update.get("rawInput").cloned().unwrap_or(Value::Null);
-        let path = raw_input.get("path").and_then(Value::as_str).unwrap_or("");
-        let args = tool_args(&raw_input);
-        let tool = display_tool_name(path);
+        // 两种形态：直接（rawInput.path = xd://…）或 eval 包装（rawInput.code
+        // 里是 tool.<name>(<args>)，path 为空）。eval 形态合成路径关联审批。
+        let (path, args, tool) = match raw_input.get("path").and_then(Value::as_str) {
+            Some(p) if !p.is_empty() => {
+                (p.to_string(), tool_args(&raw_input), display_tool_name(p))
+            }
+            _ => {
+                let code = raw_input.get("code").and_then(Value::as_str).unwrap_or("");
+                match parse_eval_tool_call(code) {
+                    Some((name, args)) => (format!("eval://{name}"), args, name.clone()),
+                    None => ("eval://".to_string(), json!(code), "eval".to_string()),
+                }
+            }
+        };
         // 工具名在此记录一次：后续 tool_call_update 不再携带，终态事件回填
         self.tool_names
             .lock()
@@ -274,8 +316,8 @@ impl UpdateConverter {
     }
 }
 
-/// tool_call_update 里 tool 名未知（in_progress 分支）：前端按 callId 更新
-/// 已有卡片，tool 空串表示不覆盖卡片上的名字。
+/// omp 的审批关联：tool_call 的 call_id → 审批键。无关联（免确认直跑）
+/// 时原样返回 call_id，卡片按 callId 对上。
 fn linked_id(conv: &UpdateConverter, call_id: &str) -> String {
     conv.call_links
         .lock()
@@ -293,16 +335,25 @@ fn chunk_text(update: &Value) -> String {
         .to_string()
 }
 
-/// rawInput → 工具参数：xd 设备写形态 {path, content(json 文本)}。
-fn tool_args(raw_input: &Value) -> Value {
-    match raw_input.get("content").and_then(Value::as_str) {
-        Some(text) => serde_json::from_str(text).unwrap_or(Value::Null),
-        None => raw_input.clone(),
-    }
-}
-
-/// 解析 omp 审批消息：返回 (xd 设备路径, 参数 JSON)。非审批表单返回 None。
+/// 解析 omp 审批消息：返回 (工具路径, 参数 JSON)。非审批表单返回 None。
+/// 两种形态（omp 版本漂移实测）：
+/// - 直接：`Allow tool: <x>\nPath: xd://…\nContent: {json}`
+/// - eval 包装：`Allow tool: eval\nLanguage: <lang>\nCode:\n… tool.<name>({json}) …`
+///   → 合成路径 eval://<name>
 fn parse_allow_message(message: &str) -> Option<(String, Value)> {
+    if message.starts_with("Allow tool: eval\n") || message.starts_with("Allow tool: eval\r") {
+        let code = message
+            .split_once("\nCode:\n")
+            .or_else(|| message.split_once("\nCode:"))
+            .map(|(_, rest)| rest.trim_start())
+            .unwrap_or("");
+        return match parse_eval_tool_call(code) {
+            Some((name, args)) => Some((format!("eval://{name}"), args)),
+            // 解析不出具体工具：保守兜底成 eval 本体（展示原始代码，必审批）
+            None if !code.is_empty() => Some(("eval://".to_string(), json!(code))),
+            None => None,
+        };
+    }
     let mut path = None;
     let mut args = Value::Null;
     for line in message.lines() {
@@ -320,9 +371,13 @@ fn parse_allow_message(message: &str) -> Option<(String, Value)> {
     path.map(|p| (p, args))
 }
 
-/// xd 设备路径 → 展示工具名：桥接工具还原原名（mcp__tod_catalog_query →
-/// catalog_query），其余取设备名尾段（read/write/…）。
+/// 工具路径 → 展示名：桥接工具还原原名（mcp__tod_catalog_query →
+/// catalog_query）；eval 合成路径取工具名（eval://catalog_query →
+/// catalog_query，空名为 eval 本体）；其余取设备名尾段（read/write/…）。
 fn display_tool_name(path: &str) -> String {
+    if let Some(name) = path.strip_prefix("eval://") {
+        return if name.is_empty() { "eval".to_string() } else { name.to_string() };
+    }
     let Some(rest) = path.strip_prefix("xd://mcp__") else {
         return path.trim_start_matches("xd://").to_string();
     };
@@ -332,8 +387,124 @@ fn display_tool_name(path: &str) -> String {
     }
 }
 
-/// tool_call_update → 卡片摘要：先试 update.content（嵌套 {type:"content",
-/// content:{type:"text", text}}），再试 rawOutput.content（直接 text 项）。
+/// 审批消息里的 eval 代码段（Code: 之后的全文）。
+fn eval_code_of_message(message: &str) -> Option<&str> {
+    message
+        .split_once("\nCode:\n")
+        .or_else(|| message.split_once("\nCode:"))
+        .map(|(_, rest)| rest.trim())
+}
+
+/// eval 代码是否就是「一次 tool.<name>(args) 调用」本身。eval 是任意代码
+/// 执行，自动批准仅限纯单次调用（含可选 `await`/`const x =` 前缀、`;` 或
+/// 一个 `display(result);` 收尾）；夹杂任何其他语句必须走人工审批。
+fn is_pure_single_call(code: &str, name: &str) -> bool {
+    let Some((start, end)) = find_call_span(code, name) else { return false };
+    let prefix = code[..start].trim();
+    let prefix_ok = prefix.is_empty()
+        || prefix == "await"
+        || prefix
+            .strip_suffix("=")
+            .is_some_and(|p| {
+                let p = p.trim();
+                ["const ", "let ", "var "]
+                    .iter()
+                    .any(|k| p.starts_with(k))
+                    && p.rsplit([' ', '\n']).next().is_some_and(|last| {
+                        !last.is_empty()
+                            && last.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+                    })
+            })
+        || prefix.ends_with("= await") || prefix.ends_with("=await");
+    let suffix_ws: String = code[end + 1..].split_whitespace().collect();
+    let suffix_ok = matches!(suffix_ws.as_str(), "" | ";" | "display(result);" | ";display(result);");
+    prefix_ok && suffix_ok
+}
+
+/// 定位 `tool.<name>(` 的调用区间（`tool.` 起点到收尾 ')' 的字节位置）。
+fn find_call_span(code: &str, name: &str) -> Option<(usize, usize)> {
+    let needle = format!("tool.{name}(");
+    let start = code.find(&needle)?; // `tool.` 起点（前缀判定用）
+    let body_start = start + needle.len();
+    let body = &code[body_start..];
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escape = false;
+    for (i, c) in body.char_indices() {
+        if in_str {
+            if escape {
+                escape = false;
+            } else if c == '\\' {
+                escape = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => in_str = true,
+            '(' | '{' | '[' => depth += 1,
+            '}' | ']' => depth -= 1,
+            ')' if depth == 0 => return Some((start, body_start + i)),
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+/// 从 eval 代码里解析 `tool.<name>(<args-json>)`：返回 (工具名, 参数)。
+fn parse_eval_tool_call(code: &str) -> Option<(String, Value)> {
+    let marker = code.find("tool.")?;
+    let after = &code[marker + 5..];
+    let name_end = after.find('(')?;
+    let name = after[..name_end].trim();
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    let body = &after[name_end + 1..];
+    // 找第一个深度 0 的 ')'：它是调用的收尾括号（参数 JSON 内括号已平衡）
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escape = false;
+    let mut end = None;
+    for (i, c) in body.char_indices() {
+        if in_str {
+            if escape {
+                escape = false;
+            } else if c == '\\' {
+                escape = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => in_str = true,
+            '(' | '{' | '[' => depth += 1,
+            '}' | ']' => depth -= 1,
+            ')' => {
+                if depth == 0 {
+                    end = Some(i);
+                    break;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    let end = end?;
+    let args: Value = serde_json::from_str(body[..end].trim()).unwrap_or(Value::Null);
+    Some((name.to_string(), args))
+}
+
+/// rawInput → 工具参数：xd 设备写形态 {path, content(json 文本)}。
+fn tool_args(raw_input: &Value) -> Value {
+    match raw_input.get("content").and_then(Value::as_str) {
+        Some(text) => serde_json::from_str(text).unwrap_or(Value::Null),
+        None => raw_input.clone(),
+    }
+}
+
 fn update_summary(update: &Value) -> Value {
     for text in content_texts(update.get("content")) {
         if let Some(v) = envelope_from_text(&text) {
@@ -354,10 +525,16 @@ fn update_summary(update: &Value) -> Value {
     }
 }
 
+/// 文本 → 卡片摘要：直接是 JSON 信封；否则找第一个 '{' 起解析
+///（eval 包装输出形如 display[1]:\n{...}）。含 status 才算信封。
 fn envelope_from_text(text: &str) -> Option<Value> {
-    let v: Value = serde_json::from_str(text).ok()?;
+    let direct: Option<Value> = serde_json::from_str(text).ok();
+    let v = direct.or_else(|| {
+        text.find('{')
+            .and_then(|i| serde_json::from_str(&text[i..]).ok())
+    })?;
     if v.get("status").is_some() {
-        Some(card_summary(text))
+        Some(card_summary(&serde_json::to_string(&v).unwrap_or_default()))
     } else {
         None
     }
@@ -399,26 +576,6 @@ pub fn stop_reason_payload(result: &Value) -> Option<Value> {
     }
 }
 
-/// 用户三档思考等级 → omp thinking 配置值（off/standard/deep →
-/// off/medium/high；omp 值域 off/auto/minimal/low/medium/high）。
-pub fn thinking_to_omp(level: &str) -> Option<&'static str> {
-    match level {
-        "off" => Some("off"),
-        "standard" => Some("medium"),
-        "deep" => Some("high"),
-        _ => None,
-    }
-}
-
-/// omp thinking 当前值 → 用户三档（读取 configOptions 后回填 UI）。
-pub fn omp_to_thinking(value: &str) -> Option<&'static str> {
-    match value {
-        "off" | "minimal" | "low" => Some("off"),
-        "medium" | "auto" => Some("standard"),
-        "high" | "xhigh" | "max" => Some("deep"),
-        _ => None,
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -613,22 +770,98 @@ mod tests {
     }
 
     #[test]
-    fn thinking_level_mapping_is_fixed() {
-        assert_eq!(thinking_to_omp("off"), Some("off"));
-        assert_eq!(thinking_to_omp("standard"), Some("medium"));
-        assert_eq!(thinking_to_omp("deep"), Some("high"));
-        assert_eq!(thinking_to_omp("bogus"), None);
-        assert_eq!(omp_to_thinking("off"), Some("off"));
-        assert_eq!(omp_to_thinking("medium"), Some("standard"));
-        assert_eq!(omp_to_thinking("high"), Some("deep"));
-    }
-
-    #[test]
     fn mcp_tool_names_for_whitelist_unchanged_by_sanitizer() {
         // 白名单工具名不含数字：omp 消毒不改名，配置键稳定
         for tool in READ_ONLY_TOOLS {
             assert_eq!(mcp_tool_name(tool), format!("mcp__tod_{tool}"));
             assert!(!tool.chars().any(|c| c.is_ascii_digit()));
         }
+    }
+
+    /// 自动批准仅限纯单次只读调用：夹杂其它语句的 eval 必须出卡片。
+    #[test]
+    fn eval_auto_approve_requires_pure_single_call() {
+        // 纯调用（含赋值/display 收尾）：自动批准
+        assert!(is_pure_single_call("await tool.catalog_query({})", "catalog_query"));
+        assert!(is_pure_single_call(
+            "const result = await tool.catalog_query({});\ndisplay(result);",
+            "catalog_query"
+        ));
+        // 夹杂其它语句：不出自动批准
+        assert!(!is_pure_single_call(
+            "await tool.catalog_query({});\nfs.rm('/tmp/x')",
+            "catalog_query"
+        ));
+        assert!(!is_pure_single_call("let x = 1;\ntool.catalog_query({})", "catalog_query"));
+    }
+
+    /// eval 包装形态（omp ≥18.1.12）：审批消息解析出真实工具与参数。
+    #[test]
+    fn eval_allow_message_parses_wrapped_tool() {
+        let msg = "Allow tool: eval\nLanguage: python\nCode:\nresult = await tool.scenario_write({\n    \"filename\": \"demo\",\n    \"records\": []\n})\ndisplay(result)";
+        let (path, args) = parse_allow_message(msg).expect("eval 表单应可解析");
+        assert_eq!(path, "eval://scenario_write");
+        assert_eq!(args["filename"], "demo");
+        assert_eq!(display_tool_name(&path), "scenario_write");
+    }
+
+    /// eval 解析失败兜底为 eval 本体（展示原始代码，必然审批）。
+    #[test]
+    fn eval_unparseable_falls_back_to_eval_itself() {
+        let msg = "Allow tool: eval\nLanguage: python\nCode:\nprint(1)";
+        let (path, args) = parse_allow_message(msg).expect("eval 兜底");
+        assert_eq!(path, "eval://");
+        assert_eq!(display_tool_name(&path), "eval");
+        assert!(args.as_str().unwrap().contains("print(1)"));
+    }
+
+    /// 白名单工具经 eval 包装时标记自动批准；非白名单正常出卡片。
+    #[test]
+    fn eval_whitelist_tool_auto_approves() {
+        let (seen, sink) = collector();
+        let conv = UpdateConverter::new(sink);
+        let params = json!({"id": 42, "params": {"message":
+            "Allow tool: eval\nLanguage: python\nCode:\nresult = await tool.catalog_query({})"}});
+        assert!(conv.on_request("elicitation/create", &params));
+        assert_eq!(conv.auto_decision("42"), Some(true));
+        assert!(seen.lock().is_empty(), "白名单自动批准不出卡片");
+
+        let params = json!({"id": 43, "params": {"message":
+            "Allow tool: eval\nLanguage: python\nCode:\nawait tool.scenario_write({\"filename\":\"demo\"})"}});
+        assert!(conv.on_request("elicitation/create", &params));
+        assert_eq!(conv.auto_decision("43"), None);
+        let cards: Vec<Value> = seen.lock().iter().filter(|v| v["kind"] == "tool_proposed").cloned().collect();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0]["tool"], "scenario_write");
+        assert_eq!(cards[0]["arguments"]["filename"], "demo");
+    }
+
+    /// eval 的 tool_call（path 为空、code 含 tool.<name>(…)）关联审批键。
+    #[test]
+    fn eval_tool_call_links_pending_approval() {
+        let (seen, sink) = collector();
+        let conv = UpdateConverter::new(sink);
+        let params = json!({"id": 7, "params": {"message":
+            "Allow tool: eval\nLanguage: js\nCode:\nawait tool.scenario_write({\"filename\":\"demo\"})"}});
+        assert!(conv.on_request("elicitation/create", &params));
+        conv.on_update(&json!({
+            "sessionUpdate": "tool_call",
+            "toolCallId": "t-9",
+            "status": "pending",
+            "rawInput": {"language": "js", "code": "await tool.scenario_write({\"filename\":\"demo\"})"}
+        }));
+        let cards: Vec<Value> = seen.lock().iter().filter(|v| v["kind"] == "tool_proposed").cloned().collect();
+        // 审批卡片（callId=7）+ tool_call 的补发（callId 关联回 7）
+        assert_eq!(cards.len(), 2);
+        assert_eq!(cards[1]["callId"], "7");
+        assert_eq!(cards[1]["tool"], "scenario_write");
+    }
+
+    /// eval 显示文本里的信封提取：display[1]:\n{…} 形态。
+    #[test]
+    fn envelope_extracted_from_eval_display_text() {
+        let text = "display[1]:\n{\"status\":\"ok\",\"data\":{\"record_id\":\"rec-7\"}}";
+        let v = envelope_from_text(text).expect("应提取信封");
+        assert_eq!(v["recordId"], "rec-7");
     }
 }

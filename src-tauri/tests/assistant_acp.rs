@@ -237,10 +237,65 @@ async fn acp_lifecycle_over_fake_process() {
     state.clear_history().await.expect("清空");
     assert_ne!(sid_before, state.current_session().unwrap(), "清空应换新会话");
 
-    // --- 7. 思考等级：三档映射 + configOptions 回读；非法档位报错 ---
-    state.set_thinking_level("deep").await.expect("设思考档");
-    assert_eq!(state.thinking_level(), "deep");
-    state.set_thinking_level("bogus").await.expect_err("非法档位应报错");
+    // --- 7. 会话配置：模型/思考/模式经 configOptions 下发并回读；非法值报错 ---
+    state
+        .set_config_option("model", "deepseek/deepseek-v4-flash")
+        .await
+        .expect("设模型");
+    let opts = state.config_options();
+    let model = opts.iter().find(|o| o["id"] == "model").expect("model 配置项");
+    assert_eq!(model["currentValue"], "deepseek/deepseek-v4-flash", "模型应生效：{opts:?}");
+    let thinking = opts.iter().find(|o| o["id"] == "thinking").expect("thinking 配置项");
+    assert!(thinking["options"].as_array().unwrap().len() > 3, "思考档应含 omp 原生值域");
+    state
+        .set_config_option("model", "no-such-model")
+        .await
+        .expect_err("非法模型应报错");
+    state
+        .set_config_option("bogus", "x")
+        .await
+        .expect_err("未知配置项应报错");
+
+    // --- 10. eval 包装形态（omp ≥18.1.12）：审批解析出真实工具与参数 ---
+    let mut seen: Vec<Value> = Vec::new();
+    let state_ref = &state;
+    drive_with(
+        Box::pin(state.send("EVALTOOL: scenario_write", None)),
+        &mut rx,
+        |ev| {
+            if ev["kind"] == "tool_proposed" {
+                assert_eq!(ev["tool"], "scenario_write");
+                assert_eq!(ev["arguments"]["filename"], "demo");
+                assert!(state_ref.resolve_confirm(ev["callId"].as_str().unwrap(), true));
+            }
+            seen.push(ev);
+        },
+    )
+    .await
+    .expect("eval 审批轮完成");
+    assert!(
+        seen.iter().any(|e| e["kind"] == "tool_done" && e["ok"] == true
+            && e["tool"] == "scenario_write" && e["summary"]["recordId"] == "rec-eval"),
+        "eval 完成态应回填工具名并从 display 文本提取信封：{seen:?}"
+    );
+
+    // --- 11. eval 白名单自动批准：只读工具不出卡片、不需用户确认 ---
+    let mut seen: Vec<Value> = Vec::new();
+    drive_with(
+        Box::pin(state.send("EVALREAD: catalog_query", None)),
+        &mut rx,
+        |ev| seen.push(ev),
+    )
+    .await
+    .expect("eval 白名单轮完成");
+    assert!(
+        !seen.iter().any(|e| e["kind"] == "tool_proposed"),
+        "只读工具经 eval 包装时不应出审批卡片：{seen:?}"
+    );
+    assert!(
+        seen.iter().any(|e| e["kind"] == "tool_done" && e["ok"] == true),
+        "自动批准应直接完成：{seen:?}"
+    );
 
     // --- 8. 子进程退出重连：会话 id 保持，静默恢复（无回放噪声） ---
     state.send("EXIT: 立刻退出", None).await.expect("命令本身 Ok");
