@@ -1,11 +1,11 @@
 //! AI 助手命令：前端经 IPC 调用（omp ACP 适配层）。
 //!
-//! 命令面（计划条目 6）：保留 get_state / send / confirm_tool / cancel /
-//! new_session / switch_session / clear_history / set_thinking_level（omp
-//! 握手声明 thinking 配置能力）；删除 set_config / test_config / rename /
-//! delete（omp ACP 无对应标准能力，不留空实现）。模型服务、API key、
-//! provider、原生 thinking 配置由 omp 原生配置管理——设置分区只展示入口
-//! 状态并提供打开 omp 原生命令的按钮（assistant_open_omp_setup）。
+//! 命令面：保留 get_state / send / confirm_tool / cancel / new_session /
+//! switch_session / clear_history / set_config_option（model/thinking/mode
+//! 通用下发，值域由 omp configOptions 决定）；删除 set_config /
+//! test_config / rename / delete（omp ACP 无对应标准能力，不留空实现）。
+//! 模型服务、API key、provider 配置由 omp 原生配置管理——设置分区只展示
+//! 入口状态并提供打开 omp 原生命令的按钮（assistant_open_omp_setup）。
 
 use serde::Serialize;
 use serde_json::Value;

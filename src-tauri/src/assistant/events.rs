@@ -168,7 +168,15 @@ impl UpdateConverter {
         let (tool, args, path) = code
             .as_deref()
             .and_then(parse_eval_tool_call)
-            .map(|(name, args)| (name.clone(), args, format!("eval://{name}")))
+            .map(|(name, args)| {
+                // 非纯单次调用：不解析出首个调用冒充，展示原始代码
+                let c = code.clone().unwrap_or_default();
+                if is_pure_single_call(&c, &name) {
+                    (name.clone(), args, format!("eval://{name}"))
+                } else {
+                    ("eval".to_string(), json!(c), "eval://".to_string())
+                }
+            })
             .unwrap_or_else(|| {
                 (
                     call.get("toolName")
@@ -348,10 +356,13 @@ fn parse_allow_message(message: &str) -> Option<(String, Value)> {
             .map(|(_, rest)| rest.trim_start())
             .unwrap_or("");
         return match parse_eval_tool_call(code) {
-            Some((name, args)) => Some((format!("eval://{name}"), args)),
-            // 解析不出具体工具：保守兜底成 eval 本体（展示原始代码，必审批）
-            None if !code.is_empty() => Some(("eval://".to_string(), json!(code))),
-            None => None,
+            // 非纯单次调用（夹杂其它语句）：不解析出首个调用冒充，卡片
+            // 展示原始代码，让用户在完整信息下审批
+            Some((name, args)) if is_pure_single_call(code, &name) => {
+                Some((format!("eval://{name}"), args))
+            }
+            _ if !code.is_empty() => Some(("eval://".to_string(), json!(code))),
+            _ => None,
         };
     }
     let mut path = None;
@@ -396,29 +407,40 @@ fn eval_code_of_message(message: &str) -> Option<&str> {
 }
 
 /// eval 代码是否就是「一次 tool.<name>(args) 调用」本身。eval 是任意代码
-/// 执行，自动批准仅限纯单次调用（含可选 `await`/`const x =` 前缀、`;` 或
-/// 一个 `display(result);` 收尾）；夹杂任何其他语句必须走人工审批。
+/// 执行，自动批准仅限纯单次调用：前缀整体只允许 空 / `await` /
+/// `[const|let|var] <标识符> = [await]` 全形；后缀只允许 `;` 或一个
+/// `display(result)` 收尾（分号可有可无）。夹杂任何其它语句或表达式一律人工审批。
 fn is_pure_single_call(code: &str, name: &str) -> bool {
+    if parse_eval_tool_call(code).is_none() {
+        return false;
+    }
     let Some((start, end)) = find_call_span(code, name) else { return false };
     let prefix = code[..start].trim();
-    let prefix_ok = prefix.is_empty()
-        || prefix == "await"
-        || prefix
-            .strip_suffix("=")
-            .is_some_and(|p| {
-                let p = p.trim();
-                ["const ", "let ", "var "]
-                    .iter()
-                    .any(|k| p.starts_with(k))
-                    && p.rsplit([' ', '\n']).next().is_some_and(|last| {
-                        !last.is_empty()
-                            && last.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
-                    })
-            })
-        || prefix.ends_with("= await") || prefix.ends_with("=await");
+    let prefix_ok = prefix.is_empty() || prefix == "await" || is_pure_decl_prefix(prefix);
     let suffix_ws: String = code[end + 1..].split_whitespace().collect();
-    let suffix_ok = matches!(suffix_ws.as_str(), "" | ";" | "display(result);" | ";display(result);");
+    let suffix_ok = matches!(
+        suffix_ws.as_str(),
+        "" | ";" | "display(result)" | "display(result);" | ";display(result)" | ";display(result);"
+    );
     prefix_ok && suffix_ok
+}
+
+/// 前缀整体形如 `const|let|var <标识符> = [await]`（不多不少）。
+/// 判全形而非尾形：`fs.rm('/tmp/x'); r = await`、`const a = danger(), b =`
+fn is_pure_decl_prefix(prefix: &str) -> bool {
+    let p = prefix.strip_suffix("await").map(str::trim_end).unwrap_or(prefix);
+    let Some(decl) = p.strip_suffix('=').map(str::trim_end) else { return false };
+    let toks: Vec<&str> = decl.split_whitespace().collect();
+    // 全形：`[const|let|var] <标识符>`（关键字可选，如 `result = await …`）
+    let ident = match toks.as_slice() {
+        [ident] => *ident,
+        [kw, ident] if matches!(*kw, "const" | "let" | "var") => *ident,
+        _ => return false,
+    };
+    !ident.is_empty()
+        && ident
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
 /// 定位 `tool.<name>(` 的调用区间（`tool.` 起点到收尾 ')' 的字节位置）。
@@ -493,7 +515,9 @@ fn parse_eval_tool_call(code: &str) -> Option<(String, Value)> {
         }
     }
     let end = end?;
-    let args: Value = serde_json::from_str(body[..end].trim()).unwrap_or(Value::Null);
+    // 参数必须是 JSON 字面量：parse 失败不解析出工具（调用方回退展示原始
+    // 代码；白名单自动批准也因此拒绝 fetch(...) 之类的表达式参数）
+    let args: Value = serde_json::from_str(body[..end].trim()).ok()?;
     Some((name.to_string(), args))
 }
 
@@ -787,12 +811,32 @@ mod tests {
             "const result = await tool.catalog_query({});\ndisplay(result);",
             "catalog_query"
         ));
-        // 夹杂其它语句：不出自动批准
-        assert!(!is_pure_single_call(
+        // 夹杂其它语句/表达式（评审坐实的绕过串）：一律人工审批
+        for evil in [
+            "fs.rm('/tmp/x'); r = await tool.catalog_query({})",
+            "const a = danger(), b = tool.catalog_query({})",
+            "console.log(await tool.scenario_write({})); r = await tool.catalog_query({})",
+            "await tool.catalog_query(fetch('http://x'))",
             "await tool.catalog_query({});\nfs.rm('/tmp/x')",
-            "catalog_query"
-        ));
-        assert!(!is_pure_single_call("let x = 1;\ntool.catalog_query({})", "catalog_query"));
+            "let x = 1;\ntool.catalog_query({})",
+        ] {
+            assert!(!is_pure_single_call(evil, "catalog_query"), "应拒绝：{evil}");
+        }
+    }
+
+    /// 非纯单次调用的 eval 审批：卡片展示原始代码（tool=eval），不以首个
+    /// 解析出的调用冒充（用户须在完整信息下审批任意代码执行）。
+    #[test]
+    fn eval_impure_code_card_shows_raw_code() {
+        let (seen, sink) = collector();
+        let conv = UpdateConverter::new(sink);
+        let msg = "Allow tool: eval\nLanguage: js\nCode:\nawait tool.scenario_write({\"filename\":\"demo\"});\nfs.rm('/tmp/x')";
+        assert!(conv.on_request("elicitation/create", &json!({"id": 9, "params": {"message": msg}})));
+        assert_eq!(conv.auto_decision("9"), None, "非纯调用不得自动批准");
+        let cards: Vec<Value> = seen.lock().iter().filter(|v| v["kind"] == "tool_proposed").cloned().collect();
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0]["tool"], "eval");
+        assert!(cards[0]["arguments"].as_str().unwrap().contains("fs.rm"), "卡片应含完整代码");
     }
 
     /// eval 包装形态（omp ≥18.1.12）：审批消息解析出真实工具与参数。

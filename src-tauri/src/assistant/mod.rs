@@ -10,8 +10,9 @@
 //! - 工具审批：omp 的 `elicitation/create` 表单映射为 `tool_proposed`
 //!   工具卡片，用户确认/拒绝经 `assistant_confirm_tool` 回 Approve/Deny；
 //!   只读工具由 omp 审批配置覆盖文件免确认（omp.rs overlay）；
-//! - 思考等级三档映射：off→off、standard→medium、deep→high
-//!   （`session/set_config_option`；档位不可用回退 medium 一次并显式报错）。
+//! - 会话配置面泛化透传：omp `configOptions`（model/thinking/mode）原样
+//!   缓存并暴露给 UI；`set_config_option` 先校验取值在选项内，期望配置在
+//!   会话建立时统一下发；`config_option_update` 通知随动。
 //!
 //! 事件契约（前端 `assistant-event`）：delta/thinking/user_message/tool_*
 //! /message_done/interrupted/error/reset。回放（session/load）与实时流走

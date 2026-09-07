@@ -10,7 +10,7 @@
 //! - 服务端请求（`elicitation/create`、`session/request_permission` 等）
 //!   转交回调并附带应答通道；本层不区分已知未知——上层对未知请求回
 //!   JSON-RPC 标准错误，保证需要回复的请求不被静默吞掉；
-//! - 读循环断开时唤醒全部等待者并广播 closed（上层据此重连）。
+//! - 读循环断开时唤醒全部等待者（is_alive 转假，上层据此重连）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

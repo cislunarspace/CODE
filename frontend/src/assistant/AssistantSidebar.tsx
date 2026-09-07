@@ -377,7 +377,7 @@ export function AssistantSidebar({
             onApplyScenario={onApplyScenario}
             onContinue={running ? undefined : handleContinue}
           />
-          {/* 输入区：思考等级三档单选 + 运行中禁用输入（单并发门禁的 UI） */}
+          {/* 输入区：配置条（模型/思考/模式，omp configOptions 动态渲染） */}
           <div
             style={{
               padding: 8,
