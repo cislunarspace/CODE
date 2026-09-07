@@ -1,218 +1,131 @@
-// chatModel 单测：持久化历史的恢复与 live 事件折叠。
+// chatModel 单测：live/回放事件折叠（omp ACP 基座：后端是唯一事件源，
+// 回放与实时流同一契约，前端只折叠）。
 
 import { describe, it, expect } from "vitest";
-import { restoreItems, foldEvent, type ChatItem } from "./chatModel";
-import type { RawMessage } from "./api";
+import { foldAll, foldEvent, type ChatItem } from "./chatModel";
+import type { ToolCardData } from "./ToolCardView";
+import type { AssistantEventPayload } from "./api";
 
-describe("restoreItems", () => {
-  it("restores user and assistant bubbles", () => {
-    const history: RawMessage[] = [
-      { role: "user", content: "你好" },
-      { role: "assistant", content: "你好！我能帮你做什么？" },
-    ];
-    const items = restoreItems(history);
-    expect(items).toEqual([
-      { kind: "user", text: "你好" },
-      { kind: "assistant", text: "你好！我能帮你做什么？" },
-    ]);
+function kinds(items: ChatItem[]): string[] {
+  return items.map((i) => i.kind);
+}
+
+function toolCard(item: ChatItem): ToolCardData {
+  if (item.kind !== "tool") throw new Error("expected tool item");
+  return item.card;
+}
+
+describe("reset / user_message", () => {
+  it("reset 清空序列（回放开头）", () => {
+    const seeded = foldEvent([], { kind: "user_message", text: "旧问题" });
+    const out = foldEvent(seeded, { kind: "reset" });
+    expect(out).toEqual([]);
   });
 
-  it("restores thinking rows in place as thinking blocks", () => {
-    const history: RawMessage[] = [
-      { role: "user", content: "设计一条转移轨道" },
-      { kind: "thinking", content: "先分析转移类型" },
-      { role: "assistant", content: "好的" },
-    ];
-    const items = restoreItems(history);
-    expect(items).toEqual([
-      { kind: "user", text: "设计一条转移轨道" },
-      { kind: "thinking", text: "先分析转移类型" },
-      { kind: "assistant", text: "好的" },
-    ]);
+  it("user_message 累并成用户气泡（多条块拼接）", () => {
+    let items = foldEvent([], { kind: "user_message", text: "回放：最早" });
+    items = foldEvent(items, { kind: "user_message", text: "的问题" });
+    expect(items).toEqual([{ kind: "user", text: "回放：最早的问题" }]);
   });
 
-  it("pairs tool_calls with tool messages into a done card with recordId", () => {
-    const history: RawMessage[] = [
-      { role: "user", content: "生成一个 halo 轨道" },
-      {
-        role: "assistant",
-        content: "好的，我来调用工具。",
-        tool_calls: [
-          { id: "call_1", function: { name: "design_orbit", arguments: '{"a":1}' } },
-        ],
-      },
-      {
-        role: "tool",
-        tool_call_id: "call_1",
-        content: JSON.stringify({ status: "ok", data: { record_id: "rec-42" } }),
-      },
-    ];
-    const items = restoreItems(history);
-    const card = items.find((i) => i.kind === "tool");
-    expect(card && card.kind === "tool" && card.card.status).toBe("done");
-    expect(card && card.kind === "tool" && card.card.summary?.recordId).toBe("rec-42");
-    expect(card && card.kind === "tool" && card.card.args).toEqual({ a: 1 });
-  });
-
-  it("族生成回执是 family_id：单独进 summary.familyId，不冒充 recordId", () => {
-    // e2m2e 5.9.3 一轨一记录：族生成响应携带 family_id（生成批次）而非
-    // record_id；familyId 不触发入树登记（成员才是记录，按 family_id 查询）
-    const history: RawMessage[] = [
-      {
-        role: "assistant",
-        content: null,
-        tool_calls: [
-          { id: "call_f", function: { name: "orbit_family_generation", arguments: "{}" } },
-        ],
-      },
-      {
-        role: "tool",
-        tool_call_id: "call_f",
-        content: JSON.stringify({ status: "ok", data: { family_id: "fam-a1" } }),
-      },
-    ];
-    const items = restoreItems(history);
-    const card = items.find((i) => i.kind === "tool");
-    expect(card?.kind === "tool" && card.card.summary?.familyId).toBe("fam-a1");
-    expect(card?.kind === "tool" && card.card.summary?.recordId).toBeUndefined();
-  });
-
-  it("marks rejected calls from the rejection prefix", () => {
-    const history: RawMessage[] = [
-      {
-        role: "assistant",
-        content: null,
-        tool_calls: [{ id: "c2", function: { name: "catalog_delete", arguments: "{}" } }],
-      },
-      { role: "tool", tool_call_id: "c2", content: "用户拒绝了本次工具调用，未执行。……" },
-    ];
-    const items = restoreItems(history);
-    const card = items[0];
-    expect(card.kind === "tool" && card.card.status).toBe("rejected");
-  });
-
-  it("marks a dangling proposed card (interrupted run) as failed", () => {
-    const history: RawMessage[] = [
-      {
-        role: "assistant",
-        content: null,
-        tool_calls: [{ id: "c3", function: { name: "design_orbit", arguments: "{}" } }],
-      },
-    ];
-    const items = restoreItems(history);
-    const card = items[0];
-    expect(card.kind === "tool" && card.card.status).toBe("error");
+  it("用户气泡后接助手气泡，不互相并块", () => {
+    let items = foldEvent([], { kind: "user_message", text: "问" });
+    items = foldEvent(items, { kind: "delta", text: "答" });
+    expect(kinds(items)).toEqual(["user", "assistant"]);
   });
 });
 
-describe("foldEvent", () => {
-  it("accumulates streaming deltas into one assistant bubble", () => {
-    let items: ChatItem[] = [{ kind: "user", text: "q" }];
-    items = foldEvent(items, { kind: "delta", text: "你" });
+describe("foldEvent 流式折叠", () => {
+  it("delta 增量归并进同一助手气泡", () => {
+    let items = foldEvent([], { kind: "delta", text: "你" });
     items = foldEvent(items, { kind: "delta", text: "好" });
-    expect(items).toEqual([
-      { kind: "user", text: "q" },
-      { kind: "assistant", text: "你好" },
-    ]);
+    expect(items).toEqual([{ kind: "assistant", text: "你好" }]);
   });
 
-  it("merges thinking deltas into one block, split by content and tool events", () => {
-    let items: ChatItem[] = [];
-    items = foldEvent(items, { kind: "thinking", text: "先想" });
-    items = foldEvent(items, { kind: "thinking", text: "一步" });
-    expect(items).toEqual([{ kind: "thinking", text: "先想一步" }]);
-    // 正文开新气泡
-    items = foldEvent(items, { kind: "delta", text: "结论" });
-    expect(items[1]).toEqual({ kind: "assistant", text: "结论" });
-    // 正文之后的思考开新块（第二轮）
-    items = foldEvent(items, { kind: "thinking", text: "第二轮" });
-    expect(items[2]).toEqual({ kind: "thinking", text: "第二轮" });
-    // 工具事件后的思考同样开新块
-    items = foldEvent(items, { kind: "tool_proposed", callId: "c", tool: "t", arguments: {} });
-    items = foldEvent(items, { kind: "thinking", text: "第三轮" });
-    expect(items[4]).toEqual({ kind: "thinking", text: "第三轮" });
+  it("thinking 归并成块，正文出现后开新块", () => {
+    let items = foldEvent([], { kind: "thinking", text: "想" });
+    items = foldEvent(items, { kind: "thinking", text: "一下" });
+    items = foldEvent(items, { kind: "delta", text: "答" });
+    items = foldEvent(items, { kind: "thinking", text: "再想" });
+    expect(kinds(items)).toEqual(["thinking", "assistant", "thinking"]);
+    expect((items[0] as { text: string }).text).toBe("想一下");
   });
 
-  it("runs a tool card through proposed → running → done", () => {
-    let items: ChatItem[] = [];
-    items = foldEvent(items, { kind: "tool_proposed", callId: "c", tool: "design_orbit", arguments: {} });
-    items = foldEvent(items, { kind: "tool_started", callId: "c", tool: "design_orbit", arguments: {} });
-    items = foldEvent(items, {
-      kind: "tool_done", callId: "c", tool: "design_orbit", ok: true,
-      summary: { status: "ok", recordId: "rec-1" },
+  it("工具卡片 proposed → running → done（带 recordId 摘要）", () => {
+    let items: ChatItem[] = foldEvent([], {
+      kind: "tool_proposed",
+      callId: "1001",
+      tool: "cr3bp_compute",
+      arguments: { mu: 0.012 },
     });
-    const card = items[0];
-    expect(card.kind === "tool" && card.card.status).toBe("done");
-    expect(card.kind === "tool" && card.card.summary?.recordId).toBe("rec-1");
+    items = foldEvent(items, { kind: "tool_started", callId: "1001", tool: "", arguments: null });
+    items = foldEvent(items, {
+      kind: "tool_done",
+      callId: "1001",
+      tool: "cr3bp_compute",
+      ok: true,
+      summary: { recordId: "rec-7", status: "ok" },
+    });
+    const card = toolCard(items[0]);
+    expect(card.status).toBe("done");
+    expect(card.summary?.recordId).toBe("rec-7");
   });
 
-  it("updates the running card with progress fractions and keeps the card state", () => {
-    let items: ChatItem[] = [];
-    items = foldEvent(items, { kind: "tool_proposed", callId: "c", tool: "design_orbit", arguments: {} });
-    items = foldEvent(items, { kind: "tool_started", callId: "c", tool: "design_orbit", arguments: {} });
-    items = foldEvent(items, { kind: "tool_progress", callId: "c", progress: 0.42, message: "designing" });
-    const card = items[0];
-    expect(card.kind === "tool" && card.card.status).toBe("running");
-    expect(card.kind === "tool" && card.card.progress).toBe(0.42);
-    expect(card.kind === "tool" && card.card.progressMessage).toBe("designing");
+  it("tool_done ok=false 落失败态并保留 error 摘要", () => {
+    const items = foldEvent([], {
+      kind: "tool_done",
+      callId: "9",
+      tool: "x",
+      ok: false,
+      summary: { error: { message: "参数越界" } },
+    });
+    const card = toolCard(items[0]);
+    expect(card.status).toBe("error");
   });
 
-  it("starts a new assistant bubble after a tool card", () => {
-    let items: ChatItem[] = [];
-    items = foldEvent(items, { kind: "tool_proposed", callId: "c", tool: "t", arguments: {} });
-    items = foldEvent(items, { kind: "delta", text: "接着…" });
-    expect(items).toHaveLength(2);
-    expect(items[1]).toEqual({ kind: "assistant", text: "接着…" });
+  it("工具卡片后新开助手气泡", () => {
+    let items = foldEvent([], { kind: "tool_started", callId: "1", tool: "t", arguments: {} });
+    items = foldEvent(items, { kind: "delta", text: "结果" });
+    expect(kinds(items)).toEqual(["tool", "assistant"]);
   });
 
-  it("folds runtime errors into a persistent error bubble", () => {
-    let items: ChatItem[] = [{ kind: "user", text: "q" }];
-    items = foldEvent(items, { kind: "error", message: "模型服务未配置" });
-    expect(items[1]).toEqual({ kind: "error", text: "模型服务未配置" });
+  it("运行期错误落持久错误气泡；中断落界限标记", () => {
+    let items = foldEvent([], { kind: "error", message: "连接断开" });
+    items = foldEvent(items, { kind: "interrupted" });
+    expect(kinds(items)).toEqual(["error", "interrupted"]);
+  });
+
+  it("message_done 不改变显示序列", () => {
+    const items = foldEvent([{ kind: "assistant", text: "a" }], {
+      kind: "message_done",
+      usage: { total_tokens: 3 },
+    });
+    expect(items).toEqual([{ kind: "assistant", text: "a" }]);
   });
 });
 
-// —— 中断（#453）：中断界限的折叠与恢复 ——
-
-describe("中断界限（#453）", () => {
-  it("foldEvent: interrupted 事件渲染为中断标记，不是 error 气泡", () => {
-    let items: ChatItem[] = [
-      { kind: "user", text: "q" },
-      { kind: "assistant", text: "部分回复" },
-    ];
-    items = foldEvent(items, { kind: "interrupted" });
-    expect(items[items.length - 1]).toEqual({ kind: "interrupted" });
-    expect(items.some((i) => i.kind === "error")).toBe(false);
-  });
-
-  it("restoreItems: kind=interrupted 行恢复为中断标记（重启后界限仍在）", () => {
-    const history: RawMessage[] = [
-      { role: "user", content: "画一条 NRHO" },
-      { role: "assistant", content: "部分回复" },
-      { kind: "interrupted" },
-    ];
-    const items = restoreItems(history);
-    expect(items).toEqual([
-      { kind: "user", text: "画一条 NRHO" },
-      { kind: "assistant", text: "部分回复" },
-      { kind: "interrupted" },
-    ]);
-  });
-
-  it("restoreItems: 中断占位 tool 消息落定卡片终态（未执行）", () => {
-    const history: RawMessage[] = [
-      { role: "user", content: "q" },
+describe("回放序列（reset + 逐条重建）", () => {
+  it("foldAll 重建完整时间线：用户/正文/思考/工具卡片", () => {
+    const replay: AssistantEventPayload[] = [
+      { kind: "reset" },
+      { kind: "user_message", text: "画 halo" },
+      { kind: "thinking", text: "选工具" },
+      { kind: "tool_proposed", callId: "100", tool: "halo_compute", arguments: { Az_km: 8000 } },
+      { kind: "tool_started", callId: "100", tool: "", arguments: null },
       {
-        role: "assistant",
-        content: "",
-        tool_calls: [{ id: "c1", function: { name: "design_orbit", arguments: "{}" } }],
+        kind: "tool_done",
+        callId: "100",
+        tool: "halo_compute",
+        ok: true,
+        summary: { recordId: "rec-r" },
       },
-      { role: "tool", tool_call_id: "c1", content: "用户中断了本轮对话，此工具调用未执行。" },
-      { kind: "interrupted" },
+      { kind: "delta", text: "完成" },
+      { kind: "message_done", usage: null },
     ];
-    const items = restoreItems(history);
-    const card = items.find((i) => i.kind === "tool");
-    expect(card?.kind === "tool" && card.card.status).toBe("error");
-    expect(card?.kind === "tool" && card.card.summary?.error?.message).toContain("中断");
+    const items = foldAll([], replay);
+    expect(kinds(items)).toEqual(["user", "thinking", "tool", "assistant"]);
+    const card = toolCard(items[2]);
+    expect(card.status).toBe("done");
+    expect(card.summary?.recordId).toBe("rec-r");
   });
 });

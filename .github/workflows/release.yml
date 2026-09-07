@@ -8,6 +8,11 @@ on:
   # Branch dispatch rehearses the builds; validation and publishing run only on tag refs.
   workflow_dispatch:
 
+# AI 会话运行时（omp ACP）固定版本：升级时改此处并跑
+# scripts/smoke_omp_acp.py 回归（协议行为以本机握手实测为准）
+env:
+  OMP_VERSION: v18.1.11
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
@@ -112,6 +117,13 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path src-tauri/binaries
           Copy-Item dist/transfer-orbit-design-sidecar.exe src-tauri/binaries/transfer-orbit-design-sidecar.exe
+      # AI 会话运行时 omp 固定版本随包分发（dev 走 TOD_OMP_BIN/PATH；
+      # 分发解析资源目录 binaries/omp.exe，不依赖用户预装）
+      - name: Stage pinned omp into tauri resources
+        shell: pwsh
+        run: |
+          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/omp-windows-x64.exe" -o src-tauri/binaries/omp.exe
+          if ((Get-Item src-tauri/binaries/omp.exe).Length -lt 10MB) { throw "omp 下载不完整" }
       # 增量更新第一步：瘦身包（不含 kernels/ 星历，约省 170MB）——应用内更新
       # 通道专用。装机端 kernels/ 已存在且 NSIS 覆盖安装不动既有文件，星历不
       # 随每次更新重下；全量包仅供新装用户，仍含完整星历
@@ -247,6 +259,13 @@ jobs:
           mkdir -p src-tauri/binaries
           cp dist/transfer-orbit-design-sidecar src-tauri/binaries/transfer-orbit-design-sidecar
           chmod +x src-tauri/binaries/transfer-orbit-design-sidecar
+      # AI 会话运行时 omp 固定版本随包分发（同 Windows 作业）
+      - name: Stage pinned omp into tauri resources
+        run: |
+          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/omp-linux-x64" -o src-tauri/binaries/omp
+          chmod +x src-tauri/binaries/omp
+          [ "$(stat -c%s src-tauri/binaries/omp)" -gt 10000000 ] || { echo "omp 下载不完整"; exit 1; }
+          src-tauri/binaries/omp --version
       # 增量更新第一步：瘦身 AppImage（不含 kernels/），同 Windows 作业
       - name: Build slim AppImage (updater channel)
         env:

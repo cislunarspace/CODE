@@ -1,94 +1,68 @@
-// i18n 单测（#447）：语言切换是全应用共享状态——同一 Provider 下所有
-// 已挂载组件同步切换、localStorage 持久化（重载恢复）、<html lang> 同步。
-// i18n tests (for #447): the language is app-wide shared state — every
-// mounted component under one Provider switches together, the choice
-// persists in localStorage (restored on reload), and <html lang> follows.
+// 词典单测：界面固定简体中文——词条完整、多组件共享同一中文翻译、
+// 挂载后 <html lang> 固定为 zh-CN、缺失 key 原样返回暴露漏配。
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { I18nProvider, useTranslation, translations } from "./i18n";
 
-describe("i18n 词典键对齐（#450）", () => {
-  it("zh 与 en 键集合一致：无缺译、无多余", () => {
-    const zh = Object.keys(translations.zh).sort();
-    const en = Object.keys(translations.en).sort();
-    expect(en).toEqual(zh);
+describe("i18n 词典（固定中文）", () => {
+  it("每个词条非空字符串且键非空", () => {
+    for (const [key, value] of Object.entries(translations)) {
+      expect(typeof value).toBe("string");
+      expect((value as string).length).toBeGreaterThan(0);
+      expect(key.length).toBeGreaterThan(0);
+    }
   });
 
-  it("每个词条非空字符串", () => {
-    for (const dict of [translations.zh, translations.en]) {
-      for (const [key, value] of Object.entries(dict)) {
-        expect(typeof value).toBe("string");
-        expect((value as string).length).toBeGreaterThan(0);
-        expect(key.length).toBeGreaterThan(0);
-      }
-    }
+  it("词典不含语言切换词条", () => {
+    expect(Object.keys(translations)).not.toContain("app.lang_toggle_title");
   });
 });
 
-/** 测试桩：渲染一条双语固定文案与切换按钮，探针语义与顶栏按钮一致。 */
-function LangProbe() {
-  const { lang, setLang, t } = useTranslation();
-  return (
-    <div>
-      <span>{t("action.save")}</span>
-      <button onClick={() => setLang(lang === "zh" ? "en" : "zh")}>
-        {lang === "zh" ? "EN" : "中"}
-      </button>
-    </div>
-  );
+/** 测试桩：渲染一条词典文案，探针语义与消费组件一致。 */
+function ZhProbe() {
+  const { t } = useTranslation();
+  return <span>{t("action.save")}</span>;
 }
 
 beforeEach(() => {
-  localStorage.clear();
   document.documentElement.lang = "";
 });
 
-describe("i18n 语言共享状态（#447）", () => {
-  it("同一 Provider 下两个组件：切换后双方文案立即同步，无需重挂载", () => {
+describe("i18n 中文共享状态", () => {
+  it("同一 Provider 下两个组件渲染同一中文文案", () => {
     render(
       <I18nProvider>
-        <LangProbe />
-        <LangProbe />
+        <ZhProbe />
+        <ZhProbe />
       </I18nProvider>,
     );
     expect(screen.getAllByText("保存")).toHaveLength(2);
-
-    fireEvent.click(screen.getAllByRole("button")[0]);
-
-    expect(screen.getAllByText("Save")).toHaveLength(2);
-    expect(screen.queryByText("保存")).toBeNull();
   });
 
-  it("语言持久化：切换写入 localStorage，重新挂载 Provider 后恢复", () => {
-    const { unmount } = render(
-      <I18nProvider>
-        <LangProbe />
-      </I18nProvider>,
-    );
-    fireEvent.click(screen.getByRole("button"));
-    expect(localStorage.getItem("tod-lang")).toBe("en");
-
-    unmount();
-    render(
-      <I18nProvider>
-        <LangProbe />
-      </I18nProvider>,
-    );
-    expect(screen.getByText("Save")).toBeDefined();
-    expect(screen.queryByText("保存")).toBeNull();
+  it("无 Provider 裸渲染同样取中文词典", () => {
+    render(<ZhProbe />);
+    expect(screen.getByText("保存")).toBeDefined();
   });
 
-  it("document.documentElement.lang 随切换更新", () => {
+  it("挂载后将 document.documentElement.lang 固定为 zh-CN", () => {
     render(
       <I18nProvider>
-        <LangProbe />
+        <ZhProbe />
       </I18nProvider>,
     );
-    expect(document.documentElement.lang).toBe("zh");
-
-    fireEvent.click(screen.getByRole("button"));
-
-    expect(document.documentElement.lang).toBe("en");
+    expect(document.documentElement.lang).toBe("zh-CN");
+  });
+  it("缺失 key 返回 key 本身，暴露开发期漏配", () => {
+    function MissingKeyProbe() {
+      const { t } = useTranslation();
+      return <span data-testid="missing-key">{t("definitely.not.a.key")}</span>;
+    }
+    render(
+      <I18nProvider>
+        <MissingKeyProbe />
+      </I18nProvider>,
+    );
+    expect(screen.getByTestId("missing-key").textContent).toBe("definitely.not.a.key");
   });
 });

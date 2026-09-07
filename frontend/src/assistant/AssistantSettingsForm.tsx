@@ -1,152 +1,128 @@
-// 模型服务配置表单（CONTEXT.md 术语：模型服务）：OpenAI 兼容协议的
-// baseUrl / 模型名 / API key，BYOK。嵌入设置弹窗的"AI 助手"分区，也是
-// 边栏空态"去设置"的落点。API key 只在保存时经 IPC 写入后端 keyring，
-// 不回读、不进 webview 持久层（ADR 0023 决策 6）。
-// Model-service config form (CONTEXT.md term: model service): baseUrl / model
-// name / API key over the OpenAI-compatible protocol, BYOK. Embedded in the
-// settings modal's "AI Assistant" section and the target of the sidebar empty
-// state's "go to settings". The API key is written to the backend keyring via
-// IPC only on save — never read back, never persisted in the webview (ADR 0023,
-// decision 6).
+// omp 配置状态面板（设置弹窗的"AI 助手"分区，也服务边栏空态"去设置"）。
+// 模型服务、API key、provider、原生 thinking 配置全部由 omp 原生配置管理：
+// 本应用不收集、不展示、也不声称能读取这些内容；只显示 omp 入口状态
+// （路径/连接态），并提供打开 omp 原生配置流程的按钮（终端 `omp setup`）。
+// 按钮失败时原样显示 stderr/原因，禁止伪造"连接成功"。
+// omp config status panel (the settings modal's "AI Assistant" section,
+// also the target of the sidebar empty state). Model service, API keys,
+// providers and native thinking all live in omp's own configuration: this
+// app neither collects nor displays them; it only shows the omp entry
+// status (path/connection) and a button that opens omp's native setup flow
+// (terminal `omp setup`). Failures surface stderr verbatim — never a fake
+// "connected".
 
-import { useEffect, useState } from "react";
-import { Button, Form, Input, Segmented, Select, Typography, message } from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { Button, Typography, message } from "antd";
+import { ApiOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
   assistantGetState,
-  assistantSetConfig,
-  assistantTestConfig,
-  type ThinkingLevel,
+  assistantOpenOmpSetup,
 } from "./api";
 import { useTranslation } from "../i18n";
 
 const { Text } = Typography;
 
-// OpenAI 兼容协议的常见服务端点预设（ADR 0022 决策 5：一套协议覆盖云端与本地）
-// Presets of common OpenAI-compatible endpoints (ADR 0022 decision 5: one
-// protocol covers both cloud and local).
-const PROVIDER_PRESETS: { label: string; baseUrl: string }[] = [
-  { label: "DeepSeek", baseUrl: "https://api.deepseek.com" },
-  { label: "通义千问 (DashScope 兼容)", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
-  { label: "Kimi (Moonshot)", baseUrl: "https://api.moonshot.cn/v1" },
-  { label: "OpenAI", baseUrl: "https://api.openai.com/v1" },
-  { label: "Ollama (本地)", baseUrl: "http://localhost:11434/v1" },
-  { label: "LM Studio (本地)", baseUrl: "http://localhost:1234/v1" },
-];
-
 export function AssistantSettingsForm() {
   const { t } = useTranslation();
-  const [baseUrl, setBaseUrl] = useState("");
-  const [model, setModel] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [hasKey, setHasKey] = useState(false);
-  const [defaultLevel, setDefaultLevel] = useState<ThinkingLevel>("standard");
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [ompPath, setOmpPath] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [legacy, setLegacy] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openResult, setOpenResult] = useState<
+    { ok: true; detail: string } | { ok: false; detail: string } | null
+  >(null);
 
-  // 载入已保存配置（key 只取 hasKey 布尔，不回显明文）
-  // Load the saved config (the key only surfaces as a hasKey boolean, never as plaintext).
-  useEffect(() => {
-    assistantGetState()
-      .then((info) => {
-        setBaseUrl(info.baseUrl);
-        setModel(info.model);
-        setHasKey(info.hasKey);
-        setDefaultLevel(info.defaultThinkingLevel);
-      })
-      .catch(() => {});
+  const load = useCallback(async () => {
+    try {
+      const info = await assistantGetState();
+      setOmpPath(info.ompPath);
+      setConnected(info.connected);
+      setLegacy(info.legacyConfig);
+    } catch {
+      setOmpPath(null);
+      setConnected(false);
+    }
   }, []);
 
-  const save = async () => {
-    setSaving(true);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const openSetup = async () => {
+    setOpening(true);
+    setOpenResult(null);
     try {
-      // 空 key = 保留已存 key（后端 assistant_set_config 的语义）
-      // Empty key = keep the stored key (the semantics of backend assistant_set_config).
-      await assistantSetConfig(baseUrl.trim(), model.trim(), apiKey.trim() || undefined, defaultLevel);
-      setHasKey(hasKey || !!apiKey.trim());
-      setApiKey("");
-      message.success(t("assistant.settings.saved"));
+      const detail = await assistantOpenOmpSetup();
+      setOpenResult({ ok: true, detail });
+      message.success(detail);
     } catch (e) {
+      // 失败如实展示（stderr/退出原因），不伪造成功
+      setOpenResult({ ok: false, detail: String(e) });
       message.error(String(e));
     } finally {
-      setSaving(false);
-    }
-  };
-
-  const test = async () => {
-    setTesting(true);
-    try {
-      await save();
-      const detail = await assistantTestConfig();
-      message.success(`${t("assistant.settings.test_ok")} ${detail}`);
-    } catch (e) {
-      message.error(`${t("assistant.settings.test_fail")} ${String(e)}`);
-    } finally {
-      setTesting(false);
+      setOpening(false);
     }
   };
 
   return (
-    <Form layout="vertical" size="small">
-      <Form.Item label={t("assistant.settings.provider")}>
-        <Select
-          size="small"
-          placeholder={t("assistant.settings.provider_placeholder")}
-          allowClear
-          onChange={(v) => {
-            const preset = PROVIDER_PRESETS.find((p) => p.label === v);
-            if (preset) setBaseUrl(preset.baseUrl);
-          }}
-          options={PROVIDER_PRESETS.map((p) => ({ label: p.label, value: p.label }))}
-        />
-      </Form.Item>
-      <Form.Item label={t("assistant.settings.base_url")}>
-        <Input
-          size="small"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          placeholder="https://api.deepseek.com"
-        />
-      </Form.Item>
-      <Form.Item label={t("assistant.settings.model")}>
-        <Input
-          size="small"
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          placeholder="deepseek-chat"
-        />
-      </Form.Item>
-      <Form.Item label={t("assistant.settings.api_key")}>
-        <Input.Password
-          size="small"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder={hasKey ? t("assistant.settings.key_kept") : "sk-…"}
-          autoComplete="off"
-        />
-        <Text type="secondary" style={{ fontSize: 11 }}>
-          {t("assistant.settings.key_hint")}
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {t("assistant.settings.omp_managed")}
         </Text>
-      </Form.Item>
-      <Form.Item label={t("assistant.settings.thinking_default")}>
-        <Segmented
+      </div>
+      {legacy && (
+        <Text type="warning" style={{ fontSize: 11 }}>
+          {t("assistant.settings.legacy_hint")}
+        </Text>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <Text strong style={{ fontSize: 12 }}>
+          omp：
+        </Text>
+        {ompPath ? (
+          <>
+            <Text code style={{ fontSize: 11 }}>
+              {ompPath}
+            </Text>
+            <Text
+              type={connected ? "success" : "secondary"}
+              style={{ fontSize: 12 }}
+            >
+              {connected
+                ? t("assistant.settings.acp_connected")
+                : t("assistant.settings.acp_idle")}
+            </Text>
+          </>
+        ) : (
+          <Text type="danger" style={{ fontSize: 12 }}>
+            {t("assistant.settings.omp_missing")}
+          </Text>
+        )}
+        <Button
           size="small"
-          value={defaultLevel}
-          onChange={(v) => setDefaultLevel(v as ThinkingLevel)}
-          options={[
-            { label: t("assistant.level.off"), value: "off" },
-            { label: t("assistant.level.standard"), value: "standard" },
-            { label: t("assistant.level.deep"), value: "deep" },
-          ]}
+          type="text"
+          icon={<ReloadOutlined />}
+          onClick={() => void load()}
+          title={t("assistant.settings.refresh")}
         />
-      </Form.Item>
-      <div style={{ display: "flex", gap: 8 }}>
-        <Button size="small" type="primary" loading={saving} onClick={save}>
-          {t("assistant.settings.save")}
-        </Button>
-        <Button size="small" loading={testing} onClick={test}>
-          {t("assistant.settings.test")}
+      </div>
+      <div>
+        <Button
+          size="small"
+          icon={<ApiOutlined />}
+          loading={opening}
+          disabled={!ompPath}
+          onClick={openSetup}
+        >
+          {t("assistant.settings.open_setup")}
         </Button>
       </div>
-    </Form>
+      {openResult && !openResult.ok && (
+        <Text type="danger" style={{ fontSize: 11, whiteSpace: "pre-wrap" }}>
+          {openResult.detail}
+        </Text>
+      )}
+    </div>
   );
 }

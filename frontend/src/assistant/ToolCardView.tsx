@@ -1,15 +1,16 @@
 // 工具卡片：一次工具调用在对话流中的可视记录（CONTEXT.md 术语：工具卡片）。
-// 状态机：proposed（待确认，可改参）→ running（不定态进度，ADR 0023 已知限制）
-//        → done / error / rejected。
+// 状态机：proposed（待确认）→ running（不定态进度）→ done / error
+//（用户拒绝走 omp 的 failed 终态，卡片呈 error 态并显示拒绝原因）。
+// omp ACP 基座：审批经 omp 审批表单（Approve/Deny），协议不携带改后参数，
+// 故无改参入口；参数全文展示供审阅。
 
 import { useEffect, useState } from "react";
-import { Button, Modal, Typography, Input, Tag, Progress } from "antd";
+import { Button, Typography, Tag } from "antd";
 import {
   CaretDownOutlined,
   CaretRightOutlined,
   CheckOutlined,
   CloseOutlined,
-  EditOutlined,
   LoadingOutlined,
   RocketOutlined,
 } from "@ant-design/icons";
@@ -22,22 +23,17 @@ export interface ToolCardData {
   callId: string;
   tool: string;
   args: unknown;
-  status: "proposed" | "running" | "done" | "error" | "rejected";
+  status: "proposed" | "running" | "done" | "error";
   /** tool_done 的摘要：status / recordId / familyId / scenarioFile / error.message */
   summary?: {
     status?: string;
     recordId?: string;
-    /** 族生成回执（e2m2e 5.9.3）：生成批次标识，非单条记录 id */
     familyId?: string;
     scenarioFile?: string;
     error?: { message?: string };
   };
   /** 运行起始时间戳（ms），用于耗时显示 */
   startedAt?: number;
-  /** 真进度分数 [0,1]（progressToken 通知；仅 live 运行中存在） */
-  progress?: number;
-  /** 进度可读消息（服务端下发的阶段说明） */
-  progressMessage?: string;
 }
 
 export function ToolCardView({
@@ -51,13 +47,9 @@ export function ToolCardView({
   onApplyScenario?: (path: string) => void;
 }) {
   const { t } = useTranslation();
-  const [editOpen, setEditOpen] = useState(false);
-  const [editText, setEditText] = useState("");
-  const [editError, setEditError] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
-  // 运行中每秒刷新耗时（无进度通知时是唯一的不定态指示；有真进度时
-  // 进度条接管，耗时数字保留）
+  // 运行中每秒刷新耗时（omp 更新流不携带分数制进度，耗时是不定态指示）
   useEffect(() => {
     if (card.status !== "running") return;
     const base = card.startedAt ?? Date.now();
@@ -68,8 +60,8 @@ export function ToolCardView({
   const argsText = JSON.stringify(card.args, null, 2);
 
   // 完成态折叠为单行摘要（工具名 + 状态 + record_id），点击展开参数与
-  // 结果摘要（ADR 0026 决策 4）；待确认/运行中保持全文展示供审阅。
-  const collapsible = card.status === "done" || card.status === "error" || card.status === "rejected";
+  // 结果摘要；待确认/运行中保持全文展示供审阅。
+  const collapsible = card.status === "done" || card.status === "error";
   const [expanded, setExpanded] = useState(false);
   const showDetail = !collapsible || expanded;
 
@@ -82,7 +74,6 @@ export function ToolCardView({
     ),
     done: <Tag color="success">{t("assistant.card.done")}</Tag>,
     error: <Tag color="error">{t("assistant.card.failed")}</Tag>,
-    rejected: <Tag>{t("assistant.card.rejected")}</Tag>,
   }[card.status];
 
   return (
@@ -114,23 +105,6 @@ export function ToolCardView({
         )}
       </div>
 
-      {/* 真进度（progressToken 通知，ADR 0023 限制已由 e2m2e 5.9.0 解除）：
-          运行中且有进度时显示分数条与阶段消息；无进度保持耗时转圈不定态 */}
-      {card.status === "running" && typeof card.progress === "number" && (
-        <div style={{ marginTop: 6 }}>
-          <Progress
-            percent={Math.min(100, Math.max(0, Math.round(card.progress * 100)))}
-            size="small"
-            status="active"
-          />
-          {card.progressMessage && (
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {card.progressMessage}
-            </Text>
-          )}
-        </div>
-      )}
-
       {/* 参数摘要：确认前完整展示供审阅（ADR 0022 决策 4） */}
       {showDetail && (
         <pre
@@ -159,17 +133,6 @@ export function ToolCardView({
             onClick={() => assistantConfirmTool(card.callId, true)}
           >
             {t("assistant.card.confirm")}
-          </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setEditText(JSON.stringify(card.args, null, 2));
-              setEditError("");
-              setEditOpen(true);
-            }}
-          >
-            {t("assistant.card.edit")}
           </Button>
           <Button
             size="small"
@@ -207,32 +170,6 @@ export function ToolCardView({
           {card.summary.error.message}
         </Text>
       )}
-
-      {/* 改参弹窗：JSON 编辑，确认时带改后参数（ADR 0022 决策 4 可改参） */}
-      <Modal
-        title={t("assistant.card.edit_title")}
-        open={editOpen}
-        onCancel={() => setEditOpen(false)}
-        onOk={() => {
-          try {
-            const parsed = JSON.parse(editText);
-            setEditOpen(false);
-            assistantConfirmTool(card.callId, true, parsed);
-          } catch {
-            setEditError(t("assistant.card.edit_bad_json"));
-          }
-        }}
-        okText={t("assistant.card.confirm")}
-        cancelText={t("assistant.card.cancel")}
-      >
-        <Input.TextArea
-          rows={12}
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          style={{ fontFamily: "monospace", fontSize: 12 }}
-        />
-        {editError && <Text type="danger" style={{ fontSize: 12 }}>{editError}</Text>}
-      </Modal>
     </div>
   );
 }

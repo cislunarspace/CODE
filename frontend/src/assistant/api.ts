@@ -1,183 +1,126 @@
 // AI 助手的前端封装：Tauri command 调用 + assistant-event 事件类型。
 // Frontend wrapper for the AI assistant: Tauri command calls plus assistant-event types.
-// 设计依据：docs/adr/0022（定位与策略）、0023（Rust 宿主 agent loop + MCP 拓扑）、
-// 0025（会话历史与多会话）、0026（思考等级与思考块）。
+// 设计依据：omp ACP 基座（会话/模型/凭据/思考配置由 omp 原生管理，本应用
+// 只做 ACP 客户端与事件转发）。
 
-/// 思考等级三档（ADR 0026 决策 1）。
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+
+/// 思考等级三档（UI 展示；后端映射 omp 原生值 off/medium/high）。
 export type ThinkingLevel = "off" | "standard" | "deep";
 
-/** 会话元数据（sessions/index.json 的一行，ADR 0025 决策 3） */
+/** 会话索引行（session/list 过滤本应用 cwd 后的传输形状） */
 export interface SessionMeta {
   id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  messageCount: number;
-  /** 本会话思考等级；空串 = 继承全局默认 */
-  thinkingLevel: string;
+  title: string | null;
+  updatedAt: string | null;
+  messageCount: number | null;
 }
 
 export interface AssistantInfo {
-  configured: boolean;
-  baseUrl: string;
-  model: string;
-  hasKey: boolean;
-  /** 当前会话的持久化历史（OpenAI 消息 + 思考行，用于重启后恢复显示） */
-  history: RawMessage[];
-  currentSessionId: string;
-  /** 会话列表（最近活动倒序） */
+  /** omp 可执行文件是否可解析（false = 空态：未安装/不可执行） */
+  ompConfigured: boolean;
+  /** ACP 进程是否存活（懒启动：未用过时为 false，不代表故障） */
+  connected: boolean;
+  /** 当前会话 id（null = 尚未建立会话，首条消息时懒创建） */
+  sessionId: string | null;
   sessions: SessionMeta[];
-  /** 当前会话生效的思考等级 */
+  /** 当前生效的思考等级 */
   thinkingLevel: ThinkingLevel;
-  /** 全局默认思考等级（设置面板；新会话继承） */
-  defaultThinkingLevel: ThinkingLevel;
+  /** 是否有回复进行中或未决审批 */
+  running: boolean;
+  /** omp 可执行路径（设置分区展示） */
+  ompPath: string | null;
+  /** 检测到旧版模型服务配置残留：提示迁移（模型与 key 在 omp 重新配置） */
+  legacyConfig: boolean;
 }
-
-/** 持久化的思考行（带 kind 标记，与消息行混入同一会话文件，ADR 0025 决策 3） */
-export interface ThinkingRow {
-  kind: "thinking";
-  content: string;
-}
-
-/** 持久化的消息行（OpenAI 形状；前端据此重建气泡与工具卡片） */
-export interface MessageRow {
-  role: "user" | "assistant" | "tool" | "system";
-  content?: string | null;
-  tool_calls?: { id: string; function: { name: string; arguments: string } }[];
-  tool_call_id?: string;
-}
-
-/** 中断界限行（kind 标记，#453）：仅作回放显示，不进 API 上下文 */
-/** The interrupt-boundary row (kind marker, #453): replay display only,
- *  never enters the API context. */
-export interface InterruptedRow {
-  kind: "interrupted";
-}
-
-export type RawMessage = MessageRow | ThinkingRow | InterruptedRow;
 
 export type AssistantEventPayload =
+  /** 重建指令：清空当前显示序列（切换/新建/清空与回放开头） */
+  | { kind: "reset" }
+  /** 用户气泡（live 与回放同一路径：后端统一发，前端不本地补） */
+  | { kind: "user_message"; text: string }
   | { kind: "delta"; text: string }
   | { kind: "thinking"; text: string }
   | { kind: "tool_proposed"; callId: string; tool: string; arguments: unknown }
   | { kind: "tool_started"; callId: string; tool: string; arguments: unknown }
   | {
-      kind: "tool_progress";
-      callId: string;
-      /** 进度分数 [0,1]（e2m2e progressToken 通知，total 恒为 1） */
-      progress: number;
-      message: string | null;
-    }
-  | {
       kind: "tool_done";
       callId: string;
       tool: string;
       ok: boolean;
-      summary: { status?: string; recordId?: string; error?: { message?: string } };
+      summary: {
+        status?: string;
+        recordId?: string;
+        familyId?: string;
+        scenarioFile?: string;
+        error?: { message?: string };
+      };
     }
-  | { kind: "tool_rejected"; callId: string; tool: string }
   | { kind: "message_done"; usage?: { total_tokens?: number } | null }
   | { kind: "interrupted" }
   | { kind: "error"; message: string };
 
 export async function assistantGetState(): Promise<AssistantInfo> {
-  const { invoke } = await import("@tauri-apps/api/core");
   return invoke("assistant_get_state");
 }
 
-export async function assistantSetConfig(
-  baseUrl: string,
-  model: string,
-  apiKey?: string,
-  thinkingLevel?: ThinkingLevel,
-): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_set_config", {
-    baseUrl,
-    model,
-    apiKey: apiKey ?? null,
-    thinkingLevel: thinkingLevel ?? null,
-  });
-}
-
-export async function assistantTestConfig(): Promise<string> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_test_config");
-}
-
 export interface SelectionContext {
-  recordId?: string | null;
-  label: string;
-  artifactType: string;
-  orbitType?: string;
+  /** 画布选择的结构化描述（后端并入发给 omp 的正文，不进用户气泡） */
+  [key: string]: unknown;
 }
 
 export async function assistantSend(
   message: string,
-  lang: string,
   selection: SelectionContext | null,
 ): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_send", { message, lang, selection });
+  await invoke("assistant_send", { message, selection });
 }
 
+/** 确认/拒绝一次工具审批；返回 false = 该键已无挂起等待（重复点击等） */
 export async function assistantConfirmTool(
   callId: string,
   approved: boolean,
-  arguments_?: unknown,
 ): Promise<boolean> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_confirm_tool", { callId, approved, arguments: arguments_ ?? null });
+  return invoke("assistant_confirm_tool", { callId, approved });
 }
 
-/** 请求中断当前进行中的一轮对话（幂等）；返回是否有轮次在跑（#453）。 */
-/** Request an interrupt of the running turn (idempotent, #453); returns
- *  whether a turn was active. */
+/** 请求中断当前轮（后端发 ACP session/cancel）；返回是否有轮次在跑 */
 export async function assistantCancel(): Promise<boolean> {
-  const { invoke } = await import("@tauri-apps/api/core");
   return invoke("assistant_cancel");
 }
 
+/** 清空当前会话（omp 无 reset 能力：落位为新建，旧会话留作历史） */
 export async function assistantClearHistory(): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_clear_history");
+  await invoke("assistant_clear_history");
 }
 
-/** 新建会话并切换过去（受切换门禁）；返回新会话 id（ADR 0025 决策 2）。 */
+/** 新建会话并切换过去（受门禁）；返回新会话 id */
 export async function assistantNewSession(): Promise<string> {
-  const { invoke } = await import("@tauri-apps/api/core");
   return invoke("assistant_new_session");
 }
 
-/** 切换当前会话（受切换门禁）；历史随切换载入。 */
+/** 切换会话（session/load 回放重建 UI；失败保持原会话） */
 export async function assistantSwitchSession(sessionId: string): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_switch_session", { sessionId });
+  await invoke("assistant_switch_session", { sessionId });
 }
 
-/** 重命名会话（下拉项悬浮操作，ADR 0025 决策 4）。 */
-export async function assistantRenameSession(sessionId: string, title: string): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_rename_session", { sessionId, title });
-}
-
-/** 删除会话（前端二次确认；后端另有切换门禁兜底）。 */
-export async function assistantDeleteSession(sessionId: string): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_delete_session", { sessionId });
-}
-
-/** 设当前会话的思考等级（输入区旁三档单选，ADR 0026 决策 1）。 */
+/** 设当前会话的思考等级（三档；后端映射 omp 原生 thinking 值） */
 export async function assistantSetThinkingLevel(level: ThinkingLevel): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  return invoke("assistant_set_thinking_level", { level });
+  await invoke("assistant_set_thinking_level", { level });
+}
+
+/** 打开 omp 原生配置流程（终端运行 `omp setup`）；失败带 stderr/原因 */
+export async function assistantOpenOmpSetup(): Promise<string> {
+  return invoke("assistant_open_omp_setup");
 }
 
 /** 订阅助手事件流；返回退订函数。 */
-/** Subscribe to the assistant event stream; returns the unlisten function. */
 export async function onAssistantEvent(
   cb: (payload: AssistantEventPayload) => void,
 ): Promise<() => void> {
-  const { listen } = await import("@tauri-apps/api/event");
-  return listen<AssistantEventPayload>("assistant-event", (ev) => cb(ev.payload));
+  const unlisten = await listen<AssistantEventPayload>("assistant-event", (event) => {
+    cb(event.payload);
+  });
+  return unlisten;
 }

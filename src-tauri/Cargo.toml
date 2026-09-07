@@ -1,6 +1,6 @@
 [package]
 name = "transfer-orbit-design"
-version = "4.8.3"
+version = "4.9.0"
 edition = "2021"
 description = "transfer-orbit-design Tauri 桌面应用（Rust 壳 + React 前端 + e2m2e sidecar）"
 
@@ -19,18 +19,18 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }  # 键序保留：sidecar 契约「帧序 = arrays 占位键顺序」依赖 JSON 文本序（BTreeMap 字母序曾致 eph/transfer 段帧配对错位）
-tokio = { version = "1", features = ["macros", "sync", "rt-multi-thread", "process", "io-util", "time"] }
+tokio = { version = "1", features = ["macros", "sync", "rt-multi-thread", "process", "io-util", "time", "io-std"] }
 anyhow = "1"
+parking_lot = "0.12"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 # 情景保存/打开的文件对话框（#429）：官方插件，与 updater/process 同模式
 # The file dialog for scenario save/open (#429): official plugin, same pattern as updater/process.
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
-# AI 助手（ADR 0023）：LLM SSE 流式调用走 rustls（避开 Windows OpenSSL 现场编译）；
-# API key 存 OS keychain（linux 用内核 keyutils 后端，不拉 D-Bus/secret-service 编译链）
+# 更新器 HTTP（rustls，避开 Windows OpenSSL 现场编译）。AI 会话已由 omp
+# 基座接管（ADR 0030），keyring/key 不再由本应用保存
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
-keyring = { version = "3", default-features = false, features = ["windows-native", "apple-native", "linux-native"] }
 
 # sidecar 子树生命周期兜底（Job Object kill-on-close），仅 Windows 需要
 [target.'cfg(windows)'.dependencies]

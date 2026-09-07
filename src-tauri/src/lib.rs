@@ -100,14 +100,23 @@ pub fn run() {
                 }
             }
             SidecarState::configure(command, cwd);
-            // AI 助手：mcp-serve 拉起配置与 sidecar 同源（dev uv / 分发打包），
-            // 仅子命令不同（ADR 0023 决策 2）
-            let (mcp_command, mcp_cwd) = if cfg!(debug_assertions) {
-                dev_mcp_command(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap())
-            } else {
-                packaged_mcp_command(resource_dir_handle.as_deref().unwrap())
-            };
-            mcp::McpState::configure(mcp_command, mcp_cwd);
+            // AI 助手（omp ACP 基座）：dev 用 TOD_OMP_BIN/PATH 的 omp，
+            // 分发用资源目录内打包的固定版本 omp；ACP 会话工作目录取
+            // 应用配置目录（会话索引按它过滤，不混入用户 CLI 会话）。
+            // mcp-serve 不再由本进程管理——omp 经桥接子进程拉起（ADR 更新）。
+            if let Some(resource_dir) = resource_dir_handle.as_deref() {
+                if !cfg!(debug_assertions) {
+                    // 桥接进程按它定位打包 mcp-serve（经 omp 环境继承）
+                    std::env::set_var("TOD_RESOURCE_DIR", resource_dir);
+                }
+            }
+            if let Some(omp_command) =
+                assistant::omp::resolve_omp_command(resource_dir_handle.as_deref())
+            {
+                if let Some(cwd) = assistant::host_tools::config_dir() {
+                    assistant::omp::OmpState::configure(omp_command, cwd);
+                }
+            }
             // 进度事件 → 前端窗口
             let handle = app.handle().clone();
             state::set_progress_emitter(std::sync::Arc::new(move |ev: &serde_json::Value| {
@@ -120,7 +129,6 @@ pub fn run() {
             }));
             app.manage(SidecarState::new());
             app.manage(ProjectState::new());
-            app.manage(mcp::McpState::new());
             app.manage(assistant::AssistantState::new());
             Ok(())
         })
@@ -140,12 +148,14 @@ pub fn run() {
             cmd::scenarios_dir,
             cmd::open_scenario,
             assistant_cmd::assistant_get_state,
-            assistant_cmd::assistant_set_config,
-            assistant_cmd::assistant_test_config,
             assistant_cmd::assistant_send,
-            assistant_cmd::assistant_cancel,
             assistant_cmd::assistant_confirm_tool,
-            assistant_cmd::assistant_clear_history
+            assistant_cmd::assistant_cancel,
+            assistant_cmd::assistant_clear_history,
+            assistant_cmd::assistant_new_session,
+            assistant_cmd::assistant_switch_session,
+            assistant_cmd::assistant_set_thinking_level,
+            assistant_cmd::assistant_open_omp_setup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

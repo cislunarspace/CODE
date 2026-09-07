@@ -11,15 +11,28 @@
 //!   （情景文件是 KB 级整块 JSON，全文直接进上下文）。
 
 use serde_json::{json, Value};
+use std::path::PathBuf;
+
+/// 用户配置目录（原 store.rs 的 config_dir；store 删除后由宿主工具自持，
+/// 与 Python 侧 user_config_dir() 同路径）。取不到 HOME/APPDATA 时返回
+/// None——调用方按"无持久化"降级。
+pub fn config_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    let base = std::env::var_os("APPDATA").map(PathBuf::from);
+    #[cfg(not(windows))]
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")));
+    base.map(|b| b.join("transfer-orbit-design"))
+}
+
+/// 情景固定目录：与配置目录同级下的 scenarios/。
+pub fn scenarios_dir() -> Option<PathBuf> {
+    config_dir().map(|d| d.join("scenarios"))
+}
 
 /// 宿主工具保留前缀（ADR 0027）：拦截分发的判据，冲突命名权归宿主。
 pub const HOST_TOOL_PREFIX: &str = "scenario_";
-
-/// 情景固定目录：与助手会话 sessions/ 同级（store::config_dir 先例）。
-pub fn scenarios_dir() -> Option<std::path::PathBuf> {
-    super::store::config_dir().map(|d| d.join("scenarios"))
-}
-
 pub fn is_host_tool(name: &str) -> bool {
     name.starts_with(HOST_TOOL_PREFIX)
 }

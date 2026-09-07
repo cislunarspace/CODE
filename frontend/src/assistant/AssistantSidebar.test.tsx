@@ -14,18 +14,22 @@ import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
 import { AssistantSidebar } from "./AssistantSidebar";
 import {
+  assistantGetState,
   assistantSend,
   assistantClearHistory,
   assistantCancel,
+  type AssistantEventPayload,
 } from "./api";
 
 vi.mock("./api", () => ({
   assistantGetState: vi.fn().mockResolvedValue({
-    configured: true,
-    history: [],
-    sessions: [],
-    currentSessionId: "default",
+    ompConfigured: true,
+    connected: true,
+    sessionId: "s1",
+    sessions: [{ id: "s1", title: null, updatedAt: null, messageCount: null }],
     thinkingLevel: "standard",
+    running: false,
+    ompPath: "/usr/bin/omp",
   }),
   onAssistantEvent: vi.fn().mockImplementation(async (cb: (payload: { kind: string }) => void) => {
     lastHandler = cb;
@@ -33,12 +37,12 @@ vi.mock("./api", () => ({
   }),
   assistantSend: vi.fn().mockResolvedValue(undefined),
   assistantCancel: vi.fn().mockResolvedValue(true),
+  assistantConfirmTool: vi.fn().mockResolvedValue(true),
   assistantClearHistory: vi.fn().mockResolvedValue(undefined),
   assistantNewSession: vi.fn().mockResolvedValue("s2"),
-  assistantRenameSession: vi.fn().mockResolvedValue(undefined),
-  assistantDeleteSession: vi.fn().mockResolvedValue(undefined),
   assistantSwitchSession: vi.fn().mockResolvedValue(undefined),
   assistantSetThinkingLevel: vi.fn().mockResolvedValue(undefined),
+  assistantOpenOmpSetup: vi.fn().mockResolvedValue(""),
 }));
 
 beforeAll(() => {
@@ -84,7 +88,6 @@ afterEach(() => {
 function setup() {
   render(
     <AssistantSidebar
-      lang="zh"
       selection={null}
       onArtifactProduced={vi.fn()}
       onOpenRecord={vi.fn()}
@@ -211,5 +214,86 @@ describe("AssistantSidebar 中断续跑（#461）", () => {
     act(() => lastHandler?.({ kind: "interrupted" }));
     expect(screen.queryByRole("button", { name: "继续" })).toBeNull();
     resolveSend();
+  });
+});
+
+// —— omp 空态（ADR 0030）：未配置时给出明确引导而不是崩溃/静默 ——
+
+describe("AssistantSidebar omp 空态", () => {
+  it("ompConfigured=false 时显示未安装引导，去设置按钮回调 onOpenSettings", async () => {
+    vi.mocked(assistantGetState).mockResolvedValueOnce({
+      ompConfigured: false,
+      connected: false,
+      sessionId: null,
+      sessions: [],
+      thinkingLevel: "standard",
+      running: false,
+      ompPath: null,
+      legacyConfig: false,
+    });
+    const onOpenSettings = vi.fn();
+    render(
+      <AssistantSidebar
+        selection={null}
+        onArtifactProduced={vi.fn()}
+        onOpenRecord={vi.fn()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    expect(await screen.findByText(/未找到可用的 omp/)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: /去设置/ }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    // 空态不出输入框（助手不可用，不提供假输入）
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+});
+
+// —— 产物登记（ADR 0022 A1）：tool_done 的 recordId+tool 配对上抛 ——
+
+describe("AssistantSidebar 产物登记", () => {
+  it("tool_done(ok) 摘要带 recordId 时以 (recordId, tool) 回调产物登记", async () => {
+    const produced = vi.fn();
+    render(
+      <AssistantSidebar
+        selection={null}
+        onArtifactProduced={produced}
+        onOpenRecord={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(lastHandler).toBeDefined());
+    act(() =>
+      lastHandler!({
+        kind: "tool_done",
+        callId: "c1",
+        tool: "family_generate",
+        ok: true,
+        summary: { recordId: "rec-42" },
+      } as AssistantEventPayload),
+    );
+    await waitFor(() => expect(produced).toHaveBeenCalledWith("rec-42", "family_generate"));
+  });
+
+  it("tool_done 摘要无 recordId 时不触发登记", async () => {
+    const produced = vi.fn();
+    render(
+      <AssistantSidebar
+        selection={null}
+        onArtifactProduced={produced}
+        onOpenRecord={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(lastHandler).toBeDefined());
+    act(() =>
+      lastHandler!({
+        kind: "tool_done",
+        callId: "c2",
+        tool: "catalog_query",
+        ok: true,
+        summary: { status: "ok" },
+      } as AssistantEventPayload),
+    );
+    expect(produced).not.toHaveBeenCalled();
   });
 });

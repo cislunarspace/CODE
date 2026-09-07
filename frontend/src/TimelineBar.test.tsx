@@ -8,9 +8,8 @@
 // frame callbacks with fake timers.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { TimelineBar, type TimelineBarProps } from "./TimelineBar";
-import { I18nProvider } from "./i18n";
 
 const baseProps: TimelineBarProps = {
   timeRange: [0, 10_000_000], // ~116 天：一步不跨出量程，步长断言不被回绕污染
@@ -119,38 +118,3 @@ describe("TimelineBar 基础交互回归", () => {
   });
 });
 
-// —— i18n（#450）：文案入词典，随语言切换 ——
-// i18n (#450): labels live in the dictionary and follow the language switch.
-
-describe("TimelineBar i18n（#450）", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        observe() {}
-        disconnect() {}
-        unobserve() {}
-      },
-    );
-  });
-
-  afterEach(() => {
-    localStorage.clear();
-    cleanup();
-  });
-
-  it("英文语言下播放/速率/循环提示切换为英文", () => {
-    localStorage.setItem("tod-lang", "en");
-    render(
-      <I18nProvider>
-        <TimelineBar {...baseProps} />
-      </I18nProvider>,
-    );
-    expect(screen.getByTitle("Play")).toBeDefined();
-    // antd Select 把 title 传播到内层元素，同名匹配可能多个
-    // antd Select propagates the title to inner nodes — multiple matches possible.
-    expect(screen.getAllByTitle("Playback rate").length).toBeGreaterThan(0);
-    expect(screen.getByTitle("Looping (click to turn off)")).toBeDefined();
-    expect(screen.queryByTitle("播放")).toBeNull();
-  });
-});

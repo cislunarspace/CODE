@@ -1,7 +1,6 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { CanvasToolbar } from "./CanvasToolbar";
-import { I18nProvider } from "./i18n";
 
 const baseProps = {
   projection: "3d" as const,
@@ -72,11 +71,6 @@ describe("CanvasToolbar component", () => {
 // Group separators and PNG export (#450).
 
 describe("CanvasToolbar 分组与 PNG 导出（#450）", () => {
-  afterEach(() => {
-    // 语言切换测试写 tod-lang；清掉，避免污染后续裸渲染用例的默认语言
-    // The lang test writes tod-lang; clear it so later bare-render cases keep zh.
-    localStorage.clear();
-  });
 
   it("投影/视图系/绘制内容/中心四组之间有 3 个竖向分隔符", () => {
     const { container } = render(<CanvasToolbar {...baseProps} />);
@@ -97,18 +91,6 @@ describe("CanvasToolbar 分组与 PNG 导出（#450）", () => {
     cleanup();
   });
 
-  it("英文语言下标签与提示切换为英文", () => {
-    localStorage.setItem("tod-lang", "en");
-    render(
-      <I18nProvider>
-        <CanvasToolbar {...baseProps} />
-      </I18nProvider>,
-    );
-    expect(screen.getByRole("radio", { name: "Synodic" })).toBeDefined();
-    expect(screen.getByRole("radio", { name: "Barycenter" })).toBeDefined();
-    expect(screen.getByRole("button", { name: /Fit/ })).toBeDefined();
-    expect(screen.queryByRole("radio", { name: "会合系" })).toBeNull();
-  });
 });
 
 // —— 绘制内容切换（eph-fig）——

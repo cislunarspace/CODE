@@ -1,763 +1,709 @@
-//! AI 助手 agent loop：LLM 对话循环与工具调用编排（本仓 ADR 0022/0023，
-//! 多会话与思考等级 ADR 0025/0026）。
+//! AI 助手会话适配器：以随应用分发的 omp 为唯一会话运行时（ACP 客户端）。
 //!
-//! 一轮发送的流程：
-//! 1. 组装三层系统提示（角色边界 / 工具使用规则 / 现取的轨道库摘要与当前
-//!    选择），连同当前会话的历史一起发给 LLM（SSE 流式，增量推前端；
-//!    思考增量单列一种事件）；
-//! 2. LLM 提议工具调用时：只读工具（白名单 [`READ_ONLY_TOOLS`]）直接执行；
-//!    其余工具发出 `tool_proposed` 事件并挂起，等用户经
-//!    `assistant_confirm_tool` 确认/改参/拒绝（ADR 0022 决策 4）；
-//! 3. 工具结果经 [`summary`] 投影后进上下文（大轨迹数据不进，只带
-//!    record_id 与诊断摘要），错误原文回灌供模型自纠（决策 8）；
-//! 4. 最多 [`MAX_ROUNDS`] 轮后收尾（防失控循环）。
+//! omp 负责：模型配置与凭据（原生配置，本应用不保存 base URL/model/key）、
+//! 会话上下文与持久化（session 目录 JSONL，本应用不解析改写）、模型调用、
+//! 思考过程与 agent loop。本模块只保留：
+//! - ACP 连接与当前 `session_id`、运行状态、待处理审批与事件路由；
+//! - `session/update` → `AssistantEventPayload` 的单一转换（events.rs）；
+//! - 会话生命周期：new / load（回放重建 UI）/ cancel（真中断，cancelled
+//!   stop reason）/ clear（omp 无 reset 能力，落位为新建，旧会话留作历史）；
+//! - 工具审批：omp 的 `elicitation/create` 表单映射为 `tool_proposed`
+//!   工具卡片，用户确认/拒绝经 `assistant_confirm_tool` 回 Approve/Deny；
+//!   只读工具由 omp 审批配置覆盖文件免确认（omp.rs overlay）；
+//! - 思考等级三档映射：off→off、standard→medium、deep→high
+//!   （`session/set_config_option`；档位不可用回退 medium 一次并显式报错）。
 //!
-//! 多会话（ADR 0025）：内存只保持当前会话的 history/pending，切换/新建/
-//! 删除当前会话受 [`AssistantState::busy`] 门禁——有进行中回复或未决确认
-//! 时拒绝（mcp-serve 不可取消，装死只会留假状态）。
-//!
-//! 思考块（ADR 0026）：SSE 思考增量实时推前端；段落结束时作为带 kind
-//! 标记的行落盘（展示层存全量），构造 API 请求时剥除（回放净化，决策 5）。
-//!
-//! 验证链挂点（ADR 0023 决策 4）：[`check_call`] / [`check_result`] 是
-//! 可插拔检查链的两个钩子，模式三场景层的物理可行性验证器将来挂在这里。
-//!
-//! 并发：同一时刻只跑一轮对话（`running` 门禁）；MCP 调用本身可并发
-//! （mcp-serve 线程池），但串行更利于用户逐条确认，v1 保持串行。
+//! 事件契约（前端 `assistant-event`）：delta/thinking/user_message/tool_*
+//! /message_done/interrupted/error/reset。回放（session/load）与实时流走
+//! 同一折叠路径，前端不再解析任何历史文件格式。
 
+pub mod acp;
+pub mod bridge;
+pub mod events;
 pub mod host_tools;
-pub mod llm;
-pub mod prompt;
-pub mod store;
-pub mod summary;
+pub mod omp;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Weak};
 
+use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
+use tokio::sync::oneshot;
 
-use crate::mcp::{call_tool_with_retry, list_tools_with_retry, McpState};
+use acp::{AcpConn, AcpHandlers, Responder};
+use events::{EventSink, UpdateConverter};
 
 /// 前端监听的事件名。
 pub const ASSISTANT_EVENT: &str = "assistant-event";
 
-/// 一轮发送最多允许的 LLM 往返轮数（含工具自纠），防失控循环。
-const MAX_ROUNDS: usize = 10;
+/// 会话结构操作被门禁拦下时的提示。
+const BUSY_MSG: &str = "有回复进行中或工具确认未决，请等待完成后再操作会话";
 
-/// 会话结构操作被门禁拦下时的提示（ADR 0025 决策 5）。
-const BUSY_MSG: &str = "有回复进行中或工具确认未决，请等待完成后再切换会话";
+/// 发给 omp 的固定中文领域指令：角色边界、工具纪律、结果与引用规范
+///（每轮 prompt 正文前置注入；omp 侧无应用可控的系统提示词接口）。
+const DOMAIN_INSTRUCTION: &str = "你是 Transfer Orbit Design 的轨道设计助手。始终使用简体中文回答，专业名词、工具名、字段名和协议名可保留必要的英文缩写。\n你只能协助本项目的轨道库、轨道计算、轨道预报、转移设计、坐标转换、分区分析和情景管理；超出范围时明确说明，不编造结果、记录、参数或工具返回值。\n处理任务时先理解用户目标，再使用已有工具获取事实；需要查询轨道库或情景时优先查询，不凭记忆猜测记录内容。工具参数必须符合工具 schema，缺少关键参数或存在多个合理解释时先向用户说明需要补充的信息。\n只读查询用于确认事实；会改变轨道库或情景的操作必须通过工具审批后执行。工具返回错误时说明错误原因和可行的下一步，不掩盖错误，不把未完成操作说成已完成。\n涉及计算结果时给出使用的输入、关键假设、单位、适用的数据系和结果摘要；引用轨道库记录、产物或情景时优先使用真实 record_id 或 scenario_file。不要输出冗长的内部思考过程，只给出对用户有用的结论、依据和下一步。";
 
-/// 启动时无任何会话记录使用的缺省会话 id（ADR 0023 决策 7 的 v1 约定）。
-const DEFAULT_SESSION: &str = "default";
+/// 组装发给 omp 的 prompt 正文：领域指令 → 用户消息 → 可选画布选择。
+/// 选择 JSON 只进正文不进气泡事件（见 run_prompt）。
+fn build_prompt_text(message: &str, selection: Option<&Value>) -> String {
+    match selection {
+        Some(sel) if !sel.is_null() => format!(
+            "{DOMAIN_INSTRUCTION}\n\n{message}\n\n[当前画布选择]\n{}",
+            serde_json::to_string(sel).unwrap_or_default()
+        ),
+        _ => format!("{DOMAIN_INSTRUCTION}\n\n{message}"),
+    }
+}
 
-/// 中断占位 tool 结果（#453）：排队中的工具调用因中断未执行时回灌进
-/// 历史的内容——保持 assistant.tool_calls 与 tool 消息成对（OpenAI
-/// 对孤立 tool_calls 报错），同时向模型说明中断事实。
-const INTERRUPTED_TOOL_TEXT: &str = "用户中断了本轮对话，此工具调用未执行。";
+/// build_prompt_text 的逆：从 omp 回放的 prompt 全文剥出用户可见消息
+///（去掉领域指令前缀与画布选择段；无信封特征时原样返回，兼容任意
+/// 回放文本）。实测 omp session/load 以单个 user_message_chunk 原样
+/// 回放 prompt 全文，气泡必须在此剥离。
+pub(crate) fn user_visible_message(full: &str) -> &str {
+    let rest = full.strip_prefix(DOMAIN_INSTRUCTION).unwrap_or(full);
+    let rest = rest.strip_prefix("\n\n").unwrap_or(rest);
+    match rest.find("\n\n[当前画布选择]") {
+        Some(i) => &rest[..i],
+        None => rest,
+    }
+}
 
-/// 只读工具白名单（ADR 0022 决策 4）：免确认直接执行。
-/// 来源：e2m2e facade 的 catalog 两查询 + 宿主内置的情景列举（ADR 0027，
-/// 纯读固定目录）。fail-closed：不在名单里的一律要确认。
-const READ_ONLY_TOOLS: &[&str] = &["catalog_query", "catalog_get", "scenario_list"];
+/// 会话事件日志上限（条）：超出截头（久远事件不再重放，全文在 omp 会话里）。
+const MAX_SESSION_LOG: usize = 5000;
 
-/// 事件发射器（setup 时注入 AppHandle 包装；测试注入 fake）。
-pub type AssistantEmitter = Arc<dyn Fn(&Value) + Send + Sync>;
-static EMITTER: OnceLock<AssistantEmitter> = OnceLock::new();
+/// 事件发射器（setup 时注入 AppHandle 包装；测试注入收集器）。
+pub type AssistantEmitter = EventSink;
+static EMITTER: std::sync::OnceLock<AssistantEmitter> = std::sync::OnceLock::new();
 
 pub fn set_emitter(e: AssistantEmitter) {
     let _ = EMITTER.set(e);
 }
 
 fn emit(payload: Value) {
-    if let Some(emit) = EMITTER.get() {
-        emit(&payload);
+    if let Some(sink) = EMITTER.get() {
+        sink(&payload);
     }
 }
 
-/// 用户对一次工具调用提议的决定。
-pub struct ConfirmDecision {
-    pub approved: bool,
-    /// 用户改过的参数（None = 用 LLM 原参数）。
-    pub arguments: Option<Value>,
+/// 助手状态：ACP 连接（经 OmpState）、当前 session id、运行门禁、待确认
+/// 审批与回放缓存。克隆语义：Command 层持 State 引用即可，无需 Clone。
+pub struct AssistantState {
+    inner: Arc<Inner>,
 }
 
-/// 助手状态：当前会话 id 与其历史（与持久化同源）、工具清单缓存、
-/// 待确认调用、单并发门禁、中断请求标志（#453）。
-pub struct AssistantState {
-    /// 当前会话（None = 尚未解析，首次访问取最近活动的会话）。
-    session_id: std::sync::Mutex<Option<String>>,
-    history: std::sync::Mutex<Vec<Value>>,
-    tools_cache: std::sync::Mutex<Option<Vec<Value>>>,
-    pending: Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>,
+struct Inner {
+    omp: omp::OmpState,
+    /// 当前会话 id（None = 尚未建立会话，首次发送时懒创建）。
+    /// 存活于 omp 进程之外：omp 崩溃重拉后按它 session/load 续上。
+    session: parking_lot::Mutex<Option<String>>,
+    /// 单并发门禁：一轮 session/prompt 进行中。
     running: AtomicBool,
-    /// 中断请求标志（#453）：assistant_cancel 置位，agent loop 在最近
-    /// 安全点（轮次边界/流事件间/工具排队/确认等待）检查；send 起止清零。
-    cancel_requested: AtomicBool,
+    /// 静默装载（重连后重开会话：转换器照常维护关联，但不外发事件）。
+    quiet: AtomicBool,
+    /// 用户三档思考等级（会话建立前缓存，建立/切换时应用）。
+    desired_thinking: parking_lot::Mutex<String>,
+    /// 会话实际生效的 omp thinking 值（configOptions currentValue）。
+    actual_thinking: parking_lot::Mutex<Option<String>>,
+    /// 待确认审批：审批键（服务端请求 id 字符串化）→ 用户决定通道。
+    confirmations: parking_lot::Mutex<HashMap<String, oneshot::Sender<bool>>>,
+    /// 会话事件日志（UI 渲染缓存）：本进程内每条已外发事件的追加记录。
+    /// omp 对已打开会话的二次 session/load 不回放，切换回来时按日志重放；
+    /// 首次打开的会话由 session/load 回放重建后整体写入。上限截头防膨胀。
+    replay_cache: parking_lot::Mutex<HashMap<String, Vec<Value>>>,
+    /// 正在捕获的回放事件（session/load 期间置位；sink 内写入）。
+    replay_capture: parking_lot::Mutex<Option<Vec<Value>>>,
+    /// 会话索引（session/list 按本应用 cwd 过滤）。
+    sessions: parking_lot::Mutex<Vec<Value>>,
+    /// 当前连接代的转换器（换进程重建，审批挂起随之作废）。
+    converter: parking_lot::Mutex<UpdateConverter>,
+    /// 统一事件出口：静默丢弃、回放捕获、会话日志追加、全局外发。
+    /// 全部事件（转换器产物与状态机自身发布）都必须经它，日志才完整。
+    /// OnceLock：构造后立刻注入（闭包持 Weak，需 Inner 先存在）。
+    sink: std::sync::OnceLock<EventSink>,
 }
 
 impl AssistantState {
     pub fn new() -> Self {
-        Self {
-            session_id: Mutex::new(None),
-            history: Mutex::new(Vec::new()),
-            tools_cache: Mutex::new(None),
-            pending: Mutex::new(HashMap::new()),
+        let inner = Arc::new(Inner {
+            omp: omp::OmpState::new(),
+            session: parking_lot::Mutex::new(None),
             running: AtomicBool::new(false),
-            cancel_requested: AtomicBool::new(false),
+            quiet: AtomicBool::new(false),
+            desired_thinking: parking_lot::Mutex::new("standard".into()),
+            actual_thinking: parking_lot::Mutex::new(None),
+            confirmations: parking_lot::Mutex::new(HashMap::new()),
+            replay_cache: parking_lot::Mutex::new(HashMap::new()),
+            replay_capture: parking_lot::Mutex::new(None),
+            sessions: parking_lot::Mutex::new(Vec::new()),
+            converter: parking_lot::Mutex::new(UpdateConverter::new(Arc::new(|_| {}))),
+            sink: std::sync::OnceLock::new(),
+        });
+        let sink = make_sink(Arc::downgrade(&inner));
+        let _ = inner.sink.set(sink.clone());
+        *inner.converter.lock() = UpdateConverter::new(sink);
+        Self { inner }
+    }
+
+    /// 当前会话 id（历史内容由回放事件流负责，这里只有索引）。
+    pub fn current_session(&self) -> Option<String> {
+        self.inner.session.lock().clone()
+    }
+
+    /// 会话列表（本应用 cwd 过滤后的 session/list 结果）。
+    pub fn sessions(&self) -> Vec<Value> {
+        self.inner.sessions.lock().clone()
+    }
+
+    /// 是否有回复进行中或未决审批（会话结构操作门禁）。
+    pub fn busy(&self) -> bool {
+        self.inner.running.load(Ordering::SeqCst) || self.has_pending_confirmations()
+    }
+
+    /// 是否存在未决工具审批。
+    pub fn has_pending_confirmations(&self) -> bool {
+        !self.inner.confirmations.lock().is_empty()
+    }
+
+    /// 当前生效的思考等级（用户三档；会话未建立时为期望值）。
+    pub fn thinking_level(&self) -> String {
+        let actual = self.inner.actual_thinking.lock().clone();
+        match actual.as_deref().and_then(events::omp_to_thinking) {
+            Some(level) => level.to_string(),
+            None => self.inner.desired_thinking.lock().clone(),
         }
     }
 
-    /// 请求中断（assistant_cancel 命令落点，幂等）：有进行中轮次时置
-    /// 取消标志，agent loop 在最近安全点停下；空闲时无副作用。
-    /// 返回是否存在进行中轮次。
-    pub fn request_cancel(&self) -> bool {
-        let running = self.running.load(Ordering::SeqCst);
+    /// ACP 进程是否存活（不为查询而拉起；首次使用才懒启动）。
+    pub async fn connected(&self) -> bool {
+        self.inner.omp.current().await.is_some()
+    }
+
+    /// omp 可执行文件是否可用（空态判定：未安装/不可执行）。以 setup
+    /// 注册的命令为准（发布构建解析过资源目录），未注册再回落实时解析。
+    pub fn omp_configured(&self) -> bool {
+        omp::OmpState::configured_command().is_some()
+    }
+
+    /// 确认/拒绝一次工具审批。返回 false = 该键没有挂起的等待（已取消/
+    /// 重复点击）。
+    pub fn resolve_confirm(&self, key: &str, approved: bool) -> bool {
+        match self.inner.confirmations.lock().remove(key) {
+            Some(tx) => {
+                let _ = tx.send(approved);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// 取活跃连接；新拉进程时静默重开当前会话（重连路径）并刷新索引。
+    async fn ensure_conn(&self) -> Result<AcpConn> {
+        let handlers = Arc::new(ConnHandlers(Arc::clone(&self.inner)));
+        let (conn, fresh) = self.inner.omp.get_or_spawn(handlers).await?;
+        if !fresh {
+            return Ok(conn);
+        }
+        // 新连接代：审批挂起全部作废（对应工具卡片已无对端等待）
+        self.inner.confirmations.lock().clear();
+        let sink = self
+            .inner
+            .sink
+            .get()
+            .expect("sink 在构造时注入")
+            .clone();
+        *self.inner.converter.lock() = UpdateConverter::new(sink);
+        let current = self.inner.session.lock().clone();
+        if let Some(sid) = current {
+            let was_quiet = self.inner.quiet.swap(true, Ordering::SeqCst);
+            let result = conn
+                .request(
+                    "session/load",
+                    json!({
+                        "sessionId": sid,
+                        "cwd": session_cwd_json(),
+                        "mcpServers": [bridge::bridge_server_entry()]
+                    }),
+                )
+                .await;
+            self.inner.quiet.store(was_quiet, Ordering::SeqCst);
+            result.map_err(|e| anyhow!("重连后恢复会话失败：{e}"))?;
+        }
+        self.refresh_sessions(&conn).await;
+        Ok(conn)
+    }
+
+    /// 刷新会话索引（session/list，按本应用 cwd 过滤，传输形状对齐前端
+    /// SessionMeta：id/title/updatedAt/messageCount）。
+    async fn refresh_sessions(&self, conn: &AcpConn) {
+        let Ok(v) = conn.request("session/list", json!({})).await else {
+            return;
+        };
+        let wanted = omp::OmpState::session_cwd()
+            .map(|c| c.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let list: Vec<Value> = v
+            .get("sessions")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|s| {
+                s.get("cwd")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| c == wanted)
+            })
+            .map(|s| {
+                json!({
+                    "id": s.get("sessionId").cloned().unwrap_or(Value::Null),
+                    "title": s.get("title").cloned().unwrap_or(Value::Null),
+                    "updatedAt": s.get("updatedAt").cloned().unwrap_or(Value::Null),
+                    "messageCount": s.get("_meta")
+                        .and_then(|m| m.get("messageCount"))
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                })
+            })
+            .collect();
+        *self.inner.sessions.lock() = list;
+    }
+
+    /// 发送一条用户消息并等整轮结束（增量经事件流推送）。
+    /// 早期错误（omp 未安装/握手失败）经 Err 上抛；运行期错误走 error 事件。
+    pub async fn send(&self, message: &str, selection: Option<Value>) -> Result<()> {
+        if self.inner.running.swap(true, Ordering::SeqCst) {
+            anyhow::bail!("上一轮对话仍在进行");
+        }
+        let result = self.run_prompt(message, selection).await;
+        self.inner.running.store(false, Ordering::SeqCst);
+        if let Err(e) = &result {
+            self.publish(json!({"kind": "error", "message": e.to_string()}));
+        }
+        Ok(())
+    }
+
+    async fn run_prompt(&self, message: &str, selection: Option<Value>) -> Result<()> {
+        let conn = self.ensure_conn().await?;
+        // 会话懒创建：首条消息建立会话（不发 reset——用户气泡已在 UI 上）
+        let current = self.inner.session.lock().clone();
+        let sid = match current {
+            Some(sid) => sid,
+            None => {
+                let sid = self
+                    .create_session(&conn, false)
+                    .await
+                    .map_err(|e| anyhow!("创建会话失败：{e}"))?;
+                *self.inner.session.lock() = Some(sid.clone());
+                sid
+            }
+        };
+        let prompt_text = build_prompt_text(message, selection.as_ref());
+        // 用户气泡统一由事件流渲染（live 与回放同一路径）；选择上下文
+        // 只进发给 omp 的正文，不进气泡事件
+        self.publish(json!({"kind": "user_message", "text": message}));
+        match conn
+            .request(
+                "session/prompt",
+                json!({"sessionId": sid, "prompt": [{"type": "text", "text": prompt_text}]}),
+            )
+            .await
+        {
+            Ok(result) => {
+                if let Some(payload) = events::stop_reason_payload(&result) {
+                    self.publish(payload);
+                }
+                self.refresh_sessions(&conn).await;
+                Ok(())
+            }
+            // 运行期错误（连接断开/omp 内部错误）：error 事件 + Ok 返回
+            //（与旧 agent loop 的错误口径一致）
+            Err(e) => {
+                self.publish(json!({"kind": "error", "message": e.to_string()}));
+                Ok(())
+            }
+        }
+    }
+
+    /// 发布一条事件（统一经 sink：静默/捕获/日志/外发语义一致）。
+    fn publish(&self, payload: Value) {
+        let sink = self.inner.sink.get().expect("sink 在构造时注入");
+        sink(&payload);
+    }
+
+    /// 发布 reset（清 UI 标记）：reset 是重建指令而非会话内容，不进日志。
+    fn publish_reset(&self) {
+        if let Some(sink) = EMITTER.get() {
+            sink(&json!({"kind": "reset"}));
+        }
+    }
+
+    /// 请求中断当前轮（幂等）：发 session/cancel，omp 以 cancelled stop
+    /// reason 结束 prompt。返回是否存在进行中轮次。
+    pub async fn request_cancel(&self) -> bool {
+        let running = self.inner.running.load(Ordering::SeqCst);
         if running {
-            self.cancel_requested.store(true, Ordering::SeqCst);
+            let current = self.inner.session.lock().clone();
+        if let Some(sid) = current {
+                // 通知是尽力而为：连接已死时下轮 ensure_conn 自愈
+                if let Some(conn) = self.inner.omp.current().await {
+                    let _ = conn.notify("session/cancel", json!({"sessionId": sid}));
+                }
+            }
         }
         running
     }
 
-    /// 当前会话 id（懒解析：首次访问取最近活动的会话，无则 default——
-    /// 与旧单会话用户的 default.jsonl 迁移衔接）。
-    pub fn current_session(&self) -> String {
-        let mut slot = self.session_id.lock().expect("session lock");
-        if let Some(id) = slot.as_deref() {
-            return id.to_string();
-        }
-        let id = store::load_sessions()
-            .first()
-            .map(|m| m.id.clone())
-            .unwrap_or_else(|| DEFAULT_SESSION.to_string());
-        *slot = Some(id.clone());
-        id
-    }
-
-    /// 当前会话历史（assistant_get_state 的数据源；懒加载落盘文件，
-    /// 含消息行与思考行）。
-    pub fn history(&self) -> Vec<Value> {
-        self.ensure_history_loaded();
-        self.history.lock().expect("history lock").clone()
-    }
-
-    fn ensure_history_loaded(&self) {
-        let mut guard = self.history.lock().expect("history lock");
-        if guard.is_empty() {
-            let id = self.current_session();
-            *guard = store::load_session_rows(&id);
-        }
-    }
-
-    /// 门禁判定（ADR 0025 决策 5）：有进行中的回复轮次或未决确认时，
-    /// 禁止切换/新建/删除会话。
-    fn busy(&self) -> bool {
-        self.running.load(Ordering::SeqCst)
-            || !self.pending.lock().expect("pending lock").is_empty()
-    }
-
-    /// 切换会话：显式载入目标会话的落盘历史（回放净化的思考行随行载入，
-    /// 展示用；进 API 上下文前再剥除）。
-    pub fn switch_session(&self, session_id: &str) -> anyhow::Result<()> {
+    /// 新建会话并切换过去（受门禁）。返回新会话 id。
+    pub async fn new_session(&self) -> Result<String> {
         if self.busy() {
             anyhow::bail!(BUSY_MSG);
         }
-        if !store::load_sessions().iter().any(|m| m.id == session_id) {
-            anyhow::bail!("会话不存在：{session_id}");
-        }
-        *self.session_id.lock().expect("session lock") = Some(session_id.to_string());
-        *self.history.lock().expect("history lock") = store::load_session_rows(session_id);
-        Ok(())
+        let conn = self.ensure_conn().await?;
+        let sid = self
+            .create_session(&conn, true)
+            .await
+            .map_err(|e| anyhow!("创建会话失败：{e}"))?;
+        *self.inner.session.lock() = Some(sid.clone());
+        self.refresh_sessions(&conn).await;
+        Ok(sid)
     }
 
-    /// 新建会话（思考等级继承全局默认，ADR 0026 决策 1）并切换过去。
-    pub fn new_session(&self) -> anyhow::Result<String> {
-        if self.busy() {
-            anyhow::bail!(BUSY_MSG);
-        }
-        let default_level =
-            llm::ThinkingLevel::parse(&store::load_model_config().thinking_level)
-                .as_str()
-                .to_string();
-        let meta = store::create_session_entry(&default_level)
-            .ok_or_else(|| anyhow::anyhow!("无用户配置目录，无法新建会话"))?;
-        *self.session_id.lock().expect("session lock") = Some(meta.id.clone());
-        self.history.lock().expect("history lock").clear();
-        Ok(meta.id)
-    }
-
-    /// 删除会话。删当前会话受门禁；删后回到"未选"态，下次访问懒解析为
-    /// 最近会话（无则 default）。
-    pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
-        let current = self.current_session();
-        if session_id == current && self.busy() {
-            anyhow::bail!(BUSY_MSG);
-        }
-        store::delete_session_entry(session_id);
-        if session_id == current {
-            *self.session_id.lock().expect("session lock") = None;
-            self.history.lock().expect("history lock").clear();
-        }
-        Ok(())
-    }
-
-    pub fn rename_session(&self, session_id: &str, title: &str) -> anyhow::Result<()> {
-        store::rename_session_entry(session_id, title)
-    }
-
-    /// 设当前会话的思考等级（严格校验，ADR 0026 决策 1：档位随会话记住）。
-    pub fn set_thinking_level(&self, level: &str) -> anyhow::Result<()> {
-        let parsed = llm::ThinkingLevel::try_parse(level)
-            .ok_or_else(|| anyhow::anyhow!("未知思考等级：{level}"))?;
-        store::set_session_thinking_level(&self.current_session(), parsed.as_str())
-    }
-
-    /// 当前会话生效的思考等级：会话自己的档位优先，空则继承全局默认。
-    fn effective_level(&self) -> llm::ThinkingLevel {
-        let id = self.current_session();
-        let raw = store::load_sessions()
-            .into_iter()
-            .find(|m| m.id == id)
-            .map(|m| m.thinking_level)
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| store::load_model_config().thinking_level);
-        llm::ThinkingLevel::parse(&raw)
-    }
-
-    /// 清空当前会话（"清空重开"按钮）：内存 + 落盘文件一起清，保留会话本身。
-    pub fn clear(&self) {
-        self.history.lock().expect("history lock").clear();
-        let id = self.current_session();
-        store::clear_session_rows(&id);
-    }
-
-    /// 是否已配置可用（设置面板与空态引导的判定）。
-    pub fn configured(&self) -> bool {
-        store::load_model_config().is_complete() && store::load_api_key().is_some()
-    }
-
-    /// 解决一次挂起的工具确认（assistant_confirm_tool 命令的落点）。
-    /// 返回 false 表示该 call_id 没有挂起的等待（已超时/重复点击）。
-    pub fn resolve_confirm(&self, call_id: &str, decision: ConfirmDecision) -> bool {
-        if let Some(tx) = self.pending.lock().expect("pending lock").remove(call_id) {
-            let _ = tx.send(decision);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// 发送一条用户消息并跑完整轮 agent loop（流式经事件推送）。
-    ///
-    /// 单并发：上一轮没跑完时拒绝新发送（前端应已禁用输入，这里是兜底）。
-    pub async fn send(
-        &self,
-        mcp: &McpState,
-        message: &str,
-        lang: &str,
-        selection: Option<Value>,
-    ) -> anyhow::Result<()> {
-        if self.running.swap(true, Ordering::SeqCst) {
-            anyhow::bail!("上一轮对话仍在进行");
-        }
-        // 新一轮开始清除上轮遗留的取消请求；结束再清一次（竞态兜底：
-        // 自然完成后才到达的停止请求不留到下一轮）
-        // Clear stale cancel requests at turn start, and again at the end
-        // (a stop arriving just after natural completion never leaks forward).
-        self.cancel_requested.store(false, Ordering::SeqCst);
-        let result = self.run(mcp, message, lang, selection).await;
-        self.cancel_requested.store(false, Ordering::SeqCst);
-        self.running.store(false, Ordering::SeqCst);
-        if let Err(e) = &result {
-            emit(json!({"kind": "error", "message": e.to_string()}));
-        }
-        result
-    }
-
-    async fn run(
-        &self,
-        mcp: &McpState,
-        message: &str,
-        lang: &str,
-        selection: Option<Value>,
-    ) -> anyhow::Result<()> {
-        let cfg = store::load_model_config();
-        let api_key = store::load_api_key();
-        if !cfg.is_complete() || api_key.is_none() {
-            anyhow::bail!("模型服务未配置：请先在设置面板 AI 助手分区填写 base URL、模型名与 API key");
-        }
-        let llm_cfg = llm::LlmConfig {
-            base_url: cfg.base_url,
-            api_key: api_key.expect("上方已检查"),
-            model: cfg.model,
-        };
-
-        // 工具清单（首次拉取后缓存；MCP→OpenAI 格式转换在同一处做）
-        let tools = self.cached_tools(mcp).await?;
-
-        // 态势层：轨道库摘要现取（只读工具，失败降级为提示，不阻断对话）
-        let catalog_summary = self.catalog_summary(mcp).await;
-        let selection_text = selection.as_ref().map(|v| compact_json(v));
-        let now_utc = now_utc_text();
-        let system = prompt::system_prompt(lang, &catalog_summary, selection_text.as_deref(), &now_utc);
-
-        let user_msg = json!({"role": "user", "content": message});
-        self.ensure_history_loaded();
-        self.push_history(user_msg.clone());
-        let mut messages = self.context_messages(system, user_msg);
-        let level = self.effective_level();
-
-        for _round in 0..MAX_ROUNDS {
-            // 中断边界 1：进入新一轮 LLM 往返前（#453）
-            // Interrupt boundary 1: before starting a new LLM round (#453).
-            if self.cancel_requested.load(Ordering::SeqCst) {
-                self.finish_interrupted();
-                return Ok(());
-            }
-            // 思考增量：实时推前端；段落结束时由 sink 落盘（Drop 兜底：
-            // 流中途出错也不丢已收到的思考段）
-            let mut think = ThinkingSink { state: self, buf: String::new(), saw_content: false };
-            let reply = llm::chat_stream(
-                &llm_cfg,
-                &messages,
-                &tools,
-                level,
-                || self.cancel_requested.load(Ordering::SeqCst),
-                |delta| match delta {
-                    llm::StreamDelta::Content(t) => {
-                        think.saw_content = true;
-                        emit(json!({"kind": "delta", "text": t}));
-                    }
-                    llm::StreamDelta::Thinking(t) => {
-                        think.accept(t);
-                        emit(json!({"kind": "thinking", "text": t}));
-                    }
-                },
+    /// create_session：session/new + 应用思考档位；emit_reset 控制 reset
+    /// 事件（send 的懒创建路径不发，避免清掉刚输入的用户气泡）。
+    async fn create_session(&self, conn: &AcpConn, emit_reset: bool) -> Result<String> {
+        let result = conn
+            .request(
+                "session/new",
+                json!({
+                    "cwd": session_cwd_json(),
+                    "mcpServers": [bridge::bridge_server_entry()]
+                }),
             )
             .await?;
-            think.flush();
-
-            // 中断边界 2：流中被取消（#453）——已流出正文保留为助手消息
-            // （空则不落空气泡），不完整的工具调用分片已由 chat_stream 丢弃
-            // Interrupt boundary 2: cancelled mid-stream (#453) — the partial
-            // text stays as an assistant message (no empty bubble); incomplete
-            // tool-call fragments were dropped by chat_stream.
-            if reply.interrupted {
-                if !reply.text.trim().is_empty() {
-                    self.push_history(json!({"role": "assistant", "content": reply.text}));
-                }
-                self.finish_interrupted();
-                return Ok(());
-            }
-
-            // 助手消息入历史（OpenAI 形状：content + 可选 tool_calls）
-            let mut assistant_msg = json!({"role": "assistant", "content": reply.text});
-            if !reply.tool_calls.is_empty() {
-                assistant_msg["tool_calls"] = Value::Array(
-                    reply
-                        .tool_calls
-                        .iter()
-                        .map(|tc| {
-                            json!({
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {"name": tc.name, "arguments": tc.arguments},
-                            })
-                        })
-                        .collect(),
-                );
-            }
-            self.push_history(assistant_msg.clone());
-            messages.push(assistant_msg);
-
-            if reply.tool_calls.is_empty() {
-                emit(json!({"kind": "message_done", "usage": reply.usage}));
-                return Ok(());
-            }
-
-            for tc in &reply.tool_calls {
-                // 中断边界 3：排队中的工具调用不再执行（#453）——补"已中断"
-                // 占位 tool 结果，保持 assistant.tool_calls 与 tool 结果成对
-                // （OpenAI 对孤立 tool_calls 直接报错）
-                // Interrupt boundary 3: queued tool calls no longer execute
-                // (#453) — an interrupted placeholder tool result keeps each
-                // assistant.tool_calls paired (OpenAI rejects dangling ones).
-                if self.cancel_requested.load(Ordering::SeqCst) {
-                    self.push_history(tool_message(&tc.id, INTERRUPTED_TOOL_TEXT));
-                    continue;
-                }
-                let tool_msg = self.execute_call(mcp, tc).await;
-                self.push_history(tool_msg.clone());
-                messages.push(tool_msg);
-            }
+        let sid = result
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("session/new 响应缺少 sessionId"))?
+            .to_string();
+        capture_config_options(&self.inner, &result);
+        self.inner.replay_cache.lock().insert(sid.clone(), Vec::new());
+        self.send_thinking(conn, &sid).await;
+        if emit_reset {
+            self.publish_reset();
         }
-        anyhow::bail!("对话轮数超过上限（{MAX_ROUNDS}），已中止；请缩小任务范围或分步提问")
+        Ok(sid)
     }
 
-    /// 中断收尾（#453）：落一条中断界限行（kind 标记，回放显示用；构造
-    /// API 上下文时与思考行一并剥除），并向前端发 interrupted 事件。
-    /// 中断不是错误——不发 error 事件，send 以 Ok 返回。
-    fn finish_interrupted(&self) {
-        let row = json!({"kind": "interrupted"});
-        self.history.lock().expect("history lock").push(row.clone());
-        let id = self.current_session();
-        store::append_session_row(&id, &row);
-        emit(json!({"kind": "interrupted"}));
-    }
-
-    /// 执行一次工具调用：只读直接跑；其余挂起等确认。返回进上下文的
-    /// tool 消息（OpenAI 形状）。
-    async fn execute_call(&self, mcp: &McpState, tc: &llm::ToolCall) -> Value {
-        // LLM 给的 arguments 是 JSON 文本；坏 JSON 直接回灌错误让模型自纠
-        let args: Value = match serde_json::from_str(&tc.arguments) {
-            Ok(v) => v,
+    /// 切换会话：session/load 回放重建 UI；已打开过的会话走本地缓存重放。
+    /// 失败时恢复原会话的显示（有缓存则重放回原状），session id 不变。
+    pub async fn switch_session(&self, session_id: &str) -> Result<()> {
+        if self.busy() {
+            anyhow::bail!(BUSY_MSG);
+        }
+        let conn = self.ensure_conn().await?;
+        let previous = self.inner.session.lock().clone();
+        self.publish_reset();
+        let cached = self.inner.replay_cache.lock().get(session_id).cloned();
+        if let Some(log) = cached {
+            self.replay_cached(session_id, &log);
+            self.refresh_sessions(&conn).await;
+            return Ok(());
+        }
+        // 首次打开：捕获回放事件流并缓存
+        *self.inner.replay_capture.lock() = Some(Vec::new());
+        let result = conn
+            .request(
+                "session/load",
+                json!({
+                    "sessionId": session_id,
+                    "cwd": session_cwd_json(),
+                    "mcpServers": [bridge::bridge_server_entry()]
+                }),
+            )
+            .await;
+        let captured = self.inner.replay_capture.lock().take();
+        match result {
+            Ok(v) => {
+                capture_config_options(&self.inner, &v);
+                let log = captured.unwrap_or_default();
+                self.inner.replay_cache.lock().insert(session_id.to_string(), log);
+                *self.inner.session.lock() = Some(session_id.to_string());
+                self.refresh_sessions(&conn).await;
+                Ok(())
+            }
             Err(e) => {
-                emit(json!({"kind": "tool_done", "callId": tc.id, "tool": tc.name,
-                            "ok": false, "summary": {"status": "error"}}));
-                return tool_message(&tc.id, &format!("工具参数不是合法 JSON：{e}。请修正参数后重试同一工具。"));
-            }
-        };
-
-        let approved_args = if is_read_only(&tc.name) {
-            emit(json!({"kind": "tool_started", "callId": tc.id, "tool": tc.name, "arguments": args}));
-            Some(args)
-        } else {
-            emit(json!({"kind": "tool_proposed", "callId": tc.id, "tool": tc.name, "arguments": args}));
-            match self.wait_confirm(&tc.id).await {
-                ConfirmDecision { approved: true, arguments } => {
-                    let final_args = arguments.unwrap_or(args);
-                    emit(json!({"kind": "tool_started", "callId": tc.id, "tool": tc.name, "arguments": final_args}));
-                    Some(final_args)
-                }
-                ConfirmDecision { approved: false, .. } => {
-                    emit(json!({"kind": "tool_rejected", "callId": tc.id, "tool": tc.name}));
-                    return tool_message(&tc.id, "用户拒绝了本次工具调用，未执行。请尊重用户决定，改换方案或询问原因。");
-                }
-            }
-        };
-        let Some(args) = approved_args else { unreachable!("分支已全覆盖") };
-
-        // 验证链挂点（ADR 0023 决策 4）：调用前检查
-        if let Err(reason) = check_call(&tc.name, &args) {
-            emit(json!({"kind": "tool_done", "callId": tc.id, "tool": tc.name,
-                        "ok": false, "summary": {"status": "error", "error": {"message": reason}}}));
-            return tool_message(&tc.id, &format!("调用被验证链拒绝：{reason}"));
-        }
-
-        // 宿主内置工具（ADR 0027）：本地执行不走 MCP；信封形状与 MCP 结果
-        // 一致，后续摘要/投影/卡片链路共用。本地 io 快，不接进度订阅。
-        // Host-built-in tools (ADR 0027): execute locally without MCP; the
-        // envelope shape matches MCP results so the summary/projection/card
-        // chain stays shared. Local io is fast — no progress subscription.
-        let outcome_text = if host_tools::is_host_tool(&tc.name) {
-            Ok((false, host_tools::execute(&tc.name, &args)))
-        } else {
-            // 进度订阅：call_tool 带 progressToken（e2m2e 5.9.0+ 发
-            // notifications/progress），转发为 tool_progress 事件——工具卡片
-            // 由"只转圈"升级为真进度（分数 + 可读消息）。
-            let progress_call_id = tc.id.clone();
-            let progress_sink: crate::mcp::ProgressSink =
-                std::sync::Arc::new(move |fraction, message| {
-                    emit(json!({"kind": "tool_progress", "callId": progress_call_id,
-                                "progress": fraction, "message": message}));
-                });
-            call_tool_with_retry(mcp, &tc.name, args, Some(progress_sink))
-                .await
-                .map(|out| (out.is_error, out.text))
-        };
-        let (ok, text) = match outcome_text {
-            Ok((is_error, text)) => (!is_error, text),
-            Err(e) => (false, format!("工具调用失败：{e}")),
-        };
-
-        // 验证链挂点：结果检查（当前只投影摘要；物理可行性验证器后补）
-        let projected = check_result(&tc.name, &text);
-        let summary = summary::card_summary(&text);
-        emit(json!({"kind": "tool_done", "callId": tc.id, "tool": tc.name,
-                    "ok": ok, "summary": summary}));
-        tool_message(&tc.id, &serde_json::to_string(&projected).unwrap_or_else(|_| text.clone()))
-    }
-
-    async fn wait_confirm(&self, call_id: &str) -> ConfirmDecision {
-        let (tx, mut rx) = tokio::sync::oneshot::channel();
-        self.pending
-            .lock()
-            .expect("pending lock")
-            .insert(call_id.to_string(), tx);
-        // 无超时：确认是用户动作，可以等任意久。中断（#453）经轮询唤醒：
-        // 停止请求把挂起确认按拒绝落定（从 pending 移除），历史成对、
-        // 卡片终态与拒绝同口径。
-        // No timeout: a confirmation is a user action and may wait forever.
-        // An interrupt (#453) wakes via polling: a stop settles the pending
-        // confirmation as rejected (removed from pending) — history stays
-        // paired, card terminal state matches the reject path.
-        loop {
-            tokio::select! {
-                decision = &mut rx => {
-                    return decision.unwrap_or(ConfirmDecision { approved: false, arguments: None });
-                }
-                _ = tokio::time::sleep(std::time::Duration::from_millis(200)) => {
-                    if self.cancel_requested.load(Ordering::SeqCst) {
-                        self.pending.lock().expect("pending lock").remove(call_id);
-                        return ConfirmDecision { approved: false, arguments: None };
+                // UI 已被 reset 清空：重放缓存里的原会话日志恢复显示
+                //（原会话无缓存时保持空态，错误信息仍可见）
+                if let Some(prev) = previous {
+                    if let Some(log) = self.inner.replay_cache.lock().get(&prev).cloned() {
+                        self.replay_cached(&prev, &log);
                     }
                 }
+                anyhow::bail!("切换会话失败：{e}")
             }
         }
     }
 
-    async fn cached_tools(&self, mcp: &McpState) -> anyhow::Result<Vec<Value>> {
-        if let Some(tools) = self.tools_cache.lock().expect("tools lock").clone() {
-            return Ok(tools);
+    /// 重放一段已缓存的会话日志到事件流：先换会话身份，重放期间经 scratch
+    /// 捕获缓冲隔离——既不把重放事件写回该会话缓存（日志会翻倍），也不
+    /// 串进此前会话的日志。
+    fn replay_cached(&self, session_id: &str, log: &[Value]) {
+        *self.inner.session.lock() = Some(session_id.to_string());
+        *self.inner.replay_capture.lock() = Some(Vec::new());
+        let sink = self.inner.sink.get().expect("sink 在构造时注入").clone();
+        for payload in log {
+            sink(payload);
         }
-        let mcp_tools = list_tools_with_retry(mcp).await?;
-        let mut tools: Vec<Value> = mcp_tools.iter().filter_map(llm::mcp_tool_to_openai).collect();
-        if tools.is_empty() {
-            anyhow::bail!("mcp-serve 未暴露任何工具（e2m2e 工具清单为空）");
-        }
-        // 宿主内置工具（ADR 0027）：情景生成/列举，注入清单尾部；对 LLM
-        // 而言与 MCP 工具无差别（同为 function）。
-        // Host-built-in tools (ADR 0027): scenario write/list, appended to the
-        // tool list; to the LLM they are indistinguishable from MCP tools.
-        tools.extend(host_tools::tool_specs());
-        *self.tools_cache.lock().expect("tools lock") = Some(tools.clone());
-        Ok(tools)
+        self.inner.replay_capture.lock().take();
     }
 
-    /// 轨道库摘要（态势层素材）：catalog_query 取最近记录，投影为紧凑
-    /// 清单。失败时返回说明文字——对话不应因摘要不可用而中断。
-    async fn catalog_summary(&self, mcp: &McpState) -> String {
-        let outcome = call_tool_with_retry(mcp, "catalog_query", json!({}), None).await;
-        match outcome {
-            Ok(out) if !out.is_error => {
-                let projected = summary::project_for_llm(&out.text);
-                compact_json(&projected)
+    /// 清空当前会话：omp ACP 握手未声明 reset 能力（sessionCapabilities
+    /// 仅 list/fork/resume/close），按计划落位为新建会话，旧会话留在 omp
+    /// 侧作为历史（不删 omp 原生文件）。
+    pub async fn clear_history(&self) -> Result<()> {
+        self.new_session().await.map(|_| ())
+    }
+
+    /// 设思考等级（用户三档）。会话存在时即时下发 omp 原生配置，否则缓存
+    /// 到会话建立。档位不可用回退 medium 一次并显式报错，不静默重试。
+    pub async fn set_thinking_level(&self, level: &str) -> Result<()> {
+        let mapped = events::thinking_to_omp(level)
+            .ok_or_else(|| anyhow!("未知思考等级：{level}"))?;
+        *self.inner.desired_thinking.lock() = level.to_string();
+        let current = self.inner.session.lock().clone();
+        if let Some(sid) = current {
+            let conn = self.ensure_conn().await?;
+            self.send_thinking_value(&conn, &sid, mapped, level).await;
+        }
+        Ok(())
+    }
+
+    /// 把用户期望档位下发到会话（create_session 与 set_thinking_level 共用）。
+    async fn send_thinking(&self, conn: &AcpConn, sid: &str) {
+        let level = self.inner.desired_thinking.lock().clone();
+        let Some(mapped) = events::thinking_to_omp(&level) else { return };
+        self.send_thinking_value(conn, sid, mapped, &level).await;
+    }
+
+    async fn send_thinking_value(&self, conn: &AcpConn, sid: &str, mapped: &str, label: &str) {
+        let request = |value: &str| {
+            conn.request(
+                "session/set_config_option",
+                json!({"sessionId": sid, "configId": "thinking", "value": value}),
+            )
+        };
+        match request(mapped).await {
+            Ok(v) => capture_config_options(&self.inner, &v),
+            Err(e) => {
+                // 档位不可用：回退 medium 一次并显式报错，不做静默多次重试
+                if mapped != "medium" {
+                    if let Ok(v) = request("medium").await {
+                        capture_config_options(&self.inner, &v);
+                    }
+                }
+                self.publish(json!({
+                    "kind": "error",
+                    "message": format!("思考等级 {label} 不可用，已回退标准档：{e}")
+                }));
             }
-            Ok(out) => format!("（轨道库查询返回错误：{}）", out.text.chars().take(200).collect::<String>()),
-            Err(e) => format!("（轨道库摘要不可用：{e}）"),
         }
     }
-
-    fn push_history(&self, msg: Value) {
-        self.history.lock().expect("history lock").push(msg.clone());
-        let id = self.current_session();
-        store::append_session_row(&id, &msg);
-    }
-
-    /// 思考段入历史与落盘（带 kind 标记的行，ADR 0025 决策 3 / 0026 决策 5）。
-    fn push_thinking(&self, text: &str) {
-        let row = json!({"kind": "thinking", "content": text});
-        self.history.lock().expect("history lock").push(row.clone());
-        let id = self.current_session();
-        store::append_session_row(&id, &row);
-    }
-
-    /// 组装本次请求的完整上下文：系统提示 + 截断后的历史（对齐到 user
-    /// 边界，不拆散 assistant tool_calls 与其 tool 结果的配对）。
-    /// 回放净化（ADR 0025 决策 1 / 0026 决策 5）：思考行剥除——多数
-    /// provider 协议明确要求思考块不回放；tool 消息本身已是写时投影摘要，
-    /// 悬空 record_id 由此天然降级，不依赖 catalog 现状。
-    fn context_messages(&self, system: String, user_msg: Value) -> Vec<Value> {
-        let history = self.history();
-        // user_msg 刚 push 进 history，末位即是；历史截断时保留它
-        let keep_from = truncate_index(&history, 50);
-        let mut messages = vec![json!({"role": "system", "content": system})];
-        messages.extend(history[keep_from..].iter().filter(|r| !is_kind_row(r)).cloned());
-        debug_assert_eq!(messages.last(), Some(&user_msg));
-        messages
-    }
 }
 
-/// 带 kind 标记的展示行（思考行/中断界限行，#453 起两者并存）：落盘供
-/// 回放显示，构造 API 上下文时剥除——多数 provider 不接受思考回放，
-/// 中断界限也只是展示语义。
-fn is_kind_row(row: &Value) -> bool {
-    row.get("kind").and_then(Value::as_str).is_some()
+fn session_cwd_json() -> Value {
+    omp::OmpState::session_cwd()
+        .map(|c| json!(c.to_string_lossy().into_owned()))
+        .unwrap_or(Value::Null)
 }
 
-/// 思考增量汇聚器：正文出现后再来的思考增量开新块；块结束时整段作为
-/// 一行思考记录落盘（展示层存全量，回放由 context 过滤，ADR 0026 决策 3/5）。
-struct ThinkingSink<'a> {
-    state: &'a AssistantState,
-    buf: String,
-    saw_content: bool,
-}
-
-impl ThinkingSink<'_> {
-    fn accept(&mut self, t: &str) {
-        if self.saw_content {
-            self.flush(); // 正文之后再来的思考：结束上一段、开新块
-            self.saw_content = false;
+fn capture_config_options(inner: &Inner, result: &Value) {
+    if let Some(opts) = result.get("configOptions").and_then(Value::as_array) {
+        if let Some(thinking) = opts.iter().find(|o| o.get("id") == Some(&json!("thinking"))) {
+            if let Some(current) = thinking.get("currentValue").and_then(Value::as_str) {
+                *inner.actual_thinking.lock() = Some(current.to_string());
+            }
         }
-        self.buf.push_str(t);
     }
+}
 
-    fn flush(&mut self) {
-        if self.buf.is_empty() {
+/// 转换器的事件出口：静默期丢弃、捕获期入缓存、正常期外发。
+/// Weak 引用打破 Inner → converter → sink → Inner 的环。
+fn make_sink(weak: Weak<Inner>) -> EventSink {
+    Arc::new(move |payload: &Value| {
+        let Some(inner) = weak.upgrade() else { return };
+        if inner.quiet.load(Ordering::SeqCst) {
             return;
         }
-        let text = std::mem::take(&mut self.buf);
-        self.state.push_thinking(&text);
+        if payload["kind"] == "reset" {
+            emit(payload.clone());
+            return;
+        }
+        if let Some(buf) = inner.replay_capture.lock().as_mut() {
+            buf.push(payload.clone());
+        } else if let Some(sid) = inner.session.lock().clone() {
+            let mut cache = inner.replay_cache.lock();
+            let log = cache.entry(sid).or_default();
+            log.push(payload.clone());
+            if log.len() > MAX_SESSION_LOG {
+                let drop = log.len() - MAX_SESSION_LOG;
+                log.drain(..drop);
+            }
+        }
+        emit(payload.clone());
+    })
+}
+
+/// ACP 事件路由：通知 → events.rs 转换（sink 决定外发）；审批请求 → 挂起
+/// 等用户决定；未知请求回标准错误（不静默吞掉需要回复的请求）。
+struct ConnHandlers(Arc<Inner>);
+
+impl AcpHandlers for ConnHandlers {
+    fn on_notification(&self, method: &str, params: Value) {
+        if method != "session/update" {
+            // 未知通知：记调试信息后忽略（$/cancel_request 等）
+            eprintln!("[assistant] 忽略 ACP 通知：{method}");
+            return;
+        }
+        let Some(update) = params.get("update") else { return };
+        self.0.converter.lock().on_update(update);
     }
-}
 
-impl Drop for ThinkingSink<'_> {
-    fn drop(&mut self) {
-        self.flush();
+    fn on_request(&self, method: &str, params: Value, responder: Responder) {
+        let inner = &self.0;
+        let full = json!({"id": responder.id().clone(), "params": params});
+        if inner.converter.lock().on_request(method, &full) {
+            // 审批：挂起等用户。无超时——确认是用户动作；中断经
+            // session/cancel 触发 omp 侧 abort，挂起应答自动失效。
+            let key = responder.id().to_string();
+            let (tx, rx) = oneshot::channel::<bool>();
+            inner.confirmations.lock().insert(key.clone(), tx);
+            let inner = Arc::clone(inner);
+            tokio::spawn(async move {
+                let approved = rx.await.unwrap_or(false);
+                let response = inner.converter.lock().decision_response(&key, approved);
+                match response {
+                    Some(v) => responder.ok(v),
+                    None => responder.err(-32603, "审批已失效（会话已重置）"),
+                }
+            });
+            return;
+        }
+        match method {
+            // fs 能力未声明（initialize 只开 elicitation），omp 不应请求；
+            // 显式拒绝而非挂死对端
+            "fs/read_text_file" | "fs/write_text_file" => {
+                responder.err(-32601, "本客户端未开放文件系统代理");
+            }
+            _ => {
+                eprintln!("[assistant] 未识别的 ACP 请求，已回错：{method}");
+                responder.err(-32601, format!("未实现的 ACP 方法：{method}"));
+            }
+        }
     }
-}
-
-/// 历史截断点：保留最近 `max` 条，且起点必须落在 user 消息上（保证
-/// assistant 的 tool_calls 与其 tool 结果不拆对——OpenAI 对孤立 tool
-/// 消息直接报错）。从 len-max 向前找下一个 user 边界，截断后不超 max。
-fn truncate_index(history: &[Value], max: usize) -> usize {
-    if history.len() <= max {
-        return 0;
-    }
-    let mut idx = history.len() - max;
-    // 最多走到末位（调用方保证末位是刚 push 的 user 消息，必为边界）
-    while idx < history.len() - 1
-        && history[idx].get("role").and_then(Value::as_str) != Some("user")
-    {
-        idx += 1;
-    }
-    idx
-}
-
-/// 只读判定（fail-closed：不在白名单的一律要确认）。
-fn is_read_only(tool: &str) -> bool {
-    READ_ONLY_TOOLS.contains(&tool)
-}
-
-/// 验证链：调用前检查（模式三物理可行性验证器的挂点，当前只做形状检查）。
-fn check_call(_tool: &str, args: &Value) -> Result<(), String> {
-    if args.is_object() {
-        Ok(())
-    } else {
-        Err("工具参数必须是 JSON 对象".into())
-    }
-}
-
-/// 验证链：结果检查（当前只做摘要投影，结果一律放行）。
-fn check_result(_tool: &str, envelope_text: &str) -> Value {
-    summary::project_for_llm(envelope_text)
-}
-
-fn tool_message(call_id: &str, content: &str) -> Value {
-    json!({"role": "tool", "tool_call_id": call_id, "content": content})
-}
-
-fn compact_json(v: &Value) -> String {
-    serde_json::to_string(v).unwrap_or_default()
-}
-
-fn now_utc_text() -> String {
-    // 不引 chrono：秒级时间戳转 ISO 文本交给系统提示的语义即可，
-    // 这里直接用 Unix 秒 + 明确标注，避免为显示格式引入依赖。
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    format!("当前 Unix 时间戳 {secs} 秒（UTC）")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn request_cancel_is_noop_when_idle_and_sets_flag_when_running() {
+    /// 事件出口三态：静默丢弃、捕获入缓存、正常外发。
+    #[tokio::test]
+    async fn sink_gates_quiet_capture_and_emit() {
         let state = AssistantState::new();
-        // 空闲时无副作用
-        // Idle: no side effect.
-        assert!(!state.request_cancel());
-        assert!(!state.cancel_requested.load(Ordering::SeqCst));
-        state.running.store(true, Ordering::SeqCst);
-        assert!(state.request_cancel());
-        assert!(state.cancel_requested.load(Ordering::SeqCst));
+        let sink = make_sink(Arc::downgrade(&state.inner));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        set_emitter(Arc::new(move |v: &Value| {
+            let _ = tx.send(v.clone());
+        }));
+
+        // 正常：外发
+        sink(&json!({"kind": "delta", "text": "a"}));
+        assert_eq!(rx.recv().await.unwrap()["kind"], "delta");
+
+        // 捕获：入缓存且外发（回放要一边重建 UI 一边存档）
+        *state.inner.replay_capture.lock() = Some(Vec::new());
+        sink(&json!({"kind": "user_message", "text": "q"}));
+        assert_eq!(rx.recv().await.unwrap()["kind"], "user_message");
+        let captured = state.inner.replay_capture.lock().take().unwrap();
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0]["kind"], "user_message");
+
+        // 静默：丢弃
+        state.inner.quiet.store(true, Ordering::SeqCst);
+        sink(&json!({"kind": "delta", "text": "b"}));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert!(rx.try_recv().is_err(), "静默期不应外发");
+        state.inner.quiet.store(false, Ordering::SeqCst);
     }
 
-    #[test]
-    fn context_messages_strip_kind_marker_rows() {
+    /// 重复确认返回 false（幂等口径与旧 resolve_confirm 一致）。
+    #[tokio::test]
+    async fn resolve_confirm_is_once_only() {
         let state = AssistantState::new();
-        {
-            let mut guard = state.history.lock().expect("history lock");
-            guard.push(json!({"role": "user", "content": "画一条 NRHO"}));
-            guard.push(json!({"kind": "thinking", "content": "思考中"}));
-            guard.push(json!({"role": "assistant", "content": "部分回复"}));
-            guard.push(json!({"kind": "interrupted"}));
-            guard.push(json!({"role": "user", "content": "继续"}));
+        let (tx, rx) = oneshot::channel();
+        state.inner.confirmations.lock().insert("7".into(), tx);
+        assert!(state.resolve_confirm("7", true));
+        assert!(!state.resolve_confirm("7", true)); // 重复点击
+        assert!(rx.await.unwrap());
+        assert!(!state.busy());
+    }
+
+    /// 门禁：运行中或存在未决审批时 busy。
+    #[test]
+    fn busy_tracks_running_and_pending() {
+        let state = AssistantState::new();
+        assert!(!state.busy());
+        state.inner.running.store(true, Ordering::SeqCst);
+        assert!(state.busy());
+
+        let (tx, _rx) = oneshot::channel();
+        state.inner.confirmations.lock().insert("1".into(), tx);
+        assert!(state.busy());
+    }
+
+    /// configOptions 里 thinking 档位的读取。
+    #[test]
+    fn captures_thinking_from_config_options() {
+        let state = AssistantState::new();
+        capture_config_options(
+            &state.inner,
+            &json!({"configOptions": [
+                {"id": "mode", "currentValue": "default"},
+                {"id": "thinking", "currentValue": "high"}
+            ]}),
+        );
+        assert_eq!(state.thinking_level(), "deep");
+    }
+
+    /// 验证构建发送给 ACP 的 prompt 时，包含固定的中文领域指令与用户输入。
+    #[test]
+    fn builds_prompt_with_domain_instruction() {
+        let prompt_without_selection = build_prompt_text("请生成一族 Halo 轨道", None);
+        assert!(prompt_without_selection.starts_with(DOMAIN_INSTRUCTION));
+        assert!(prompt_without_selection.contains("请生成一族 Halo 轨道"));
+        assert!(!prompt_without_selection.contains("[当前画布选择]"));
+
+        let prompt_with_selection = build_prompt_text(
+            "分析当前轨道",
+            Some(&json!({"recordId": "rec-123", "family": "Halo"})),
+        );
+        assert!(prompt_with_selection.starts_with(DOMAIN_INSTRUCTION));
+        assert!(prompt_with_selection.contains("分析当前轨道"));
+        assert!(prompt_with_selection.contains("[当前画布选择]"));
+        assert!(prompt_with_selection.contains("\"recordId\":\"rec-123\""));
+    }
+
+    /// build_prompt_text 与 user_visible_message 互逆：回放剥离后应还原
+    /// 用户原始消息；无信封特征的回放文本原样通过。
+    #[test]
+    fn user_visible_message_round_trip() {
+        for (message, selection) in [
+            ("问", None),
+            ("多行\n消息", Some(json!({"recordId": "r1"}))),
+        ] {
+            let full = build_prompt_text(message, selection.as_ref());
+            assert_eq!(user_visible_message(&full), message);
         }
-        let last = json!({"role": "user", "content": "继续"});
-        let messages = state.context_messages("sys".into(), last.clone());
-        // 系统提示 + 剥除 kind 行后的历史（user/assistant/user）
-        // System prompt + history with kind rows stripped (user/assistant/user).
-        assert_eq!(messages.len(), 4);
-        assert!(messages.iter().all(|m| m.get("kind").is_none()));
-        assert_eq!(messages.last(), Some(&last));
-    }
-
-    #[test]
-    fn read_only_whitelist_is_fail_closed() {
-        assert!(is_read_only("catalog_query"));
-        assert!(is_read_only("catalog_get"));
-        assert!(is_read_only("scenario_list"), "宿主情景列举是纯读固定目录（ADR 0027）");
-        assert!(!is_read_only("scenario_write"), "情景写入必须走确认");
-        assert!(!is_read_only("design_orbit"));
-        assert!(!is_read_only("catalog_delete"));
-        assert!(!is_read_only("future_unknown_tool"), "未知工具必须走确认");
-    }
-
-    #[test]
-    fn truncation_aligns_to_user_boundary() {
-        let mut history: Vec<Value> = vec![];
-        for i in 0..60 {
-            let role = if i % 3 == 0 { "user" } else { "assistant" };
-            history.push(json!({"role": role, "content": format!("m{i}")}));
-        }
-        let idx = truncate_index(&history, 50);
-        assert_eq!(history[idx]["role"], "user", "截断点必须在 user 消息上");
-        assert!(history.len() - idx <= 50);
-    }
-
-    #[test]
-    fn short_history_is_not_truncated() {
-        let history = vec![json!({"role": "user", "content": "hi"})];
-        assert_eq!(truncate_index(&history, 50), 0);
-    }
-
-    #[test]
-    fn replay_strips_thinking_rows_but_keeps_pairing() {
-        // 回放净化：思考行剥除；夹在 assistant(tool_calls) 与 tool 结果
-        // 之间的思考行不影响配对完整
-        let history = vec![
-            json!({"role": "user", "content": "q"}),
-            json!({"kind": "thinking", "content": "想一想"}),
-            json!({"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "t", "arguments": "{}"}}]}),
-            json!({"kind": "thinking", "content": "看结果"}),
-            json!({"role": "tool", "tool_call_id": "c1", "content": "{}"}),
-            json!({"role": "assistant", "content": "答"}),
-        ];
-        let stripped: Vec<Value> = history.iter().filter(|r| !is_kind_row(r)).cloned().collect();
-        assert_eq!(stripped.len(), 4);
-        assert!(stripped.iter().all(|r| !is_kind_row(r)));
-        // 配对完整：截断点从 stripped 上对齐 user 边界后，tool_calls 与 tool 仍在同窗
-        let idx = truncate_index(&stripped, 50);
-        assert_eq!(idx, 0);
-        let roles: Vec<&str> = stripped[idx..].iter().filter_map(|r| r.get("role").and_then(Value::as_str)).collect();
-        assert_eq!(roles, vec!["user", "assistant", "tool", "assistant"]);
-    }
-
-    #[test]
-    fn truncation_skips_thinking_rows_to_find_user_boundary() {
-        let mut history: Vec<Value> = vec![];
-        for i in 0..30 {
-            history.push(json!({"role": "user", "content": format!("m{i}")}));
-            history.push(json!({"kind": "thinking", "content": "t"}));
-            history.push(json!({"role": "assistant", "content": "a"}));
-        }
-        let idx = truncate_index(&history, 50);
-        assert_eq!(history[idx].get("role").and_then(Value::as_str), Some("user"), "截断点必须落在 user 消息上，思考行不能充当边界");
-        assert!(history.len() - idx <= 50);
+        assert_eq!(user_visible_message("回放：最早的问题"), "回放：最早的问题");
     }
 }

@@ -29,7 +29,7 @@ beforeAll(() => {
   window.matchMedia = mm as unknown as typeof window.matchMedia;
 });
 
-const t = (key: string) => translations.zh[key] ?? key;
+const t = (key: string) => translations[key] ?? key;
 
 describe("buildOrbitInfo", () => {
   it("族成员段：类型/数据系/Jacobi/点数/跨度/来源齐全", () => {
@@ -87,7 +87,7 @@ describe("OrbitInfoPanel", () => {
   it("空态显示操作指引", () => {
     render(<OrbitInfoPanel info={null} />);
     expect(screen.getByTestId("orbit-info-panel").textContent).toContain(
-      translations.zh["orbit_info.empty"],
+      translations["orbit_info.empty"],
     );
   });
 
