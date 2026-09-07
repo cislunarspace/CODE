@@ -25,7 +25,7 @@ pub mod host_tools;
 pub mod omp;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 
 use anyhow::{anyhow, Result};
@@ -98,8 +98,11 @@ struct Inner {
     /// 当前会话 id（None = 尚未建立会话，首次发送时懒创建）。
     /// 存活于 omp 进程之外：omp 崩溃重拉后按它 session/load 续上。
     session: parking_lot::Mutex<Option<String>>,
-    /// 单并发门禁：一轮 session/prompt 进行中。
-    running: AtomicBool,
+    /// 在飞轮次计数（引导允许第二轮并起：omp 实测语义是取消旧轮续跑）。
+    in_flight: AtomicUsize,
+    /// 引导抑制：引导发送（running 中再发消息）置位，被它取消的那一轮的
+    /// cancelled 结果不再发 interrupted 事件（引导气泡本身即解释）。
+    steering_suppress: AtomicBool,
     /// 静默装载（重连后重开会话：转换器照常维护关联，但不外发事件）。
     quiet: AtomicBool,
     /// 用户期望的会话配置（config_id → value；会话建立前缓存，建立时应用）。
@@ -129,7 +132,8 @@ impl AssistantState {
         let inner = Arc::new(Inner {
             omp: omp::OmpState::new(),
             session: parking_lot::Mutex::new(None),
-            running: AtomicBool::new(false),
+            in_flight: AtomicUsize::new(0),
+            steering_suppress: AtomicBool::new(false),
             quiet: AtomicBool::new(false),
             desired_config: parking_lot::Mutex::new(HashMap::new()),
             config_options: parking_lot::Mutex::new(Vec::new()),
@@ -158,7 +162,7 @@ impl AssistantState {
 
     /// 是否有回复进行中或未决审批（会话结构操作门禁）。
     pub fn busy(&self) -> bool {
-        self.inner.running.load(Ordering::SeqCst) || self.has_pending_confirmations()
+        self.inner.in_flight.load(Ordering::SeqCst) > 0 || self.has_pending_confirmations()
     }
 
     /// 是否存在未决工具审批。
@@ -265,18 +269,38 @@ impl AssistantState {
         *self.inner.sessions.lock() = list;
     }
 
-    /// 发送一条用户消息并等整轮结束（增量经事件流推送）。
-    /// 早期错误（omp 未安装/握手失败）经 Err 上抛；运行期错误走 error 事件。
+    /// 发送一条用户消息并等整轮结束（增量经事件流推送）。生成中再发即
+    /// 引导：omp 对运行中会话收到新 prompt 的实测语义是取消当前轮并立即
+    /// 以新消息续跑（上下文保留）；引导前先收尾所有挂起审批。早期错误
+    ///（omp 未安装/握手失败）经 Err 上抛；运行期错误走 error 事件。
     pub async fn send(&self, message: &str, selection: Option<Value>) -> Result<()> {
-        if self.inner.running.swap(true, Ordering::SeqCst) {
-            anyhow::bail!("上一轮对话仍在进行");
+        if self.inner.in_flight.load(Ordering::SeqCst) > 0 {
+            // 引导轮：取消语义由 omp 承担（新 prompt 顶掉当前轮）。挂起的
+            // 工具审批随轮取消：逐一拒绝收尾（卡片落 error 态），并抑制旧轮
+            // 的 interrupted 标记
+            self.resolve_pending_for_steering();
+            self.inner.steering_suppress.store(true, Ordering::SeqCst);
         }
+        self.inner.in_flight.fetch_add(1, Ordering::SeqCst);
         let result = self.run_prompt(message, selection).await;
-        self.inner.running.store(false, Ordering::SeqCst);
+        self.inner.in_flight.fetch_sub(1, Ordering::SeqCst);
         if let Err(e) = &result {
             self.publish(json!({"kind": "error", "message": e.to_string()}));
         }
         Ok(())
+    }
+
+    /// 引导前置清理：逐一拒绝全部挂起审批（omp 已 abort 的旧审批请求应答
+    /// 无害）并对每张卡片发布失败收尾事件。
+    fn resolve_pending_for_steering(&self) {
+        let keys: Vec<String> = self.inner.confirmations.lock().keys().cloned().collect();
+        for key in &keys {
+            self.resolve_confirm(key, false);
+            self.publish(json!({
+                "kind": "tool_done", "callId": key, "tool": "", "ok": false,
+                "summary": {"status": "info", "text": "随引导消息取消"}
+            }));
+        }
     }
 
     async fn run_prompt(&self, message: &str, selection: Option<Value>) -> Result<()> {
@@ -306,8 +330,14 @@ impl AssistantState {
             .await
         {
             Ok(result) => {
-                if let Some(payload) = events::stop_reason_payload(&result) {
-                    self.publish(payload);
+                // 引导引起的取消不发 interrupted（气泡与新一轮已解释）；
+                // 用户主动停止（停止按钮先清抑制标志）照常发
+                let suppressed = result.get("stopReason").and_then(Value::as_str) == Some("cancelled")
+                    && self.inner.steering_suppress.swap(false, Ordering::SeqCst);
+                if !suppressed {
+                    if let Some(payload) = events::stop_reason_payload(&result) {
+                        self.publish(payload);
+                    }
                 }
                 self.refresh_sessions(&conn).await;
                 Ok(())
@@ -337,10 +367,11 @@ impl AssistantState {
     /// 请求中断当前轮（幂等）：发 session/cancel，omp 以 cancelled stop
     /// reason 结束 prompt。返回是否存在进行中轮次。
     pub async fn request_cancel(&self) -> bool {
-        let running = self.inner.running.load(Ordering::SeqCst);
+        self.inner.steering_suppress.store(false, Ordering::SeqCst);
+        let running = self.inner.in_flight.load(Ordering::SeqCst) > 0;
         if running {
             let current = self.inner.session.lock().clone();
-        if let Some(sid) = current {
+            if let Some(sid) = current {
                 // 通知是尽力而为：连接已死时下轮 ensure_conn 自愈
                 if let Some(conn) = self.inner.omp.current().await {
                     let _ = conn.notify("session/cancel", json!({"sessionId": sid}));
@@ -606,11 +637,18 @@ impl AcpHandlers for ConnHandlers {
     fn on_request(&self, method: &str, params: Value, responder: Responder) {
         let inner = &self.0;
         let full = json!({"id": responder.id().clone(), "params": params});
-        if inner.converter.lock().on_request(method, &full) {
-            let key = responder.id().to_string();
+        let key = responder.id().to_string();
+        // 先登记决定通道再让转换器发射卡片：前端见到 tool_proposed 即可能
+        // 立刻 resolve_confirm，键必须先存在（否则竞态丢确认）
+        let (tx, rx) = oneshot::channel::<bool>();
+        if !inner.converter.lock().on_request(method, &full) {
+            drop(tx); // 非审批请求：不发卡片，直接走未知请求分支
+        } else {
+            inner.confirmations.lock().insert(key.clone(), tx);
             // 只读白名单（eval 包装形态下 overlay 键失效）：客户端直接批准，
             // 不挂起等用户、不出审批卡片
             if inner.converter.lock().auto_decision(&key) == Some(true) {
+                inner.confirmations.lock().remove(&key);
                 if let Some(v) = inner.converter.lock().decision_response(&key, true) {
                     responder.ok(v);
                 } else {
@@ -620,9 +658,6 @@ impl AcpHandlers for ConnHandlers {
             }
             // 审批：挂起等用户。无超时——确认是用户动作；中断经
             // session/cancel 触发 omp 侧 abort，挂起应答自动失效。
-            let key = responder.id().to_string();
-            let (tx, rx) = oneshot::channel::<bool>();
-            inner.confirmations.lock().insert(key.clone(), tx);
             let inner = Arc::clone(inner);
             tokio::spawn(async move {
                 let approved = rx.await.unwrap_or(false);
@@ -699,7 +734,7 @@ mod tests {
     fn busy_tracks_running_and_pending() {
         let state = AssistantState::new();
         assert!(!state.busy());
-        state.inner.running.store(true, Ordering::SeqCst);
+        state.inner.in_flight.store(1, Ordering::SeqCst);
         assert!(state.busy());
 
         let (tx, _rx) = oneshot::channel();
@@ -740,6 +775,30 @@ mod tests {
         assert!(prompt_with_selection.contains("[当前画布选择]"));
         assert!(prompt_with_selection.contains("\"recordId\":\"rec-123\""));
     }
+
+    /// 引导抑制标志：cancelled + suppress 不发 interrupted；用户主动停止
+    ///（request_cancel 先清标志）照常发。
+    #[tokio::test]
+    async fn steering_suppresses_interrupted_but_user_cancel_does_not() {
+        let state = AssistantState::new();
+
+        // 引导引起：置抑制 → cancelled 结果（stop_reason_payload 本来产
+        // interrupted）——这里直接验证抑制消费语义
+        state.inner.steering_suppress.store(true, Ordering::SeqCst);
+        let result = json!({"stopReason": "cancelled"});
+        let suppressed = result.get("stopReason").and_then(Value::as_str) == Some("cancelled")
+            && state.inner.steering_suppress.swap(false, Ordering::SeqCst);
+        assert!(suppressed, "引导取消应被抑制");
+        // 消费过一次后：下一个 cancelled 不再抑制（interrupted 照常发）
+        let suppressed = state.inner.steering_suppress.swap(false, Ordering::SeqCst);
+        assert!(!suppressed);
+
+        // request_cancel 清标志：用户停止路径不受影响
+        state.inner.steering_suppress.store(true, Ordering::SeqCst);
+        let _ = state.request_cancel().await;
+        assert!(!state.inner.steering_suppress.load(Ordering::SeqCst));
+    }
+
 
     /// build_prompt_text 与 user_visible_message 互逆：回放剥离后应还原
     /// 用户原始消息；无信封特征的回放文本原样通过。

@@ -156,7 +156,7 @@ export function AssistantSidebar({
   };
 
   const sendText = async (text: string) => {
-    if (!text || running) return;
+    if (!text) return;
     setDraft("");
     // 用户气泡经事件流回显（与回放同一路径），这里不本地补
     setRunning(true);
@@ -393,9 +393,8 @@ export function AssistantSidebar({
               <Input.TextArea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder={t("assistant.input_placeholder")}
+                placeholder={running ? t("assistant.input_placeholder_running") : t("assistant.input_placeholder")}
                 autoSize={{ minRows: 1, maxRows: 5 }}
-                disabled={running}
                 onPressEnter={(e) => {
                   if (!e.shiftKey) {
                     e.preventDefault();
@@ -403,9 +402,9 @@ export function AssistantSidebar({
                   }
                 }}
               />
-              {running ? (
-                // 生成中：发送按钮变停止按钮——ACP session/cancel 真中断，
-                // cancelled stop reason 到达后 interrupted 事件停住 UI
+              {running && (
+                // 生成中：停止按钮（取消不引导）。发送按钮并存——生成中
+                // 发送即引导（后端发新 prompt，omp 取消当前轮续跑）
                 <Button
                   type="primary"
                   icon={<StopOutlined />}
@@ -415,14 +414,13 @@ export function AssistantSidebar({
                   aria-label={t("assistant.stop")}
                   title={t("assistant.stop")}
                 />
-              ) : (
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={handleSend}
-                  disabled={!draft.trim()}
-                />
               )}
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleSend}
+                disabled={!draft.trim()}
+              />
             </div>
           </div>
         </>

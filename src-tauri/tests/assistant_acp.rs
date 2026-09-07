@@ -297,6 +297,48 @@ async fn acp_lifecycle_over_fake_process() {
         "自动批准应直接完成：{seen:?}"
     );
 
+    // --- 12. 引导：生成中再发消息 = 取消当前轮并立即以新消息续跑 ---
+    // omp 实测语义：新 prompt 顶掉在飞轮（旧轮 cancelled 由引导气泡解释，
+    // 不发 interrupted）
+    let mut seen: Vec<Value> = Vec::new();
+    let f1 = state.send("STEER: 慢慢生成", None);
+    tokio::pin!(f1);
+    let (saw_thinking, f1) = until_kind_or_done(f1, &mut rx, "thinking").await;
+    assert!(saw_thinking, "旧轮应在跑");
+    let f2 = state.send("STEERED: 改用新约束", None);
+    tokio::pin!(f2);
+    drive_with(f2, &mut rx, |ev| seen.push(ev)).await.expect("引导轮完成");
+    drive_with(f1, &mut rx, |ev| seen.push(ev)).await.expect("旧轮收尾");
+    assert!(
+        seen.iter().any(|e| e["kind"] == "user_message" && e["text"] == "STEERED: 改用新约束"),
+        "引导气泡应出现：{seen:?}"
+    );
+    assert!(
+        seen.iter().any(|e| e["kind"] == "delta" && e["text"].as_str().unwrap_or("").contains("STEERED")),
+        "引导轮应流式输出：{seen:?}"
+    );
+    assert!(
+        !seen.iter().any(|e| e["kind"] == "interrupted"),
+        "引导引起的取消不应出 interrupted 标记：{seen:?}"
+    );
+
+    // --- 13. 引导时挂起审批的收尾：卡片落 error 态，不进确认 ---
+    let mut seen: Vec<Value> = Vec::new();
+    let f1 = state.send("EVALTOOL: scenario_write", None);
+    tokio::pin!(f1);
+    let (saw_card, f1) = until_kind_or_done(f1, &mut rx, "tool_proposed").await;
+    assert!(saw_card, "应有审批卡片");
+    // 不确认，直接引导
+    let f2 = state.send("STEERED: 换方向", None);
+    tokio::pin!(f2);
+    drive_with(f2, &mut rx, |ev| seen.push(ev)).await.expect("引导轮完成");
+    drive_with(f1, &mut rx, |ev| seen.push(ev)).await.expect("旧轮收尾");
+    assert!(
+        seen.iter().any(|e| e["kind"] == "tool_done" && e["ok"] == false
+            && e["summary"]["text"].as_str().unwrap_or("").contains("随引导消息取消")),
+        "挂起卡片应收尾为随引导取消：{seen:?}"
+    );
+
     // --- 8. 子进程退出重连：会话 id 保持，静默恢复（无回放噪声） ---
     state.send("EXIT: 立刻退出", None).await.expect("命令本身 Ok");
     let err = wait_kind(&mut rx, "error").await;

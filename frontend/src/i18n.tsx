@@ -82,6 +82,7 @@ export const translations: Record<string, string> = {
   "assistant.card.running": "运行中",
   "assistant.card.done": "已完成",
   "assistant.card.failed": "失败",
+  "assistant.input_placeholder_running": "正在生成…可直接输入，发送即引导",
   "assistant.card.confirm": "确认运行",
   "assistant.card.reject": "拒绝",
   "assistant.card.view_artifact": "查看产物",

@@ -157,25 +157,45 @@ describe("AssistantSidebar 清空确认（#450）", () => {
   });
 });
 
-// —— 中断（#453）：生成中发送按钮变停止按钮，点击请求后端中断 ——
-// Interruption (#453): while generating, the send button becomes a stop
-// button that asks the backend to interrupt.
+// —— 中断与引导（#453）：生成中停止按钮与发送按钮并存，输入框保持可输入；
+// 生成中发送即引导（omp 语义：取消当前轮并以新消息续跑） ——
 
-describe("AssistantSidebar 中断（#453）", () => {
-  it("空闲时无停止按钮，发送中发送按钮变停止按钮", async () => {
+describe("AssistantSidebar 中断与引导（#453）", () => {
+  it("发送中停止按钮出现、输入框仍可输入、发送按钮保持可用", async () => {
     let resolveSend: () => void = () => {};
     vi.mocked(assistantSend).mockImplementationOnce(
       () => new Promise<void>((r) => (resolveSend = r)),
     );
     setup();
     await typeDraft("画一条 NRHO");
-    // 空闲：只有发送按钮
-    // Idle: only the send button.
+    // 空闲：无停止按钮
     expect(screen.queryByRole("button", { name: "停止生成" })).toBeNull();
     pressEnter(false);
     await waitFor(() => expect(screen.getByRole("button", { name: "停止生成" })).toBeDefined());
+    // 生成中：输入框不禁用、可继续输入
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(box.disabled).toBe(false);
+    fireEvent.change(box, { target: { value: "补充约束" } });
+    expect(box.value).toBe("补充约束");
     resolveSend();
     await waitFor(() => expect(screen.queryByRole("button", { name: "停止生成" })).toBeNull());
+  });
+
+  it("运行中发送即引导：触发第二次 assistantSend", async () => {
+    let resolveSend: () => void = () => {};
+    vi.mocked(assistantSend).mockImplementationOnce(
+      () => new Promise<void>((r) => (resolveSend = r)),
+    );
+    setup();
+    await typeDraft("画一条 NRHO");
+    pressEnter(false);
+    await waitFor(() => expect(screen.getByRole("button", { name: "停止生成" })).toBeDefined());
+    // 生成中再输入并发送 → 引导
+    await typeDraft("改用另一条轨道族");
+    pressEnter(false);
+    await waitFor(() => expect(assistantSend).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(assistantSend).mock.calls[1][0]).toBe("改用另一条轨道族");
+    resolveSend();
   });
 
   it("点击停止按钮触发 assistantCancel，幂等可重复点击", async () => {
