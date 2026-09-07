@@ -63,6 +63,12 @@ class AcpClient:
                 with self._lock:
                     self.elicitations.append(msg)
                 self.respond(msg["id"], {"action": "accept", "content": {"value": "Approve"}})
+            if msg.get("method") == "session/request_permission":
+                # 权限请求：自动 allow_once（同上，只验证链路）
+                self.respond(
+                    msg["id"],
+                    {"outcome": {"outcome": "selected", "optionId": "allow_once"}},
+                )
             with self._lock:
                 self.lines.append(msg)
 
@@ -189,7 +195,10 @@ def main() -> int:
         sid = new["sessionId"]
         print(f"[2] session/new ok：{sid}")
 
-        # 3. 只读工具（白名单）直接执行：catalog_query 不触发审批表单
+        # 3. 只读工具经桥接执行：omp 版本漂移两种形态（≤18.1.11 直接路径
+        # 白名单不出审批；≥18.1.12 MCP 工具经 eval 包装，eval 表单里应
+        # 引用 catalog_query——应用侧白名单自动批准由集成测试覆盖，这里
+        # 验证桥接工具确实被调用了）
         result = client.request(
             "session/prompt",
             {
@@ -197,26 +206,25 @@ def main() -> int:
                 "prompt": [
                     {
                         "type": "text",
-                        "text": "调用 catalog_query 工具查询最近的轨道记录（参数给空对象）。"
-                        " 只做这一次工具调用，然后用一句话报告结果状态。",
+                        "text": "调用设备 xd://mcp__tod_catalog_query（工具 catalog_query，参数给空对象 {}），"
+                        "查询最近的轨道记录。直接对该设备发起工具调用，不要经 eval/代码"
+                        "执行包装。完成后用一句话报告结果状态。",
                     }
                 ],
             },
         )
         assert result["stopReason"] == "end_turn", f"只读轮异常结束：{result}"
-        catalog_els = [
-            e
-            for e in client.elicitations
-            if "mcp__tod_catalog_query" in e["params"].get("message", "")
-        ]
-        assert not catalog_els, "白名单工具不应触发审批表单"
+        for e in client.elicitations:
+            msg = e["params"].get("message", "")
+            assert "catalog_query" in msg or "mcp__tod_catalog_query" in msg, (
+                f"只读轮审批应只涉及 catalog_query：{msg[:160]}"
+            )
         # 模型行为不确定（可能自查工具文档/重试）：只断言发生了工具调用，
         # 终态宽松（真实桥接链路由第 4 步的 scenario_write 严格验证）
-        assert any(
-            u.get("sessionUpdate") == "tool_call_update"
-            for u in client.updates(sid)
-        ), "应有工具调用回执"
-        print("[3] 只读工具白名单直跑 ok（无审批表单）")
+        assert any(u.get("sessionUpdate") == "tool_call_update" for u in client.updates(sid)), (
+            "应有工具调用回执"
+        )
+        print("[3] 只读工具调用 ok（审批若出现仅涉 catalog_query）")
         _ = result
 
         # 4. 写工具触发审批 → Approve → 桥接真实执行
@@ -227,21 +235,19 @@ def main() -> int:
                 "prompt": [
                     {
                         "type": "text",
-                        "text": "调用 scenario_write 工具，filename 用 "
-                        "smoke_acp_demo，records 给空列表，reference_epoch 给 "
-                        '{"utc": "2024-01-01T00:00:00"}。只做这一次调用，完成后'
-                        "用一句话报告 scenario_file 路径。",
+                        "text": "调用设备 xd://mcp__tod_scenario_write（工具 scenario_write），"
+                        "filename 用 smoke_acp_demo，records 给空列表，reference_epoch "
+                        '给 {"utc": "2024-01-01T00:00:00"}。直接对该设备发起工具调用，'
+                        "不要经 eval/代码执行包装。完成后一句话报告 scenario_file 路径。",
                     }
                 ],
             },
         )
         assert result["stopReason"] == "end_turn", f"写工具轮异常结束：{result}"
         write_els = [
-            e
-            for e in client.elicitations
-            if "mcp__tod_scenario_write" in e["params"].get("message", "")
+            e for e in client.elicitations if "scenario_write" in e["params"].get("message", "")
         ]
-        assert write_els, "写工具应触发审批表单"
+        assert write_els, "写工具应触发审批表单（直接 Path 形态或 eval Code 形态）"
         write_done = [
             u
             for u in client.updates(sid)

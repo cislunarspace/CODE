@@ -9,7 +9,7 @@
 // session and agent loop live in omp (ACP); this only renders and forwards.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Input, Popconfirm, Segmented, Spin, Tooltip, Typography, message } from "antd";
+import { Button, Input, Popconfirm, Spin, Tooltip, Typography, message } from "antd";
 import {
   ClearOutlined,
   DoubleRightOutlined,
@@ -24,13 +24,14 @@ import {
   assistantGetState,
   assistantNewSession,
   assistantSend,
-  assistantSetThinkingLevel,
+  assistantSetConfigOption,
   assistantSwitchSession,
   onAssistantEvent,
+  type AssistantConfigOption,
   type SelectionContext,
   type SessionMeta,
-  type ThinkingLevel,
 } from "./api";
+import { AssistantConfigStrip } from "./AssistantConfigStrip";
 import { ChatView } from "./ChatView";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { ResizeHandle } from "../ResizeHandle";
@@ -77,7 +78,7 @@ export function AssistantSidebar({
   const [running, setRunning] = useState(false);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("standard");
+  const [configOptions, setConfigOptions] = useState<AssistantConfigOption[]>([]);
   // 最新回调经 ref 持有：事件订阅只建一次，回调随渲染更新
   const producedRef = useRef(onArtifactProduced);
   producedRef.current = onArtifactProduced;
@@ -89,7 +90,7 @@ export function AssistantSidebar({
       setAvailable(info.ompConfigured);
       setSessions(info.sessions);
       setCurrentSessionId(info.sessionId);
-      setThinkingLevel(info.thinkingLevel);
+      setConfigOptions(info.configOptions ?? []);
       setRunning(info.running);
       return info;
     } catch {
@@ -214,14 +215,18 @@ export function AssistantSidebar({
   const switchBusy =
     running || items.some((i) => i.kind === "tool" && i.card.status === "proposed");
 
-  const handleLevel = async (level: ThinkingLevel) => {
-    const prev = thinkingLevel;
-    setThinkingLevel(level); // 乐观更新，失败回滚
+  // 配置切换（模型/思考/模式）：乐观更新 currentValue，失败整面回滚重拉
+  const handleConfigChange = async (configId: string, value: string) => {
+    const prev = configOptions;
+    setConfigOptions((opts) =>
+      opts.map((o) => (o.id === configId ? { ...o, currentValue: value } : o)),
+    );
     try {
-      await assistantSetThinkingLevel(level);
+      await assistantSetConfigOption(configId, value);
     } catch (e) {
-      setThinkingLevel(prev);
+      setConfigOptions(prev);
       message.error(String(e));
+      void loadState();
     }
   };
 
@@ -372,26 +377,18 @@ export function AssistantSidebar({
             onApplyScenario={onApplyScenario}
             onContinue={running ? undefined : handleContinue}
           />
-          {/* 输入区：思考等级三档单选 + 运行中禁用输入（单并发门禁的 UI） */}
+          {/* 输入区：配置条（模型/思考/模式，omp configOptions 动态渲染） */}
           <div
             style={{
               padding: 8,
               borderTop: "1px solid var(--tod-border, #e8e8e8)",
             }}
           >
-            <Tooltip title={t("assistant.level.label")}>
-              <Segmented
-                size="small"
-                value={thinkingLevel}
-                disabled={running}
-                onChange={(v) => handleLevel(v as ThinkingLevel)}
-                options={[
-                  { label: t("assistant.level.off"), value: "off" },
-                  { label: t("assistant.level.standard"), value: "standard" },
-                  { label: t("assistant.level.deep"), value: "deep" },
-                ]}
-              />
-            </Tooltip>
+            <AssistantConfigStrip
+              configOptions={configOptions}
+              disabled={running}
+              onChange={(id, v) => void handleConfigChange(id, v)}
+            />
             <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
               <Input.TextArea
                 value={draft}

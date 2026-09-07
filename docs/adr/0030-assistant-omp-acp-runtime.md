@@ -18,6 +18,13 @@ ACP（Agent Client Protocol）是 omp 原生暴露的 stdio 协议：换行 JSON
 - `session/cancel` 通知使在飞 prompt 以 `stopReason: "cancelled"` 结束；
 - 思考档位是 session 配置项（`session/set_config_option`，configId `thinking`，值域 off/auto/minimal/low/medium/high）。
 
+**omp 18.1.12 漂移实测**（随配置条改造验证）：
+
+- `session/new` 的 `configOptions` 扩展为 mode/model/thinking 三项（模型含全部已配置 provider 的选项列表），`set_config_option` 的 result 回全量配置面；
+- MCP 工具对模型不再直接出现在工具列表：经 eval 的 `tool.*` 命名空间尝试会失败（eval 不认识 MCP 名），可靠调用路径是挂载设备路径 `xd://mcp__tod_<tool>` 直调（审批仍为 "Allow tool" 直接表单）；模型需要提示词引导（领域指令已加设备路径约定）；
+- 若模型经 eval 包装调用：审批消息是通用 `Allow tool: eval`（Code 里含 `tool.<name>(args)`），转换层解析出真实工具名与参数出卡片；自动批准仅限「整段代码就是一次 tool.<name>(args) 调用」的只读白名单工具（eval 是任意代码执行，夹杂其它语句必审批）；
+- eval 终态的摘要从 `display[N]:\n{...}` 文本里提取信封。
+
 ## 决策
 
 1. **omp 为唯一会话运行时**。应用删除自建 LLM client（`llm.rs`）、系统提示组装（`prompt.rs`）、结果投影（`summary.rs`）、模型配置与会话 JSONL 存储（`store.rs`）与 agent loop（旧 `mod.rs`）。模型服务、API key、provider、原生 thinking 配置一律由 omp 原生配置管理，应用不保存、不回读、不提供第二套配置（旧 `assistant.json`/`assistant.key` 只检测存在性用于迁移提示，不自动复制）。
