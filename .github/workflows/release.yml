@@ -260,7 +260,12 @@ jobs:
           cp dist/transfer-orbit-design-sidecar src-tauri/binaries/transfer-orbit-design-sidecar
           chmod +x src-tauri/binaries/transfer-orbit-design-sidecar
       # AI 会话运行时 omp 固定版本随包分发（同 Windows 作业）；资产按目标架构
-      # 选取（amd64→x64、aarch64→arm64），--version 冒烟要求与 runner 同架构
+      # 选取（amd64→x64、aarch64→arm64），--version 冒烟要求与 runner 同架构。
+      # aarch64 特例：omp 是 Go arm64 二进制（64KB 页对齐），AppImage 打包时
+      # linuxdeploy 对 AppDir 内所有 ELF 无条件 patchelf 会把它打坏（ldd 退出
+      # 码 1、运行段错误；x64 不受影响），故 aarch64 包内放自解包壳 + omp.gz
+      # （非 ELF 不被扫描），首用解包到用户缓存——壳语义见 packaging/scripts/
+      # omp-wrapper.sh。amd64 维持裸二进制不动。
       - name: Stage pinned omp into tauri resources
         run: |
           case "${{ matrix.arch }}" in
@@ -268,10 +273,18 @@ jobs:
             aarch64) OMP_ASSET=omp-linux-arm64 ;;
             *) echo "未知架构 ${{ matrix.arch }}"; exit 1 ;;
           esac
-          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/${OMP_ASSET}" -o src-tauri/binaries/omp
-          chmod +x src-tauri/binaries/omp
-          [ "$(stat -c%s src-tauri/binaries/omp)" -gt 10000000 ] || { echo "omp 下载不完整"; exit 1; }
-          src-tauri/binaries/omp --version
+          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/${OMP_ASSET}" -o /tmp/omp-download
+          chmod +x /tmp/omp-download
+          [ "$(stat -c%s /tmp/omp-download)" -gt 10000000 ] || { echo "omp 下载不完整"; exit 1; }
+          /tmp/omp-download --version
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            gzip -9 -c /tmp/omp-download > src-tauri/binaries/omp.gz
+            sed "s/__OMP_VERSION__/${{ env.OMP_VERSION }}/" packaging/scripts/omp-wrapper.sh > src-tauri/binaries/omp
+            chmod +x src-tauri/binaries/omp
+            src-tauri/binaries/omp --version
+          else
+            mv /tmp/omp-download src-tauri/binaries/omp
+          fi
       # 增量更新第一步：瘦身 AppImage（不含 kernels/），同 Windows 作业
       - name: Build slim AppImage (updater channel)
         env:
