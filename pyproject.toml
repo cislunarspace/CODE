@@ -39,7 +39,7 @@ docs = [
 ]
 
 [project.urls]
-Repository = "https://github.com/cislunarspace/transfer-orbit-design"
+Repository = "https://github.com/cislunarspace/CODE"
 
 [tool.pyright]
 pythonVersion = "3.13"
@@ -80,7 +80,7 @@ index-url = "https://pypi.org/simple"
 
 [tool.uv.sources]
 calcephpy = [
-  { url = "https://github.com/cislunarspace/e2m2e/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl", marker = "sys_platform == 'win32'" },
+  { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl", marker = "sys_platform == 'win32'" },
 ]
 
 [tool.ruff]

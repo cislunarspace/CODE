@@ -34,7 +34,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 
-REPO = "cislunarspace/e2m2e"
+REPO = "cislunarspace/CODE-core"
 RELEASE = "kernels-v1"
 
 #: 下载源域名白名单（SSRF 防线）：API 清单与 release 资产只从 GitHub 官方域拉取

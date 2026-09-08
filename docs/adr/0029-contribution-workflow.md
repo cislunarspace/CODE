@@ -2,7 +2,7 @@
 
 **状态**：已接受
 **日期**：2026-09-04
-**关联**：AGENTS.md（issue / PR / 评论的格式——本 ADR 不改它的正文结构约定，只补它没覆盖的分类、标签与面板）；e2m2e 仓 ADR 0046（同一体系的先行决策）；GitHub 面板 cislunarspace/projects/1
+**关联**：AGENTS.md（issue / PR / 评论的格式——本 ADR 不改它的正文结构约定，只补它没覆盖的分类、标签与面板）；e2m2e 仓 ADR 0046（同一体系的先行决策）；GitHub 面板 ouyangjiahong26/projects/1
 
 ## 背景
 

@@ -74,7 +74,7 @@
 - 创建走 GitHub 的五类模板（Bug / Feature / Idea / Research / Task），标题前缀与 type 标签由模板预填。
 - 面板唯一自动入板规则是子 issue，普通 issue 建成后不自动入板，须手动加入：
 
-      gh project item-add 1 --owner cislunarspace --url <issue 的 URL>
+      gh project item-add 1 --owner ouyangjiahong26 --url <issue 的 URL>
 
   入板后状态自动置为 Inbox，不用手设；Inbox 之后的推进与 Priority、Start Date 由维护者手动维护（面板结构、状态语义与自动联动的完整说明见 CONTRIBUTING.md 的 Project 流水线一节）。
 

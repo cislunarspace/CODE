@@ -15,7 +15,7 @@ NASA SPICE 内核文件；必需内核包括行星历（`.bsp`，如 `de440s.bsp
 - **自动下载**：精简环境（如未拉取 LFS 的 CI）可运行
   `uv run python scripts/download_kernels.py`，幂等地拉取全部内核到 `kernels/`；
 - **手动下载**：从 e2m2e 的
-  [`kernels-v1` release](https://github.com/cislunarspace/e2m2e/releases)
+  [`kernels-v1` release](https://github.com/cislunarspace/CODE-core/releases)
   下载解压到 sidecar 工作目录下的 `kernels/`（开发期即仓库根 `kernels/`，
   安装版即安装目录）；
 - **自备数据**：将 `$SPICE_KERNEL_DIR` 指向已有内核目录（优先级最高，sidecar

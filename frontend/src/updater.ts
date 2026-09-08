@@ -5,7 +5,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 /** GitHub Releases page (latest redirects to the newest tag): manual update
  *  entry for deb/rpm installs. */
 export const RELEASES_PAGE_URL =
-  "https://github.com/cislunarspace/transfer-orbit-design/releases/latest";
+  "https://github.com/cislunarspace/CODE/releases/latest";
 
 export type BundleType =
   | "appimage"

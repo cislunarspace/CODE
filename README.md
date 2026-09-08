@@ -1,17 +1,17 @@
 # transfer-orbit-design - 地月空间轨道设计 GUI
 
-[![Release](https://img.shields.io/github/v/release/cislunarspace/transfer-orbit-design?label=release)](https://github.com/cislunarspace/transfer-orbit-design/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/cislunarspace/transfer-orbit-design/ci.yml?branch=master&label=CI)](https://github.com/cislunarspace/transfer-orbit-design/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/cislunarspace/CODE?label=release)](https://github.com/cislunarspace/CODE/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/cislunarspace/CODE/ci.yml?branch=master&label=CI)](https://github.com/cislunarspace/CODE/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-transfer-orbit-design 是 [e2m2e](https://github.com/cislunarspace/e2m2e) 的 GUI 前端。e2m2e 提供地月空间轨道设计所需的动力学模型、修正器、延拓器与转移算法，本仓库把它们封装成可视化桌面应用。v4.0.0 起 GUI 为 Tauri 2 架构：React 前端负责界面，Rust 壳负责进程编排，e2m2e 以 sidecar 子进程运行（stdio JSON 行 + 二进制帧协议）：界面不碰算法，算法不进界面。
+transfer-orbit-design 是 [e2m2e](https://github.com/cislunarspace/CODE-core) 的 GUI 前端。e2m2e 提供地月空间轨道设计所需的动力学模型、修正器、延拓器与转移算法，本仓库把它们封装成可视化桌面应用。v4.0.0 起 GUI 为 Tauri 2 架构：React 前端负责界面，Rust 壳负责进程编排，e2m2e 以 sidecar 子进程运行（stdio JSON 行 + 二进制帧协议）：界面不碰算法，算法不进界面。
 
 ## 安装
 
 ### 桌面应用（Windows / Linux）
 
-从 [GitHub Releases](https://github.com/cislunarspace/transfer-orbit-design/releases) 下载对应平台的安装包：Windows x64 用 `transfer-orbit-design_<版本>_x64-setup.exe`（NSIS 安装器，免管理员权限，安装到当前用户目录）或 `.msi`；Linux amd64 / aarch64 用 AppImage、`deb` 或 `rpm`。所有安装包内含 e2m2e 运行时（transfer-orbit-design-sidecar）与全套 SPICE 内核（含行星历），开箱即用。下载后请对照 `checksums.txt` 校验。已安装的应用自动接收应用内更新：AppImage 与 Windows 安装包由更新插件直接替换（更新包不含内核，首次安装的内核原地复用）；deb/rpm 安装在应用内下载完整安装包并经系统包管理器安装（需输入管理员密码）。
+从 [GitHub Releases](https://github.com/cislunarspace/CODE/releases) 下载对应平台的安装包：Windows x64 用 `transfer-orbit-design_<版本>_x64-setup.exe`（NSIS 安装器，免管理员权限，安装到当前用户目录）或 `.msi`；Linux amd64 / aarch64 用 AppImage、`deb` 或 `rpm`。所有安装包内含 e2m2e 运行时（transfer-orbit-design-sidecar）与全套 SPICE 内核（含行星历），开箱即用。下载后请对照 `checksums.txt` 校验。已安装的应用自动接收应用内更新：AppImage 与 Windows 安装包由更新插件直接替换（更新包不含内核，首次安装的内核原地复用）；deb/rpm 安装在应用内下载完整安装包并经系统包管理器安装（需输入管理员密码）。
 
 ### 开发环境
 
@@ -28,7 +28,7 @@ npx --prefix frontend tauri dev     # 开发模式启动：Vite 热更新 + Rust
 SPICE 内核随 Git LFS 随仓库分发（克隆后位于 `kernels/`），安装包也已随带；纯 CR3BP 工具用不到行星历。需要另行准备的场景（精简环境、自备数据）：
 
 - **自动下载**：`uv run python scripts/download_kernels.py`，幂等拉取到 `kernels/`；
-- **手动下载**：从 e2m2e 的 [`kernels-v1` release](https://github.com/cislunarspace/e2m2e/releases) 解压到 `kernels/`（sidecar 工作目录下的相对路径）；
+- **手动下载**：从 e2m2e 的 [`kernels-v1` release](https://github.com/cislunarspace/CODE-core/releases) 解压到 `kernels/`（sidecar 工作目录下的相对路径）；
 - **自备数据**：`$SPICE_KERNEL_DIR` 指向已有内核目录（优先级最高）。
 
 官方来源：[NASA NAIF](https://naif.jpl.nasa.gov/naif/data.html)（备用）。
@@ -57,7 +57,7 @@ SPICE 内核随 Git LFS 随仓库分发（克隆后位于 `kernels/`），安装
 
 ## 文档
 
-在线文档：<https://cislunarspace.github.io/transfer-orbit-design/zh/>
+在线文档：<https://cislunarspace.github.io/CODE/zh/>
 
 本地构建：
 

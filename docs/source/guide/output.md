@@ -14,7 +14,7 @@ Jacobi 区间、振幅区间；谱系指针记录上下游因果链）。重启�
 ## 库即数据格式
 
 轨道库是 e2m2e catalog 格式（见
-[e2m2e 文档](https://cislunarspace.github.io/e2m2e/)）：
+[e2m2e 文档](https://cislunarspace.github.io/CODE-core/)）：
 
 - 记录按多维分类索引，支持组合过滤查询；
 - 谱系指针（上游记录 id）使设计 → 保持等链式产物的因果关系重启不断；
