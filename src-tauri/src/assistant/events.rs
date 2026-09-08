@@ -50,7 +50,8 @@ fn card_summary(envelope_text: &str) -> Value {
 pub const BRIDGE_SERVER_NAME: &str = "tod";
 
 /// 只读免确认工具（桥接层原样转发的名字，无数字不受 omp 改名影响）。
-pub const READ_ONLY_TOOLS: &[&str] = &["catalog_query", "catalog_get", "scenario_list"];
+/// valid_ranges 是参数合法范围查询（纯读，ADR 0022 决策 4 的免确认扩展）。
+pub const READ_ONLY_TOOLS: &[&str] = &["catalog_query", "catalog_get", "scenario_list", "valid_ranges"];
 
 /// omp 对 MCP 工具名的消毒规则（实测：数字→下划线，如 e2m2e→e_m_e）。
 /// 桥接工具名里凡有数字都会被改写；白名单恰好不含数字，原样可用。

@@ -75,7 +75,11 @@ export function AssistantSidebar({
   const [available, setAvailable] = useState<boolean | null>(null);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [draft, setDraft] = useState("");
-  const [running, setRunning] = useState(false);
+  // 在飞轮次计数（引导允许两轮并发：旧轮先收尾不能把新轮的生成态清零）
+  const [sendCount, setSendCount] = useState(0);
+  // 载入时后端报告的在飞状态（跨挂载的轮次；终态事件到达即清除）
+  const [backendInFlight, setBackendInFlight] = useState(false);
+  const running = sendCount > 0 || backendInFlight;
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [configOptions, setConfigOptions] = useState<AssistantConfigOption[]>([]);
@@ -91,7 +95,7 @@ export function AssistantSidebar({
       setSessions(info.sessions);
       setCurrentSessionId(info.sessionId);
       setConfigOptions(info.configOptions ?? []);
-      setRunning(info.running);
+      setBackendInFlight(info.running);
       return info;
     } catch {
       setAvailable(false);
@@ -132,6 +136,10 @@ export function AssistantSidebar({
     let unlisten: (() => void) | undefined;
     onAssistantEvent((payload) => {
       setItems((prev) => foldEvent(prev, payload));
+      // 跨挂载轮次的终态：后端报告的 busy 就此解除
+      if (["message_done", "interrupted", "error"].includes(payload.kind)) {
+        setBackendInFlight(false);
+      }
       if (payload.kind === "tool_done" && payload.ok && payload.summary?.recordId) {
         producedRef.current?.(payload.summary.recordId, payload.tool);
       }
@@ -156,10 +164,10 @@ export function AssistantSidebar({
   };
 
   const sendText = async (text: string) => {
-    if (!text || running) return;
+    if (!text) return;
     setDraft("");
     // 用户气泡经事件流回显（与回放同一路径），这里不本地补
-    setRunning(true);
+    setSendCount((c) => c + 1);
     try {
       // 命令在整轮结束时返回；期间事件经 assistant-event 流入。
       // 运行期错误已由 error 事件气泡呈现，这里不再重复 toast。
@@ -178,7 +186,7 @@ export function AssistantSidebar({
       // 运行期输入框禁用必为空；守卫仅在为空时回填，不覆盖用户新输入。
       setDraft((cur) => (cur === "" ? text : cur));
     } finally {
-      setRunning(false);
+      setSendCount((c) => Math.max(0, c - 1));
     }
   };
 
@@ -393,9 +401,8 @@ export function AssistantSidebar({
               <Input.TextArea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder={t("assistant.input_placeholder")}
+                placeholder={running ? t("assistant.input_placeholder_running") : t("assistant.input_placeholder")}
                 autoSize={{ minRows: 1, maxRows: 5 }}
-                disabled={running}
                 onPressEnter={(e) => {
                   if (!e.shiftKey) {
                     e.preventDefault();
@@ -403,9 +410,9 @@ export function AssistantSidebar({
                   }
                 }}
               />
-              {running ? (
-                // 生成中：发送按钮变停止按钮——ACP session/cancel 真中断，
-                // cancelled stop reason 到达后 interrupted 事件停住 UI
+              {running && (
+                // 生成中：停止按钮（取消不引导）。发送按钮并存——生成中
+                // 发送即引导（后端发新 prompt，omp 取消当前轮续跑）
                 <Button
                   type="primary"
                   icon={<StopOutlined />}
@@ -415,14 +422,13 @@ export function AssistantSidebar({
                   aria-label={t("assistant.stop")}
                   title={t("assistant.stop")}
                 />
-              ) : (
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={handleSend}
-                  disabled={!draft.trim()}
-                />
               )}
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleSend}
+                disabled={!draft.trim()}
+              />
             </div>
           </div>
         </>

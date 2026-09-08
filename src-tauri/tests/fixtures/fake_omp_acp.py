@@ -18,6 +18,7 @@
 import json
 import sys
 import threading
+import time
 
 state = {
     "next_session": 0,
@@ -26,6 +27,7 @@ state = {
     "mode": "default",
     "cancel_requested": False,
     "cwd": "",
+    "pending_msgs": [],
 }
 write_lock = threading.Lock()
 
@@ -170,7 +172,6 @@ def handle_prompt(mid, params):
             },
         )
         # 等待 session/cancel（测试侧另线触发，最多等 10 秒）
-        import time
 
         for _ in range(100):
             if state["cancel_requested"]:
@@ -190,7 +191,7 @@ def handle_prompt(mid, params):
         },
     )
 
-    if "TOOL:" in text:
+    if "TOOL:" in text and "EVALTOOL:" not in text and "EVALREAD:" not in text:
         # 审批链路：tool_call(pending) → elicitation/create → 按应答出终态
         tool = text.split("TOOL:", 1)[1].strip().split(maxsplit=1)[0] or "scenario_write"
         notify(
@@ -281,6 +282,29 @@ def handle_prompt(mid, params):
             update["content"] = content
         notify("session/update", {"sessionId": session_id, "update": update})
 
+    if "STEER:" in text:
+        # 慢轮引导（omp 实测语义：运行中来新 prompt = 取消当前轮 + 新轮
+        # 立即开始）。读 stdin 等第二 prompt（STEERED:）或 session/cancel
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            msg = json.loads(line)
+            if msg.get("method") == "session/cancel":
+                state["cancel_requested"] = True
+                reply(mid, {"stopReason": "cancelled", "usage": {"totalTokens": 5}})
+                return
+            if msg.get("method") == "session/prompt":
+                blocks = msg.get("params", {}).get("prompt", [])
+                steered = any("STEERED:" in (b.get("text", "")) for b in blocks)
+                if steered:
+                    reply(mid, {"stopReason": "cancelled", "usage": {"totalTokens": 5}})
+                    handle_prompt(msg["id"], msg["params"])
+                    return
+        reply(mid, {"stopReason": "end_turn", "usage": {"totalTokens": 5}})
+        return
+
     notify(
         "session/update",
         {
@@ -310,7 +334,10 @@ def request_elicitation(prompt_id, message):
             },
         }
     )
-    while True:
+    # 引导场景：审批等待期间到达的新 prompt 入队（主循环稍后处理）并
+    # 回 cancelled 给当前轮（omp 实测语义：新 prompt 取消在飞轮含挂起审批）
+    deadline = time.time() + 10
+    while time.time() < deadline:
         line = sys.stdin.readline()
         if not line:
             return None
@@ -322,93 +349,105 @@ def request_elicitation(prompt_id, message):
         if msg.get("method") == "session/cancel":
             state["cancel_requested"] = True
             continue
-        if msg.get("method") is None and msg.get("id") is not None:
-            # 其它请求响应：忽略
+        if msg.get("method") is not None:
+            state["pending_msgs"].append(msg)
+            if msg.get("method") == "session/prompt":
+                reply(prompt_id, {"stopReason": "cancelled", "usage": {"totalTokens": 5}})
+                return None
             continue
+    print("[fake] elicitation 等待应答超时（10s），返回 None", file=sys.stderr)
+    return None
 
 
 def main():
-    for line in sys.stdin:
+    while True:
+        # 审批等待期入队的消息（引导的新 prompt 等）先出队处理
+        if state["pending_msgs"]:
+            msg = state["pending_msgs"].pop(0)
+            dispatch(msg)
+            continue
+        line = sys.stdin.readline()
+        if not line:
+            break
         line = line.strip()
         if not line:
             continue
         msg = json.loads(line)
-        method = msg.get("method")
-        mid = msg.get("id")
-        params = msg.get("params") or {}
+        dispatch(msg)
 
-        if method == "initialize":
-            reply(
-                mid,
-                {"protocolVersion": 1, "agentInfo": {"name": "fake-omp"}, "agentCapabilities": {}},
-            )
-            continue
-        # 记住会话建立/载入时的 cwd（真实 omp 按落盘值返回 session/list）
-        if method in ("session/new", "session/load") and params.get("cwd"):
-            state["cwd"] = params["cwd"]
-        if method == "session/new":
-            state["next_session"] += 1
-            reply(
-                mid,
-                {"sessionId": f"fake-{state['next_session']}", "configOptions": config_options()},
-            )
-        elif method == "session/load":
-            if params.get("sessionId") == "fail-load":
-                # 指定失败会话：测客户端失败路径（应恢复原会话显示）
-                reply_err(mid, -32000, "会话文件损坏")
-                continue
-            replay(params.get("sessionId", "?"))
-            reply(mid, {"configOptions": config_options()})
-        elif method == "session/set_config_option":
-            cid = params.get("configId", "")
-            value = params.get("value", "")
-            opt = next((o for o in config_options() if o["id"] == cid), None)
-            if opt is None:
-                reply_err(mid, -32603, f"Unknown ACP config option: {cid}")
-                continue
-            if not any(x["value"] == value for x in opt["options"]):
-                reply_err(mid, -32603, f"Unknown value for {cid}: {value}")
-                continue
-            state[cid] = value
-            reply(mid, {"configOptions": config_options()})
-        elif method == "session/list":
-            reply(
-                mid,
-                {
-                    "sessions": [
-                        {
-                            "sessionId": "fake-1",
-                            "cwd": state["cwd"],  # 真实 omp 按落盘 cwd 返回
-                            "title": "会话一",
-                            "updatedAt": "2026-01-01T00:00:00Z",
-                            "_meta": {"messageCount": 3},
-                        },
-                        {
-                            "sessionId": "other-9",
-                            "cwd": "/somewhere/else",
-                            "title": "别人的",
-                            "updatedAt": "2026-01-01T00:00:00Z",
-                            "_meta": {"messageCount": 1},
-                        },
-                    ]
-                },
-            )
-        elif method == "session/prompt":
-            handle_prompt(mid, params)
-        elif method == "session/cancel":
-            state["cancel_requested"] = True
-        elif method == "session/set_config_option":
-            state["thinking"] = params.get("value", "medium")
-            reply(mid, {"configOptions": config_options()})
-        elif method == "$/ping-unknown":
-            # 未知请求：等一条应答（客户端应回 -32601；这里不校验内容）
-            pass
-        else:
-            if mid is not None:
-                reply_err(mid, -32601, f"未知方法 {method}")
-        # 干扰项：未知通知应被客户端忽略
-        if method == "initialize":
-            notify("$/noise", {})
+
+def dispatch(msg):
+    method = msg.get("method")
+    mid = msg.get("id")
+    params = msg.get("params") or {}
+
+    if method == "initialize":
+        reply(
+            mid,
+            {"protocolVersion": 1, "agentInfo": {"name": "fake-omp"}, "agentCapabilities": {}},
+        )
+        notify("$/noise", {})
+        return
+    # 记住会话建立/载入时的 cwd（真实 omp 按落盘值返回 session/list）
+    if method in ("session/new", "session/load") and params.get("cwd"):
+        state["cwd"] = params["cwd"]
+    if method == "session/new":
+        state["next_session"] += 1
+        reply(
+            mid,
+            {"sessionId": f"fake-{state['next_session']}", "configOptions": config_options()},
+        )
+    elif method == "session/load":
+        if params.get("sessionId") == "fail-load":
+            # 指定失败会话：测客户端失败路径（应恢复原会话显示）
+            reply_err(mid, -32000, "会话文件损坏")
+            return
+        replay(params.get("sessionId", "?"))
+        reply(mid, {"configOptions": config_options()})
+    elif method == "session/set_config_option":
+        cid = params.get("configId", "")
+        value = params.get("value", "")
+        opt = next((o for o in config_options() if o["id"] == cid), None)
+        if opt is None:
+            reply_err(mid, -32603, f"Unknown ACP config option: {cid}")
+            return
+        if not any(x["value"] == value for x in opt["options"]):
+            reply_err(mid, -32603, f"Unknown value for {cid}: {value}")
+            return
+        state[cid] = value
+        reply(mid, {"configOptions": config_options()})
+    elif method == "session/list":
+        reply(
+            mid,
+            {
+                "sessions": [
+                    {
+                        "sessionId": "fake-1",
+                        "cwd": state["cwd"],  # 真实 omp 按落盘 cwd 返回
+                        "title": "会话一",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                        "_meta": {"messageCount": 3},
+                    },
+                    {
+                        "sessionId": "other-9",
+                        "cwd": "/somewhere/else",
+                        "title": "别人的",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                        "_meta": {"messageCount": 1},
+                    },
+                ]
+            },
+        )
+    elif method == "session/prompt":
+        handle_prompt(mid, params)
+    elif method == "session/cancel":
+        state["cancel_requested"] = True
+    elif method == "$/ping-unknown":
+        # 未知请求：等一条应答（客户端应回 -32601；这里不校验内容）
+        pass
+    else:
+        if mid is not None:
+            reply_err(mid, -32601, f"未知方法 {method}")
 
 
 if __name__ == "__main__":
