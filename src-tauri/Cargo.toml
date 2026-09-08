@@ -1,6 +1,6 @@
 [package]
 name = "transfer-orbit-design"
-version = "4.9.0"
+version = "4.8.4"
 edition = "2021"
 description = "transfer-orbit-design Tauri 桌面应用（Rust 壳 + React 前端 + e2m2e sidecar）"
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transfer-orbit-design"
-version = "4.8.3"
+version = "4.8.4"
 description = "地月空间转移轨道设计与分析脚本工具集，提供 CR3BP 轨道生成、转移设计、绘图和星历转换能力"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
