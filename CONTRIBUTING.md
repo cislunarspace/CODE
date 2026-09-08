@@ -22,7 +22,7 @@ Issue 分五类，各有一套模板，按要提交的内容选择：
 
 标题以类型标签开头，后接说清对象和目的的一句话，不写方案。Issue 用 `[FEAT]` / `[BUG]` / `[IDEA]` / `[RESEARCH]` / `[TASK]`（与所选模板对应，模板已预填）；PR 用意图标签 `[FEAT]` / `[FIX]` / `[DOC]` / `[TEST]` / `[CLEANUP]` / `[DEP]`（与 kind 对应）。优先级、状态等其余元信息不进标题，由 Project 字段承载。
 
-使用问题、想法探讨与一般性讨论走 [Discussions](https://github.com/cislunarspace/transfer-orbit-design/discussions)，不占用 Issue。需要维护者拍板的点在正文单独列出（**待拍板**）；后来在 PR 里落地的，合并前回 Issue 评论拍板结果——决策记在 Issue，不记在 PR 描述里。
+使用问题、想法探讨与一般性讨论走 [Discussions](https://github.com/cislunarspace/CODE/discussions)，不占用 Issue。需要维护者拍板的点在正文单独列出（**待拍板**）；后来在 PR 里落地的，合并前回 Issue 评论拍板结果——决策记在 Issue，不记在 PR 描述里。
 
 ## 提 Pull Request
 
@@ -51,7 +51,7 @@ Issue 不用 kind 标签，分类由模板创建时自动打的标签承担（`t
 
 ## Project 流水线
 
-本仓库与 [e2m2e](https://github.com/cislunarspace/e2m2e) 共用一块推进面板「[cislunarspace Issue Management](https://github.com/users/cislunarspace/projects/1)」，Repository 字段区分来源，两个仓的工作同屏排序：
+本仓库与 [e2m2e](https://github.com/cislunarspace/CODE-core) 共用一块推进面板「[cislunarspace Issue Management](https://github.com/users/ouyangjiahong26/projects/1)」，Repository 字段区分来源，两个仓的工作同屏排序：
 
 | 状态 | 含义 |
 |---|---|

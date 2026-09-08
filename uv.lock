@@ -80,7 +80,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/c0/83/a3e830fd0ea6e1427
 [[package]]
 name = "calcephpy"
 version = "5.0.0"
-source = { url = "https://github.com/cislunarspace/e2m2e/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }
+source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }
 resolution-markers = [
     "sys_platform == 'win32'",
 ]
@@ -90,7 +90,7 @@ dependencies = [
     { name = "setuptools" },
 ]
 wheels = [
-    { url = "https://github.com/cislunarspace/e2m2e/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:b8098bc44ccd1b94921cf84ba9460220da1dd56131461f920445452c111fac69" },
+    { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:b8098bc44ccd1b94921cf84ba9460220da1dd56131461f920445452c111fac69" },
 ]
 
 [package.metadata]
@@ -296,7 +296,7 @@ version = "5.9.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
-    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/e2m2e/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "pyerfa" },
@@ -991,7 +991,7 @@ version = "0.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
-    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/e2m2e/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "numpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/17/1d/ad3be7135ebd9c65189247726349fe5dd758b8163ba7a686cbffb2085916/r2s2-0.1.0.tar.gz", hash = "sha256:3f8f56d9fe01bb87ff425ebfab1f396a12046f828ee346765df83dc1fdf727b0", size = 10033886, upload-time = "2026-01-22T09:00:19.628Z" }
@@ -1309,7 +1309,7 @@ version = "4.8.4"
 source = { editable = "." }
 dependencies = [
     { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
-    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/e2m2e/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "e2m2e", extra = ["mcp"] },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -1340,7 +1340,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "calcephpy", marker = "sys_platform != 'win32'", specifier = "==5.0.0" },
-    { name = "calcephpy", marker = "sys_platform == 'win32'", url = "https://github.com/cislunarspace/e2m2e/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" },
+    { name = "calcephpy", marker = "sys_platform == 'win32'", url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" },
     { name = "e2m2e", extras = ["mcp"], specifier = ">=5.9.4" },
     { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=2.0" },

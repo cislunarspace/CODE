@@ -261,7 +261,7 @@ WebGLRenderer + OrbitControls（旋转/缩放/平移）
 
 中栏工具面板接通 8 个工具：轨道族生成、任务轨道设计、参数空间扫描（catalog_sweep）、轨道保持、轨道预报、转移轨道设计、时空坐标转换、分区边界（spatiography_boundaries，产出进画布区域图层；前端 `TOOL_REGISTRY` 注册，经通用 `run_tool` 通道下发；轨道稳定性因上游 placeholder 状态移出注册表，#416）。17 个工具 schema（含 7 个 catalog 操作与 3 个分区解析工具）已全部导出，catalog 操作的界面分布：query/get 服务目录浏览与轨迹叠加，sweep 在工具面板，delete 在项目树右键菜单，export 在筛选栏「导出包」，promote/tag 在记录详情面板。AI 助手经 mcp-serve 调用同一套 e2m2e 工具，不受注册表限制。
 原则不变：不承诺 GUI 承载 e2m2e 全部算法能力，需要脚本化工作流时直接使用
-[e2m2e CLI](https://github.com/cislunarspace/e2m2e)。
+[e2m2e CLI](https://github.com/cislunarspace/CODE-core)。
 
 ## 分发
 

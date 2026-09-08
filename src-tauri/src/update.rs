@@ -10,7 +10,7 @@ use serde::Serialize;
 use tauri::Emitter;
 
 /// 与 tauri.conf.json plugins.updater.endpoints 同源的 GitHub 仓库。
-const GITHUB_REPO: &str = "cislunarspace/transfer-orbit-design";
+const GITHUB_REPO: &str = "cislunarspace/CODE";
 /// 下载进度事件名(Started/Progress/Finished,前端映射为统一 DownloadEvent)。
 const DOWNLOAD_EVENT: &str = "update-download-progress";
 /// 进度事件节流阈值:每累计 256KB 发一次,避免高频 IPC。
@@ -290,7 +290,7 @@ mod tests {
         assert!(is_allowed_download_url(&ok));
         assert!(!is_allowed_download_url("https://api.github.com/repos/other/releases"));
         assert!(!is_allowed_download_url(
-            "http://github.com/cislunarspace/transfer-orbit-design/releases/download/v4.8.2/app.deb"
+            "http://github.com/cislunarspace/CODE/releases/download/v4.8.2/app.deb"
         ));
         assert!(!is_allowed_download_url(
             "https://github.com/cislunarspace/other-repo/releases/download/v4.8.2/app.deb"

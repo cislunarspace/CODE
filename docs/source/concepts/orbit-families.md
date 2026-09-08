@@ -52,7 +52,7 @@ GUI 的**轨道设计**工具支持 **DRO / DPO / Halo / NRHO / Lissajous /
 L4 / L5 / Axial / ELFO** 等类型（ELFO 是月心冻结轨道，不属于上述周期
 轨道族，见下）。其余周期轨道族（Lyapunov、Vertical、Butterfly、
 Tadpole、RO 等）由 e2m2e 算法库支持，需要脚本化工作流时使用
-[e2m2e CLI](https://github.com/cislunarspace/e2m2e)。
+[e2m2e CLI](https://github.com/cislunarspace/CODE-core)。
 
 **Lissajous**：三维拟周期轨道（两个方向的振荡频率不同），不是严格周期
 轨道，不闭合。软件支持 L1/L2/L3 附近的 Lissajous。

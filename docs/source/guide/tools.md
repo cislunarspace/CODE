@@ -58,4 +58,4 @@
 catalog 管理操作的
 界面分布：查询/取用由目录浏览与画布叠加承担，删除在项目树右键菜单，标注
 与族成员提升在记录详情面板，教学案例包导出在过滤栏。需要脚本化工作流时
-经 [e2m2e CLI](https://cislunarspace.github.io/e2m2e/) 使用。
+经 [e2m2e CLI](https://cislunarspace.github.io/CODE-core/) 使用。

@@ -4,7 +4,7 @@
 
 ### 桌面应用（Windows）
 
-从 [GitHub Releases](https://github.com/cislunarspace/transfer-orbit-design/releases)
+从 [GitHub Releases](https://github.com/cislunarspace/CODE/releases)
 下载 `transfer-orbit-design_<版本>_x64-setup.exe`，双击安装（NSIS 安装器，
 免管理员权限，安装到当前用户目录）。安装包自带 e2m2e 运行时与全套 SPICE
 内核（含行星历），开箱即用。另有 Linux AppImage / deb 包与桌面端自动更新。
@@ -57,4 +57,4 @@ SPICE 内核经 Git LFS 随仓库分发，克隆后位于 `kernels/`；星历类
 其余计算工具（轨道设计、轨道保持、轨道预报、转移设计、时空坐标转换）的
 界面已接通，参数与产物说明见 {doc}`tools`；AI 助手的配置与使用见
 {doc}`gui`；需要脚本化工作流时可用
-[e2m2e CLI](https://cislunarspace.github.io/e2m2e/)。
+[e2m2e CLI](https://cislunarspace.github.io/CODE-core/)。
