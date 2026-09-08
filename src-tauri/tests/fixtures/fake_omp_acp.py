@@ -334,7 +334,10 @@ def request_elicitation(prompt_id, message):
             },
         }
     )
-    while True:
+    # 引导场景：审批等待期间到达的新 prompt 入队（主循环稍后处理）并
+    # 回 cancelled 给当前轮（omp 实测语义：新 prompt 取消在飞轮含挂起审批）
+    deadline = time.time() + 10
+    while time.time() < deadline:
         line = sys.stdin.readline()
         if not line:
             return None
@@ -347,10 +350,13 @@ def request_elicitation(prompt_id, message):
             state["cancel_requested"] = True
             continue
         if msg.get("method") is not None:
-            # 引导场景：审批等待期间到达的新 prompt 等请求先入队，
-            # 由主循环在审批结束后处理（否则被吞、客户端挂死）
             state["pending_msgs"].append(msg)
+            if msg.get("method") == "session/prompt":
+                reply(prompt_id, {"stopReason": "cancelled", "usage": {"totalTokens": 5}})
+                return None
             continue
+    print("[fake] elicitation 等待应答超时（10s），返回 None", file=sys.stderr)
+    return None
 
 
 def main():

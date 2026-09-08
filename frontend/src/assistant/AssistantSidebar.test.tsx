@@ -198,6 +198,26 @@ describe("AssistantSidebar 中断与引导（#453）", () => {
     resolveSend();
   });
 
+  it("引导并发两轮：旧轮先收尾不清除生成态，全部结束才恢复", async () => {
+    const resolvers: Array<() => void> = [];
+    vi.mocked(assistantSend).mockImplementation(
+      () => new Promise<void>((r) => resolvers.push(r)),
+    );
+    setup();
+    await typeDraft("第一轮");
+    pressEnter(false);
+    await waitFor(() => expect(screen.getByRole("button", { name: "停止生成" })).toBeDefined());
+    await typeDraft("第二轮（引导）");
+    pressEnter(false);
+    await waitFor(() => expect(assistantSend).toHaveBeenCalledTimes(2));
+    // 旧轮先返回：停止按钮必须仍在（新轮还在生成）
+    resolvers[0]();
+    await waitFor(() => expect(screen.getByRole("button", { name: "停止生成" })).toBeDefined());
+    // 新轮结束：才恢复空闲
+    resolvers[1]();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "停止生成" })).toBeNull());
+  });
+
   it("点击停止按钮触发 assistantCancel，幂等可重复点击", async () => {
     let resolveSend: () => void = () => {};
     vi.mocked(assistantSend).mockImplementationOnce(

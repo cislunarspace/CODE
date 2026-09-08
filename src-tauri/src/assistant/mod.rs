@@ -641,10 +641,12 @@ impl AcpHandlers for ConnHandlers {
         // 先登记决定通道再让转换器发射卡片：前端见到 tool_proposed 即可能
         // 立刻 resolve_confirm，键必须先存在（否则竞态丢确认）
         let (tx, rx) = oneshot::channel::<bool>();
+        inner.confirmations.lock().insert(key.clone(), tx);
         if !inner.converter.lock().on_request(method, &full) {
-            drop(tx); // 非审批请求：不发卡片，直接走未知请求分支
+            // 非审批请求：无卡片，回收登记后走未知请求分支
+            inner.confirmations.lock().remove(&key);
+            drop(rx);
         } else {
-            inner.confirmations.lock().insert(key.clone(), tx);
             // 只读白名单（eval 包装形态下 overlay 键失效）：客户端直接批准，
             // 不挂起等用户、不出审批卡片
             if inner.converter.lock().auto_decision(&key) == Some(true) {
