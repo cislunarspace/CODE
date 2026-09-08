@@ -259,10 +259,16 @@ jobs:
           mkdir -p src-tauri/binaries
           cp dist/transfer-orbit-design-sidecar src-tauri/binaries/transfer-orbit-design-sidecar
           chmod +x src-tauri/binaries/transfer-orbit-design-sidecar
-      # AI 会话运行时 omp 固定版本随包分发（同 Windows 作业）
+      # AI 会话运行时 omp 固定版本随包分发（同 Windows 作业）；资产按目标架构
+      # 选取（amd64→x64、aarch64→arm64），--version 冒烟要求与 runner 同架构
       - name: Stage pinned omp into tauri resources
         run: |
-          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/omp-linux-x64" -o src-tauri/binaries/omp
+          case "${{ matrix.arch }}" in
+            amd64)   OMP_ASSET=omp-linux-x64 ;;
+            aarch64) OMP_ASSET=omp-linux-arm64 ;;
+            *) echo "未知架构 ${{ matrix.arch }}"; exit 1 ;;
+          esac
+          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/${OMP_ASSET}" -o src-tauri/binaries/omp
           chmod +x src-tauri/binaries/omp
           [ "$(stat -c%s src-tauri/binaries/omp)" -gt 10000000 ] || { echo "omp 下载不完整"; exit 1; }
           src-tauri/binaries/omp --version
