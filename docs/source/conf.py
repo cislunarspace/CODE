@@ -7,7 +7,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-project = "Transfer Orbit Design"
+project = "CODE"
 copyright = "2026, Authors"
 author = "Authors"
 

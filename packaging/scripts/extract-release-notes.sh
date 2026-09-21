@@ -21,7 +21,7 @@ if [[ -f "${CHANGELOG}" ]]; then
 fi
 
 {
-  echo "# transfer-orbit-design ${TAG}"
+  echo "# CODE ${TAG}"
   echo
   if [[ -n "${section}" ]]; then
     echo "${section}"

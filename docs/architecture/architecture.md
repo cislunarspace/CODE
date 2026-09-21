@@ -1,6 +1,6 @@
-# transfer-orbit-design 架构设计
+# CODE 架构设计
 
-> 本文描述 transfer-orbit-design（以下简称 tod）的**最终形态**架构。逐项架构决策见 `docs/adr/`。
+> 本文描述 CODE（原 transfer-orbit-design，以下简称 tod）的**最终形态**架构。逐项架构决策见 `docs/adr/`。
 
 ## 总体定位
 

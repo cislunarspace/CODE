@@ -2,6 +2,12 @@
 
 > 自 4.8.3 起版本小节纯中文；GitHub Release 正文由对应小节生成。历史小节保持写成时的双语不动。
 
+## 4.8.5 (2026-09-21)
+
+### 文档
+
+- **项目改名 CODE（cislunar orbit designer）**：项目正式更名 CODE，cislunar orbit designer 为其英文全称；README、在线文档（Sphinx）、CONTRIBUTING、CONTEXT 与架构文档的当前叙述改用新名。安装包文件名、应用 ID（com.cislunarspace.transfer-orbit-design）、PyPI/Cargo 包名、sidecar 与配置目录等技术标识保留不变，应用内更新与既有安装不受影响。历史 ADR、规划文档与 CHANGELOG 历史小节保持当时原貌。
+
 ## 4.8.4 (2026-09-08)
 
 ### 功能
