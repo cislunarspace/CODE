@@ -76,7 +76,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 
 ## Code Conventions & Common Patterns
 
-- **语言**：文档、注释、docstring、回复用中文；命令、路径、代码标识符不翻译。Python docstring 用 Google style，`src/` 每个生产模块必须有模块级 docstring（规范与示例见 `docs/development.md`）。脚本输出用 `logging` 不用 `print`；CLI help 须回答参数控制什么、默认值、单位三问。
+- **语言**：文档、注释、docstring、回复用中文；命令、路径、代码标识符不翻译；项目文档不使用「」这类直角引号。Python docstring 用 Google style，`src/` 每个生产模块必须有模块级 docstring（规范与示例见 `docs/development.md`）。脚本输出用 `logging` 不用 `print`；CLI help 须回答参数控制什么、默认值、单位三问。
 - **格式**：`.editorconfig`（Python 4 空格，YAML/JSON/TOML 2 空格，LF）；ruff 行长 100（`tests/ docs/ scripts/ tools/` 不检查）；TypeScript strict（`tsc -b`）。前端无 prettier/eslint、Rust 无 rustfmt/clippy 配置——不要引入格式化重排制造噪音 diff。
 - **命名**：Python `snake_case` 模块/函数、`PascalCase` 类、结果 DTO 用 `…ResultData` 后缀、常量 `UPPER_SNAKE`；Rust 类型 `PascalCase`、常量 `SCREAMING_SNAKE`、文件头 `//!` 重在讲为什么；TS 组件 `PascalCase.tsx`、逻辑模块 `camelCase.ts`。IPC struct 用 `#[serde(rename_all = "camelCase")]`，例外 `EphemerisSegment` 故意 snake_case（与 e2m2e `EphemerisTable` 同形，共用解析）；发给 sidecar 的 `arguments` 保持 snake_case（e2m2e request 字段原名）。
 - **错误处理**：Python 统一 `OrbitError(code, message, cause)`，`translate_exception` 翻译 e2m2e 异常（`CORRECTION_DIVERGED` / `PROPAGATION_FAILED` / `BACKEND_UNAVAILABLE` / `KERNEL_NOT_FOUND` / `INVALID_PARAMS` …）；Rust 内部 `anyhow`、跨 IPC `Result<T, String>`；前端 `formatToolError` + antd toast + 表单内联标红。原则：不伪造成功、坏文件明确报错（`scenario.ts:parseScenario`），可选数据软失败降级（如 `moonTrackFromResponse` 返回 null）。
@@ -103,7 +103,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - **Node.js ≥ 20**（README），前端测试实际需要 ≥ 22.13（jsdom 30）。包管理用 **npm**（`package-lock.json` 入库），命令一律带 `--prefix frontend`。
 - **Rust 稳定版工具链**，edition 2021，Tauri 2，`Cargo.lock` 入库。
 - **打包**：PyInstaller onefile 产 sidecar（`packaging/transfer_orbit_design_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历——漏收即坏包）；release 分 slim（无 kernels，供更新通道）与全量（含 kernels，供新装）；omp 钉版本随包分发（`release.yml` env）。
-- **依赖门槛**（见下方编码准则「审慎依赖」）：先用已有依赖与标准库，新增依赖须说明原因。
+- **依赖门槛**（见下方编码准则的审慎依赖条）：先用已有依赖与标准库，新增依赖须说明原因。
 
 ## Testing & QA
 
@@ -116,7 +116,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - 断言：标量 `pytest.approx`、数组 `np.testing.assert_allclose`（atol 1e-6 量级）、Rust f32 容差 1e-6。随机数不设种子——不断言随机值，只断言形状或由输入推导的期望。
 - 共享设施：`tests/conftest.py`（注入 `SPICE_KERNEL_DIR`、Agg 后端、隔离 `CATALOG_DIR`）、`tests/engine/conftest.py`（fake e2m2e 结果族、`mock_design_orbit`）。
 - 打包冒烟：`scripts/smoke_mcp_serve.py`（release 发布闸）、`scripts/smoke_omp_acp.py`（omp ACP 链路）——手工或发布期跑，不进测试套件。
-- 无覆盖率门槛；验证按下方编码准则「验证行为」与「按根因修复」执行，修 bug 先复现。
+- 无覆盖率门槛；验证按下方编码准则的验证行为、按根因修复两条执行，修 bug 先复现。
 
 ---
 
