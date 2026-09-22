@@ -103,7 +103,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - **Node.js ≥ 20**（README），前端测试实际需要 ≥ 22.13（jsdom 30）。包管理用 **npm**（`package-lock.json` 入库），命令一律带 `--prefix frontend`。
 - **Rust 稳定版工具链**，edition 2021，Tauri 2，`Cargo.lock` 入库。
 - **打包**：PyInstaller onefile 产 sidecar（`packaging/transfer_orbit_design_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历——漏收即坏包）；release 分 slim（无 kernels，供更新通道）与全量（含 kernels，供新装）；omp 钉版本随包分发（`release.yml` env）。
-- **依赖门槛**（见下方编码准则第 8 节）：先用已有依赖与标准库，新增依赖须说明原因。
+- **依赖门槛**（见下方编码准则「审慎依赖」）：先用已有依赖与标准库，新增依赖须说明原因。
 
 ## Testing & QA
 
@@ -116,13 +116,13 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - 断言：标量 `pytest.approx`、数组 `np.testing.assert_allclose`（atol 1e-6 量级）、Rust f32 容差 1e-6。随机数不设种子——不断言随机值，只断言形状或由输入推导的期望。
 - 共享设施：`tests/conftest.py`（注入 `SPICE_KERNEL_DIR`、Agg 后端、隔离 `CATALOG_DIR`）、`tests/engine/conftest.py`（fake e2m2e 结果族、`mock_design_orbit`）。
 - 打包冒烟：`scripts/smoke_mcp_serve.py`（release 发布闸）、`scripts/smoke_omp_acp.py`（omp ACP 链路）——手工或发布期跑，不进测试套件。
-- 无覆盖率门槛；验证按下方编码准则第 5 节执行，修 bug 先写复现测试。
+- 无覆盖率门槛；验证按下方编码准则「验证行为」与「按根因修复」执行，修 bug 先复现。
 
 ---
 
 ## 协作流程、写作要求与编码准则
 
-以下为仓库既有约定，原文保留：`/loop-go` 循环工程、交流语言、写作要求与 issue / PR / 评论的格式、编码准则。
+以下为仓库既有约定：`/loop-go` 循环工程、交流语言、写作要求与 issue / PR / 评论的格式、编码准则。其中交流语言、写作要求、编码准则三节经 sync-writing-standards 与规范源文件同步维护，其余各节原文保留。
 
 ### Loop Engineering
 
