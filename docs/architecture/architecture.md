@@ -84,7 +84,7 @@ transfer-orbit-design/
 │   └── source/            # Sphinx 源（docs/README.md 说明维护流程）
 ├── tests/                 # Python 领域层测试（commons/engine/model 分层）
 ├── scripts/               # 独立工具脚本（download_kernels.py / smoke_mcp_serve.py）
-├── catalog/               # 轨道库（e2m2e catalog，产物持久化源；设置可改指）
+├── catalog/               # 轨道库（e2m2e catalog；GUI 落用户配置目录，见本文分发节 #491；此目录供脚本与测试）
 └── pyproject.toml
 ```
 
