@@ -62,3 +62,7 @@ e2m2e 5.8.0 落地轨道库 catalog（上游 #475 / ADR 0031）后，产物持�
 - **旧产物**：output/ 旧格式不迁移（上游 ADR 0031 决策 9），需要时重算，理由 4现有 output/ 兼容随之失效。
 
 其余部分（Project 不做持久化、删除无撤销）不变。
+
+## 修订（2026-09-26，issue #491，关联 e2m2e ADR 0047）
+
+上游 e2m2e ADR 0047（随 v5.9.5）把 `catalog_enabled` 默认翻转为关、`catalog_dir` 默认 None：未指定目录时库操作报 `CATALOG_NOT_CONFIGURED`，未开入库开关时 record_id 静默为 None。上一节的库目录落点随之更新：库目录不再钉仓库根 `catalog/`，改由本仓在 Rust 壳 app setup 显式注入 `E2M2E_CATALOG_ENABLED=1` 与 `E2M2E_CATALOG_DIR=<用户配置目录>/catalog`（Windows `%APPDATA%/transfer-orbit-design/catalog`，Linux 为 XDG 配置目录下的同名路径，与情景、助手会话同级），不随工作目录漂移；改指方式为预设 `E2M2E_CATALOG_DIR`，用户预设优先。仓库根 `catalog/` 余下供脚本与测试（Python 领域层默认）使用；旧库不迁移（见上一修订的旧产物条）。
