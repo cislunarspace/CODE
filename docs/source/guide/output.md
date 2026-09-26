@@ -3,9 +3,11 @@
 ## catalog/ 目录
 
 v4.0.0 起，界面计算产物统一持久化到 **e2m2e 轨道库**（catalog），不再按工具
-分目录落 JSON/NPZ 文件。轨道库默认位于 sidecar 工作目录下的 `catalog/`：
-开发期即仓库根 `catalog/`，安装版在安装目录下；可用环境变量
-`$E2M2E_CATALOG_DIR` 改指。
+分目录落 JSON/NPZ 文件。桌面端库目录固定在用户配置目录下的 `catalog/`：
+Windows 为 `%APPDATA%/transfer-orbit-design/catalog`，Linux 为
+`$XDG_CONFIG_HOME`（通常 `~/.config`）下的 `transfer-orbit-design/catalog`，
+与情景文件、助手会话同级；启动时由 Rust 壳显式注入，不随工作目录漂移。
+用户在环境里预设 `$E2M2E_CATALOG_DIR` 时以预设为准。
 
 产物**自动入库**：族生成成功后即成为库记录（多维分类：族类型、平动点、
 Jacobi 区间、振幅区间；谱系指针记录上下游因果链）。重启后项目树经

@@ -53,7 +53,7 @@ SPICE 内核随 Git LFS 随仓库分发（克隆后位于 `kernels/`），安装
 
 画布计算的数据流：参数表单 → Rust 命令 → e2m2e sidecar（JSON 行信封 + 二进制帧，e2m2e ADR 0035）→ 产物自动入轨道库 → 项目树/画布经 `catalog_query` / `catalog_get` 取用。AI 助手是并行的第二条链路：omp（ACP）→ 应用 MCP 桥接 → `mcp-serve` 调同一套工具，只读查询与画布长计算互不阻塞（ADR 0030）。
 
-产物持久化在 `catalog/` 目录（开发期仓库根 `catalog/`；安装版在安装目录下）。轨道库是 e2m2e catalog 格式（多维分类、谱系指针），可以直接被 e2m2e 或其他宿主打开；`output/` 仅保留转移遗留分区与脚本场景。
+产物持久化在轨道库 `catalog/` 目录，位于用户配置目录下（Windows `%APPDATA%/transfer-orbit-design/catalog`，Linux 为 XDG 配置目录下的同名路径），与情景文件、助手会话同级；启动时由 Rust 壳显式指定，不随工作目录漂移，用户预设 `E2M2E_CATALOG_DIR` 时以预设为准。轨道库是 e2m2e catalog 格式（多维分类、谱系指针），可以直接被 e2m2e 或其他宿主打开；`output/` 仅保留转移遗留分区与脚本场景。
 
 ## 文档
 

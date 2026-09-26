@@ -57,15 +57,63 @@ pub fn packaged_mcp_command(resource_dir: &std::path::Path) -> (Vec<String>, Opt
 }
 
 /// 分发期拉起配置：resources/binaries 内的打包 sidecar，cwd 指 resource
-/// 根，e2m2e Config 的 kernels/、catalog/ 按 cwd 相对解析（安装目录内
-/// resources 已带 kernels/，catalog/ 运行时创建；两个路径均可被
-/// SPICE_KERNEL_DIR / E2M2E_CATALOG_DIR 环境变量覆盖）。
+/// 根，e2m2e Config 的 kernels/ 按 cwd 相对解析（安装目录内 resources 已
+/// 带 kernels/；可被 SPICE_KERNEL_DIR 覆盖）。轨道库不依赖 cwd：目录由
+/// setup 显式注入用户配置目录（见 `configure_catalog_env`），否则打包形态
+/// 的库会落安装目录、应用升级即丢。
 pub fn packaged_sidecar_command(resource_dir: &std::path::Path) -> (Vec<String>, Option<String>) {
     let exe = resource_dir.join("binaries").join(SIDECAR_EXE);
     (
         vec![exe.to_string_lossy().into_owned()],
         Some(resource_dir.to_string_lossy().into_owned()),
     )
+}
+
+/// 轨道库显式配置（#491）：给出要注入的环境变量计划，用户已显式设置的
+/// 变量不出现在计划里（它们优先）。
+///
+/// 为什么必须显式注入：e2m2e 钉住的 5.9.4 里 `catalog_enabled` 硬编码为真、
+/// `catalog_dir` 缺省 `"catalog"` 相对 cwd（dev 落仓库根、打包落安装目录，
+/// 升级丢库）；上游 ADR 0047（v5.9.5）把两者默认翻转为关闭/None，未指定
+/// 时入库请求报 `CATALOG_NOT_CONFIGURED`，而本仓 `cmd.rs` 只在 `record_id`
+/// 非空时入项目树、无 else 分支——静默丢记录比显式报错更坏。
+///
+/// `enabled` 与 `user_dir` 解耦：取不到用户目录时仍注入 `enabled=1`。无
+/// HOME/APPDATA（`config_dir()` 返回 None）时，5.9.4 下维持原 cwd 行为，
+/// ≥5.9.5 下由 e2m2e 如实报 `CATALOG_NOT_CONFIGURED`——比静默丢记录好。
+///
+/// 不在 Rust 侧建目录或猜路径：库由 e2m2e 在指定目录上创建，目录不可写也
+/// 由它如实报错。
+pub fn catalog_env_plan(
+    existing_dir: Option<&std::ffi::OsStr>,
+    existing_enabled: Option<&std::ffi::OsStr>,
+    user_dir: Option<&std::path::Path>,
+) -> Vec<(&'static str, std::ffi::OsString)> {
+    let mut plan = Vec::new();
+    if existing_dir.is_none() {
+        if let Some(dir) = user_dir {
+            plan.push(("E2M2E_CATALOG_DIR", dir.join("catalog").into_os_string()));
+        }
+    }
+    if existing_enabled.is_none() {
+        plan.push(("E2M2E_CATALOG_ENABLED", std::ffi::OsString::from("1")));
+    }
+    plan
+}
+
+/// 应用 `catalog_env_plan`：库目录取用户配置目录下的 catalog/，与
+/// scenarios/ 同级。进程级 set_var 即够——sidecar 惰性 spawn、助手链经
+/// app → omp → bridge → mcp-serve 全部继承本进程环境（`TOD_RESOURCE_DIR`
+/// 走同一条路径，全仓无 env_clear）。
+fn configure_catalog_env() {
+    let user_dir = assistant::host_tools::config_dir();
+    for (key, value) in catalog_env_plan(
+        std::env::var_os("E2M2E_CATALOG_DIR").as_deref(),
+        std::env::var_os("E2M2E_CATALOG_ENABLED").as_deref(),
+        user_dir.as_deref(),
+    ) {
+        std::env::set_var(key, value);
+    }
 }
 
 pub fn run() {
@@ -99,6 +147,10 @@ pub fn run() {
                     std::env::set_var("SPICE_KERNEL_DIR", &dir);
                 }
             }
+            // 轨道库自动配置（#491）：目录钉到用户配置目录下的 catalog/，
+            // 不随 cwd（dev 仓库根 / 打包安装目录）漂移。同样子进程继承，
+            // 用户显式设置的环境优先。
+            configure_catalog_env();
             SidecarState::configure(command, cwd);
             // AI 助手（omp ACP 基座）：dev 用 TOD_OMP_BIN/PATH 的 omp，
             // 分发用资源目录内打包的固定版本 omp；ACP 会话工作目录取
@@ -180,5 +232,40 @@ mod tests {
         let (cmd, cwd) = dev_sidecar_command(root);
         assert_eq!(cmd, vec!["uv", "run", "e2m2e", "serve-stdio"]);
         assert_eq!(cwd.as_deref(), Some("/repo"));
+    }
+
+    #[test]
+    fn catalog_env_plan_injects_dir_and_enabled_when_unset() {
+        let plan = catalog_env_plan(None, None, Some(std::path::Path::new("/cfg")));
+        let expected_dir = std::path::Path::new("/cfg").join("catalog").into_os_string();
+        assert_eq!(
+            plan,
+            vec![
+                ("E2M2E_CATALOG_DIR", expected_dir),
+                ("E2M2E_CATALOG_ENABLED", std::ffi::OsString::from("1")),
+            ]
+        );
+    }
+
+    #[test]
+    fn catalog_env_plan_respects_preset_env() {
+        let dir = std::ffi::OsStr::new("/mine");
+        let on = std::ffi::OsStr::new("1");
+        let cfg = std::path::Path::new("/cfg");
+        assert!(catalog_env_plan(Some(dir), Some(on), Some(cfg)).is_empty());
+        // 仅 dir 预设：只补 enabled，不覆盖用户目录
+        assert_eq!(
+            catalog_env_plan(Some(dir), None, Some(cfg)),
+            vec![("E2M2E_CATALOG_ENABLED", std::ffi::OsString::from("1"))]
+        );
+    }
+
+    #[test]
+    fn catalog_env_plan_without_user_dir_injects_only_enabled() {
+        // 无 HOME/APPDATA：不猜路径，只保证入库开关打开（#491 fail-loud 取舍）
+        assert_eq!(
+            catalog_env_plan(None, None, None),
+            vec![("E2M2E_CATALOG_ENABLED", std::ffi::OsString::from("1"))]
+        );
     }
 }

@@ -271,8 +271,10 @@ Tauri 主程序 + `transfer-orbit-design-sidecar`（PyInstaller onefile 打包�
 e2m2e serve-stdio，`packaging/transfer_orbit_design_sidecar.spec`）+ SPICE
 内核（含行星历，随 Git LFS 入库），三者经 resources 映射进安装目录。分发期
 Rust 壳从 resource 目录拉起 sidecar（`packaged_sidecar_command`），cwd 指向
-resource 根，e2m2e Config 的 `kernels/`、`catalog/` 按 cwd 相对解析（可用
-`SPICE_KERNEL_DIR` / `E2M2E_CATALOG_DIR` 环境变量覆盖）。桌面端自动更新经
+resource 根，e2m2e Config 的 `kernels/` 按 cwd 相对解析（可用
+`SPICE_KERNEL_DIR` 覆盖）；轨道库目录不看 cwd，启动时由壳显式注入用户配置
+目录（`configure_catalog_env`，#491），预设 `E2M2E_CATALOG_DIR` 时以预设为准。
+桌面端自动更新经
 `@tauri-apps/plugin-updater` 基于 GitHub Releases 的 latest.json（ADR 0018）。
 发布管线见 `.github/workflows/release.yml`（tag `v*` 触发：元数据校验 →
 lint → 测试 → Windows NSIS+MSI 与 Linux（amd64/aarch64）AppImage/deb/rpm
