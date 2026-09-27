@@ -76,11 +76,11 @@ describe("参数覆写层 (paramOverlay)", () => {
     expect(convertValue("phase", Math.PI, "弧度", "周期份额")).toBeCloseTo(0.5, 4);
   });
 
-  it("15 种 design_orbit 轨道类型分支默认值齐备", () => {
+  it("17 种 design_orbit 轨道类型分支默认值齐备", () => {
     const expectedTypes = [
       "HALO", "DRO", "DPO", "NRHO", "LISSAJOUS", "AXIAL",
       "L4", "L5", "L4_SPO", "L5_SPO", "L4_LPO", "L5_LPO",
-      "L4_HORSESHOE", "L5_HORSESHOE", "ELFO"
+      "L4_HORSESHOE", "L5_HORSESHOE", "ELFO", "LYAPUNOV", "RO"
     ];
     for (const t of expectedTypes) {
       const defs = getBranchDefaults("design_orbit", t);
@@ -135,7 +135,7 @@ describe("参数覆写层 (paramOverlay)", () => {
     expect(elfoFields).toContain("arg_of_pericenter");
   });
 
-  it("分支键类型预置下拉与分支默认值一一对应：design_orbit 15 项、轨道族生成 8 项", () => {
+  it("分支键类型预置下拉与分支默认值一一对应：design_orbit 17 项、轨道族生成 8 项", () => {
     // 顺序是展示顺序，不与默认值表键序绑定；只约束覆盖一致
     // Dropdown order is presentation-only; assert coverage, not order.
     expect([...BRANCH_TYPE_OPTIONS["design_orbit"]].map((o) => o.value).sort()).toEqual(
@@ -222,7 +222,81 @@ describe("转移设计类型联动 (transfer_design)", () => {
     });
   });
 
-  it("ENUM_OPTIONS.transfer_type 提供四项中文标签", () => {
-    expect(ENUM_OPTIONS.transfer_type.map((o) => o.value)).toEqual(["HMN", "LGA", "WSB", "low_thrust"]);
+  it("ENUM_OPTIONS.transfer_type 提供五项中文标签（5.9.7 起含 PCN）", () => {
+    expect(ENUM_OPTIONS.transfer_type.map((o) => o.value)).toEqual([
+      "HMN",
+      "LGA",
+      "WSB",
+      "low_thrust",
+      "PCN",
+    ]);
+  });
+
+  it("PCN 分支默认值：transfer_type 自身 + 搜索用 tof_range；目标参数化不给默认", () => {
+    // bplane_target / departure_asymptote 互斥，默认任一侧都会让另一侧
+    // 变成静默不可达的错支，必须由用户选。
+    // bplane_target / departure_asymptote are mutually exclusive; defaulting
+    // either one silently makes the other the wrong branch, so the user picks.
+    expect(getBranchDefaults("transfer_design", "PCN")).toEqual({
+      transfer_type: "PCN",
+      tof_range: [3, 6],
+    });
+  });
+
+  it("PCN 适用字段：两个目标参数化都渲染，公共字段照旧，不显 target_ephemeris", () => {
+    const pcn = getFieldApplicability("transfer_design", "PCN");
+    expect(pcn).toContain("bplane_target");
+    expect(pcn).toContain("departure_asymptote");
+    expect(pcn).not.toContain("target_orbit_radius_km");
+    expect(pcn).not.toContain("lga_search_params");
+    expect(pcn).not.toContain("target_ephemeris");
+    for (const common of ["transfer_type", "tli_epoch", "parking_alt_km", "incl_deg", "flight_path_deg", "tof_range"]) {
+      expect(pcn).toContain(common);
+    }
+  });
+});
+
+describe("e2m2e 5.9.7 新能力接入", () => {
+  it("design_orbit 新增 LYAPUNOV / RO 分支：下拉、默认值与适用字段齐备", () => {
+    const values = BRANCH_TYPE_OPTIONS["design_orbit"].map((o) => o.value);
+    expect(values).toContain("LYAPUNOV");
+    expect(values).toContain("RO");
+
+    // LYAPUNOV 供平动点与振幅；RO 只给共振比、相位与实测可收敛的短弧画像
+    //（amplitude 留空 = 精确共振成员，上游 RO 星历冒烟同口径）
+    // LYAPUNOV carries the libration point and amplitude; RO gives only the
+    // resonance pair, phase, and the short-arc profile measured to converge (an
+    // empty amplitude selects the exact member, as in upstream's RO ephemeris smoke).
+    expect(getBranchDefaults("design_orbit", "LYAPUNOV")).toEqual({
+      amplitude: 12000,
+      phase: 0.0,
+      collinear_point: 2,
+    });
+    expect(getBranchDefaults("design_orbit", "RO")).toEqual({
+      resonance_p: 4,
+      resonance_q: 1,
+      phase: 0.0,
+      duration: 300000,
+      output_step: 36000,
+    });
+    expect("amplitude" in getBranchDefaults("design_orbit", "RO")).toBe(false);
+
+    expect(getFieldApplicability("design_orbit", "LYAPUNOV")).toContain("amplitude");
+    expect(getFieldApplicability("design_orbit", "LYAPUNOV")).toContain("collinear_point");
+    const ro = getFieldApplicability("design_orbit", "RO");
+    expect(ro).toContain("resonance_p");
+    expect(ro).toContain("resonance_q");
+    expect(ro).toContain("amplitude");
+  });
+
+  it("ENUM_OPTIONS.transform_type 覆盖六个变换对（含 EPPR）", () => {
+    expect(ENUM_OPTIONS.transform_type.map((o) => o.value)).toEqual([
+      "synodic_to_j2000",
+      "j2000_to_synodic",
+      "j2000_to_eppr",
+      "eppr_to_j2000",
+      "gcrs_to_ebcrs",
+      "ebcrs_to_gcrs",
+    ]);
   });
 });

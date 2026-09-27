@@ -62,7 +62,16 @@ import {
   type ScenarioPlayback,
 } from "./scenario";
 import { saveScenarioFile, openScenarioFile } from "./scenarioApi";
-import { runTool, getArtifact, ephemerisStatus, formatToolError, type EphemerisStatus } from "./sidecarApi";
+import {
+  runTool,
+  getArtifact,
+  ephemerisStatus,
+  formatToolError,
+  type EphemerisStatus,
+  type ManeuverEvent,
+  type BplaneInfo,
+  type DepartureAsymptoteInfo,
+} from "./sidecarApi";
 import { AssistantSidebar } from "./assistant/AssistantSidebar";
 import { AssistantSettingsForm } from "./assistant/AssistantSettingsForm";
 import type { SelectionContext } from "./assistant/api";
@@ -115,26 +124,68 @@ const LEFT_COLLAPSED_KEY = "tod-left-collapsed";
 const MID_COLLAPSED_KEY = "tod-mid-collapsed";
 
 /**
- * 转移响应 details → 出发/到达脉冲事件旗标（Q6/Q9 决策：本期用 details
- * 现成字段，机动事件结构化契约随转移存档下批做；近月点无时刻字段不做）。
- * dv_departure_km_s/dv_arrival_km_s 为 LGA/WSB 字段，dv1_km_s/dv2_km_s 为
- * HMN 字段，兼容取用；时刻 = tli et + (0 | tof_sec)。
- * Transfer details → departure/arrival pulse event flags (Q6/Q9: ready-made
- * details fields this round; the structured maneuver-event contract ships with
- * transfer catalog records next batch; perilune has no time field, skipped).
- * dv_departure_km_s/dv_arrival_km_s are the LGA/WSB fields, dv1_km_s/dv2_km_s
- * the HMN ones; times = tli et + (0 | tof_sec).
+ * 转移响应 → 时间轴事件：优先读结构化 maneuver_events（e2m2e #575 契约，
+ * 5.9.7 起进响应），缺失或空则回退旧 details 现成字段（上游保留一个版本后
+ * 废弃，故回退是过渡路径）。
+ *
+ * maneuver_events 的 t_sec 以 TLI 为 0（与 trajectory_times 同基准），故
+ * et = tli et + t_sec；kind 映射到词典：departure → 出发脉冲、arrival →
+ * 到达脉冲、perilune → 近月点旗标（dv_km_s=0 的非脉冲事件，不附 Δv 文本）、
+ * 其余 kind 用 note 原文（无 note 用 kind）。dv 仅在 dv_km_s > 0 时出现。
+ *
+ * 回退路径口径不变：dv_departure_km_s/dv_arrival_km_s 为 LGA/WSB 字段，
+ * dv1_km_s/dv2_km_s 为 HMN 字段，兼容取用；时刻 = tli et + (0 | tof_sec)。
+ *
+ * Transfer response → timeline events: prefer the structured maneuver_events
+ * (e2m2e #575 contract, in the response since 5.9.7) and fall back to the old
+ * ready-made details fields when absent or empty (upstream keeps them for one
+ * version, so the fallback is a transitional path).
+ *
+ * maneuver_events' t_sec is TLI-based (same basis as trajectory_times), hence
+ * et = tli et + t_sec; kinds map to the dictionary: departure → departure pulse,
+ * arrival → arrival pulse, perilune → the perilune flag (a non-pulse event with
+ * dv_km_s=0, carrying no Δv text), any other kind → its note verbatim (kind when
+ * there is no note). dv appears only when dv_km_s > 0.
+ *
+ * The fallback keeps the old convention: dv_departure_km_s/dv_arrival_km_s are
+ * the LGA/WSB fields and dv1_km_s/dv2_km_s the HMN ones, accepted either way;
+ * times = tli et + (0 | tof_sec).
  */
-function transferEventsFromDetails(
-  details: unknown,
+export function transferTimelineEvents(
+  data: Record<string, unknown>,
   tliEpoch: string | number | undefined,
   t: (key: string) => string,
 ): TimelineEvent[] {
-  const det = (details ?? {}) as Record<string, unknown>;
   const tliEt = tliEpoch !== undefined ? etFromEpoch(tliEpoch) : NaN;
   if (!Number.isFinite(tliEt)) return [];
-  const tof = Number(det.tof_sec);
+
+  const maneuvers = Array.isArray(data.maneuver_events)
+    ? (data.maneuver_events as ManeuverEvent[])
+    : [];
   const events: TimelineEvent[] = [];
+  for (const ev of maneuvers) {
+    const tSec = Number(ev?.t_sec);
+    if (!Number.isFinite(tSec)) continue;
+    const kind = typeof ev?.kind === "string" ? ev.kind : "";
+    const label =
+      kind === "departure"
+        ? t("event.departure_pulse")
+        : kind === "arrival"
+          ? t("event.arrival_pulse")
+          : kind === "perilune"
+            ? t("event.perilune_flag")
+            : ev?.note || kind;
+    const dv = Number(ev?.dv_km_s);
+    events.push({
+      et: tliEt + tSec,
+      label,
+      ...(Number.isFinite(dv) && dv > 0 ? { dv: `${dv.toFixed(2)} km/s` } : {}),
+    });
+  }
+  if (events.length > 0) return events;
+
+  const det = (data.details ?? {}) as Record<string, unknown>;
+  const tof = Number(det.tof_sec);
   const dvDep = Number(det.dv_departure_km_s ?? det.dv1_km_s);
   if (Number.isFinite(dvDep) && dvDep > 0) {
     events.push({ et: tliEt, label: t("event.departure_pulse"), dv: `${dvDep.toFixed(2)} km/s` });
@@ -1249,7 +1300,46 @@ export default function App() {
         return;
       }
 
-      message.success(t("run.complete"));
+      // PCN 回显（5.9.7）：响应带 bplane / departure_asymptote 时把摘要发成成功
+      // 提示——这两个字段是 PCN 几何的唯一出口（Δv 总数看不出打靶是否命中），
+      // 其余工具维持 run.complete。
+      // PCN echo (5.9.7): when the response carries bplane / departure_asymptote,
+      // send the summary as the success toast — those fields are the only outlet for
+      // the PCN geometry (total Δv alone does not show whether the targeting hit);
+      // other tools keep run.complete.
+      const transferData = (resp.data ?? {}) as Record<string, unknown>;
+      const bplane =
+        selectedTool === "transfer_design" ? (transferData.bplane as BplaneInfo | null | undefined) : null;
+      const asymptote =
+        selectedTool === "transfer_design"
+          ? (transferData.departure_asymptote as DepartureAsymptoteInfo | null | undefined)
+          : null;
+      // 软失败（stagnated/infeasible）时 delta_v 是 inf，摘要里不写 “Infinity km/s”
+      // A soft failure (stagnated/infeasible) reports delta_v as inf; the summary
+      // must not read "Infinity km/s".
+      const dvText = Number.isFinite(Number(transferData.delta_v))
+        ? Number(transferData.delta_v).toFixed(2)
+        : "—";
+      if (bplane) {
+        message.success(
+          t("run.pcn_bplane")
+            .replace("{dv}", dvText)
+            .replace("{perilune}", bplane.perilune_alt_km.toFixed(1))
+            .replace("{bt}", bplane.bdot_t_km.toFixed(1))
+            .replace("{br}", bplane.bdot_r_km.toFixed(1))
+            .replace("{vinf}", bplane.v_inf_km_s.toFixed(3)),
+        );
+      } else if (asymptote) {
+        message.success(
+          t("run.pcn_asymptote")
+            .replace("{dv}", dvText)
+            .replace("{rha}", asymptote.rha_deg.toFixed(2))
+            .replace("{dha}", asymptote.dha_deg.toFixed(2))
+            .replace("{c3}", asymptote.c3_km2_s2.toFixed(3)),
+        );
+      } else {
+        message.success(t("run.complete"));
+      }
       await refreshArtifacts();
 
       // 新一轮计算开始：上一轮的候选会话层整体清空（#430）——候选集属于
@@ -1312,7 +1402,7 @@ export default function App() {
           // the candidate session layer (bounded by the pinned-layer cap),
           // the panel lists parameters side by side, and TLI moments get chips. ——
           const rawCandidates = Array.isArray(d.candidates) ? (d.candidates as Record<string, unknown>[]) : null;
-          let events = transferEventsFromDetails(d.details, tliEpoch, t);
+          let events = transferTimelineEvents(d, tliEpoch, t);
           if (rawCandidates && rawCandidates.length > 1) {
             const views: TransferCandidateView[] = [];
             const arcs: PinnedRecord[] = [];

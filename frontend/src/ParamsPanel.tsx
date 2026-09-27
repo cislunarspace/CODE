@@ -17,6 +17,7 @@ import { InfoCircleOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { type SchemaProperty, type ToolSchema } from "./schema";
 import {
+  branchSelection,
   UNIT_DEFINITIONS,
   toStandardValue,
   fromStandardValue,
@@ -43,13 +44,9 @@ interface ParamsPanelProps {
 }
 
 export function ParamsPanel({ toolName, schema, values, onChange, fieldErrors }: ParamsPanelProps) {
-  // 分支键字段：orbit_type（轨道工具）或 transfer_type（转移设计）
-  // Branch-key field: orbit_type (orbit tools) or transfer_type (transfer design).
-  const branchKey = toolName === "transfer_design" ? "transfer_type" : "orbit_type";
-  // 当前分支类型（未选时给各自的首个合法分支）
-  // Current branch type (falls back to each tool's first legal branch).
-  const branchType =
-    (values[branchKey] as string) || (branchKey === "transfer_type" ? "HMN" : "HALO");
+  // 分支键字段与当前分支类型（与提交校验、默认值填充同源）
+  // Branch-key field and current branch type (same source as submission validation and default filling).
+  const { key: branchKey, type: branchType } = branchSelection(toolName, values);
 
   // 记录每个字段当前选中的显示单位
   // Tracks each field's currently selected display unit.

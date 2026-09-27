@@ -3,14 +3,14 @@
   "description": "任务轨道设计输入。\n\n统一覆盖 CR3BP 周期轨道（DRO/NRHO/Halo/Lissajous/…）和 ELFO 冻结轨道。\n按 orbit_type 分派校验与默认值填充（``model_validator``）。\nduration 统一用秒。",
   "properties": {
     "orbit_type": {
-      "description": "DRO/DPO/NRHO/HALO/LISSAJOUS/L4/L5/AXIAL/.../ELFO",
+      "description": "DRO/DPO/NRHO/HALO/LYAPUNOV/LISSAJOUS/L4/L5/AXIAL/RO/.../ELFO",
       "title": "Orbit Type",
       "type": "string"
     },
     "amplitude": {
       "anyOf": [
         {
-          "maximum": 200000.0,
+          "maximum": 350000.0,
           "minimum": -110000.0,
           "type": "number"
         },
@@ -20,6 +20,34 @@
       ],
       "default": null,
       "title": "Amplitude"
+    },
+    "resonance_p": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "共振比卫星侧整数（p:q = 卫星:月球），仅 RO 用",
+      "title": "Resonance P"
+    },
+    "resonance_q": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "共振比月球侧整数，仅 RO 用",
+      "title": "Resonance Q"
     },
     "phase": {
       "anyOf": [
@@ -123,7 +151,7 @@
       "anyOf": [
         {
           "exclusiveMinimum": 0.0,
-          "maximum": 10000.0,
+          "maximum": 40000.0,
           "type": "number"
         },
         {
@@ -255,7 +283,7 @@
     },
     "correction_method": {
       "default": "two_level",
-      "description": "星历修正方法：standard/two_level（稳定轨道，如 DRO）/segmented（不稳定轨道，全程分段打靶）。未显式指定时按族分派默认（HALO/NRHO/DPO → segmented，其余 CR3BP 族 → two_level）；显式传入与族冲突的值时告警并改写为 segmented",
+      "description": "星历修正方法：standard/two_level（稳定轨道，如 DRO）/segmented（不稳定轨道，全程分段打靶）。未显式指定时按族分派默认（HALO/NRHO/DPO/LYAPUNOV → segmented，其余 CR3BP 族 → two_level）；显式传入与族冲突的值时告警并改写为 segmented",
       "title": "Correction Method",
       "type": "string"
     },

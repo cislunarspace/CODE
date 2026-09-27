@@ -653,16 +653,24 @@ export function familyMembersToTrajectoryData(
   return { trajectories, times, timeBasis, frames: frameTags, jacobi };
 }
 
-/** 全局时刻范围（多条轨迹取端点）；空则 null，时间轴保持禁用。 */
-/** Global time range (endpoints across trajectories); null when empty, keeping the timeline disabled. */
+/** 全局时刻范围（多条轨迹取端点）；空则 null，时间轴保持禁用。
+ *  端点按每条轨迹的全量 min/max 取，不假设数组按时间递增：orbit_propagation
+ *  的 direction=backward（5.9.7）给出递减时刻序列，取 t[0]/t[last] 会得到
+ *  倒置区间，把时间轴与动画导出打成空区间。 */
+/** Global time range (endpoints across trajectories); null when empty, keeping
+ *  the timeline disabled. Endpoints come from each trajectory's full min/max and
+ *  never assume ascending times: orbit_propagation's direction=backward (5.9.7)
+ *  yields descending time series, where reading t[0]/t[last] produces an inverted
+ *  interval and collapses the timeline and animation export. */
 export function trajectoryTimeRange(times: number[][]): [number, number] | null {
   if (times.length === 0) return null;
   let min = Infinity;
   let max = -Infinity;
   for (const t of times) {
-    if (t.length === 0) continue;
-    if (t[0] < min) min = t[0];
-    if (t[t.length - 1] > max) max = t[t.length - 1];
+    for (const value of t) {
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
   }
   return Number.isFinite(min) && Number.isFinite(max) ? [min, max] : null;
 }

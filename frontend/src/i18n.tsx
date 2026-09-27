@@ -36,6 +36,7 @@ export const translations: Record<string, string> = {
   "scenario.opened": "情景已打开：固定层 {count} 条记录，时间轴已校准到参考历元",
   "event.departure_pulse": "出发脉冲",
   "event.arrival_pulse": "到达脉冲",
+  "event.perilune_flag": "近月点",
   "event.candidate_pulse": "候选 {k} TLI",
   "panel.candidates_title": "可行解对比（top-N，Δv 升序）",
   "panel.cand_selected": "选中",
@@ -126,6 +127,10 @@ export const translations: Record<string, string> = {
   "run.executing": "执行计算中...",
   "run.submitting": "正在提交计算任务...",
   "run.complete": "计算完成！",
+  "run.pcn_bplane":
+    "计算完成！PCN 到达解：Δv {dv} km/s，近月点高度 {perilune} km，B·T {bt} km，B·R {br} km，v∞ {vinf} km/s",
+  "run.pcn_asymptote":
+    "计算完成！PCN 出发解：Δv {dv} km/s，渐近线赤经 {rha}°、赤纬 {dha}°，C3 {c3} km²/s²",
   "run.failed": "执行失败",
   "run.error_prefix": "计算错误",
   "run.lga_needs_target": "LGA/WSB 转移需要先在项目树选中目标轨道工件",

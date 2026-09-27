@@ -16,7 +16,8 @@
 
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render } from "@testing-library/react";
-import App from "./App";
+import App, { transferTimelineEvents } from "./App";
+import { etFromEpoch } from "./timeBasis";
 
 // jsdom 无 matchMedia / ResizeObserver，antd 与画布挂载需要
 // jsdom lacks matchMedia / ResizeObserver, required by antd and the canvas mount.
@@ -121,5 +122,95 @@ describe("App 布局收缩契约（#462 折叠回归）", () => {
     expect(column!.style.flexDirection).toBe("column");
     // 契约本体：没有它，折叠再展开就会把助手边栏推出窗口
     expect(column!.style.minWidth).toBe("0px");
+  });
+});
+
+describe("transferTimelineEvents 转移时间轴事件（5.9.7 maneuver_events）", () => {
+  // t 直通词典：被测的是 kind → 词典键的映射，不是文案本身
+  // t passes keys through: the kind → dictionary-key mapping is under test, not the wording.
+  const t = (key: string) => key;
+  const TLI = "2026-01-01T00:00:00Z";
+  const tliEt = etFromEpoch(TLI);
+
+  it("优先读结构化 maneuver_events：t_sec 以 TLI 为 0，kind 映射到词典键", () => {
+    // details 里放矛盾的旧字段：选了 maneuver_events 就不该被读到
+    // The details carry contradictory legacy fields: choosing maneuver_events must not read them.
+    const events = transferTimelineEvents(
+      {
+        maneuver_events: [
+          { kind: "departure", t_sec: 0, dv_km_s: 3.14 },
+          { kind: "arrival", t_sec: 259200, dv_km_s: 0.85 },
+        ],
+        details: { dv1_km_s: 9.99, dv2_km_s: 9.99, tof_sec: 1 },
+      },
+      TLI,
+      t,
+    );
+    expect(events).toHaveLength(2);
+    expect(events[0].label).toBe("event.departure_pulse");
+    expect(events[0].dv).toBe("3.14 km/s");
+    expect(events[0].et).toBeCloseTo(tliEt, 6);
+    expect(events[1].label).toBe("event.arrival_pulse");
+    expect(events[1].et).toBeCloseTo(tliEt + 259200, 6);
+  });
+
+  it("perilune 是非脉冲旗标：dv_km_s=0 时不附 Δv 文本", () => {
+    const events = transferTimelineEvents(
+      {
+        maneuver_events: [
+          { kind: "departure", t_sec: 0, dv_km_s: 3.1 },
+          { kind: "perilune", t_sec: 172800, dv_km_s: 0 },
+          { kind: "arrival", t_sec: 259200, dv_km_s: 0.9 },
+        ],
+      },
+      TLI,
+      t,
+    );
+    expect(events.map((e) => e.label)).toEqual([
+      "event.departure_pulse",
+      "event.perilune_flag",
+      "event.arrival_pulse",
+    ]);
+    expect(events[1].dv).toBeUndefined();
+    expect(events[1].et).toBeCloseTo(tliEt + 172800, 6);
+  });
+
+  it("开放枚举：其他 kind 用 note 原文，无 note 用 kind", () => {
+    const events = transferTimelineEvents(
+      {
+        maneuver_events: [
+          { kind: "tcm", t_sec: 100, dv_km_s: 0.01, note: "中途修正" },
+          { kind: "loi", t_sec: 200, dv_km_s: 0.5 },
+        ],
+      },
+      TLI,
+      t,
+    );
+    expect(events[0].label).toBe("中途修正");
+    expect(events[1].label).toBe("loi");
+  });
+
+  it("maneuver_events 缺失或为空时回退旧 details 字段（HMN dv1/dv2、LGA/WSB dv_departure/dv_arrival）", () => {
+    const hmn = transferTimelineEvents(
+      { details: { dv1_km_s: 3.1, dv2_km_s: 0.9, tof_sec: 259200 } },
+      TLI,
+      t,
+    );
+    expect(hmn.map((e) => e.label)).toEqual(["event.departure_pulse", "event.arrival_pulse"]);
+    expect(hmn[1].et).toBeCloseTo(tliEt + 259200, 6);
+    expect(hmn[1].dv).toBe("0.90 km/s");
+
+    const lga = transferTimelineEvents(
+      { maneuver_events: [], details: { dv_departure_km_s: 3.1, dv_arrival_km_s: 0.9, tof_sec: 86400 } },
+      TLI,
+      t,
+    );
+    expect(lga.map((e) => e.dv)).toEqual(["3.10 km/s", "0.90 km/s"]);
+  });
+
+  it("TLI 历元缺失或不可解析时不给事件（时刻基准是 et 绝对钟）", () => {
+    const events = [{ kind: "departure", t_sec: 0, dv_km_s: 3.1 }];
+    expect(transferTimelineEvents({ maneuver_events: events }, undefined, t)).toEqual([]);
+    expect(transferTimelineEvents({ maneuver_events: events }, "not-a-date", t)).toEqual([]);
   });
 });

@@ -60,6 +60,48 @@ export interface TransferSegment {
   deltaVKmS?: number | null;
 }
 
+/** 转移机动的结构化事件（e2m2e #575 契约，5.9.7 起进响应）。
+ *  kind 为开放枚举：departure（出发脉冲）/ perilune（近月点旗标）/
+ *  arrival（到达脉冲）…；t_sec 为 TLI 起算秒（t=0 即出发脉冲，与
+ *  trajectory_times 同基准）；非脉冲事件（perilune）的 dv_km_s 为 0。 */
+/** Structured maneuver events of a transfer (e2m2e #575 contract, in the response
+ *  since 5.9.7). kind is an open enum: departure / perilune (a flag, not a pulse) /
+ *  arrival / …; t_sec is TLI-based (t=0 is the departure pulse, the same basis as
+ *  trajectory_times); a non-pulse event carries dv_km_s = 0. */
+export interface ManeuverEvent {
+  kind: string;
+  t_sec: number;
+  dv_km_s: number;
+  note?: string | null;
+}
+
+/** 达成的月心 B 平面参数（#635；仅 PCN 路径填充，其余为 null）。
+ *  perilune_alt_km = 近月点半径 − 月球平均半径：交会解为月面以上正值，
+ *  撞月解为负值。 */
+/** The achieved lunar B-plane parameters (#635; PCN only, null otherwise).
+ *  perilune_alt_km = perilune radius − mean lunar radius: positive above the
+ *  surface for a rendezvous solution, negative for a lunar-impact one. */
+export interface BplaneInfo {
+  v_inf_km_s: number;
+  c3_km2_s2: number;
+  rha_deg: number;
+  dha_deg: number;
+  bdot_r_km: number;
+  bdot_t_km: number;
+  b_mag_km: number;
+  theta_deg: number;
+  perilune_alt_km: number;
+}
+
+/** 实际使用的出发双曲渐近线（#635；仅 PCN 填充，与请求同 schema 回显实际值） */
+/** The departure hyperbolic asymptote actually used (#635; PCN only, same schema
+ *  as the request, echoing the realised values). */
+export interface DepartureAsymptoteInfo {
+  rha_deg: number;
+  dha_deg: number;
+  c3_km2_s2: number;
+}
+
 export async function getArtifact(recordId: string): Promise<ArtifactData> {
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke("get_artifact", { recordId });

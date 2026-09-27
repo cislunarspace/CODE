@@ -255,8 +255,27 @@ describe("trajectoryTimeRange", () => {
     expect(trajectoryTimeRange([[0, 1, 2], [5, 10]])).toEqual([0, 10]);
   });
 
+  it("递减时刻序列（direction=backward）仍给出 [min, max]，不倒置", () => {
+    // orbit_propagation 的 direction=backward（5.9.7）按积分次序输出递减时刻；
+    // 旧实现取 t[0]/t[last]，会得到 [4, 0] 这样的倒置区间，把 timelineMode 与
+    // 动画导出打成空区间（TimelineBar 判 timeRange[0] >= timeRange[1] 即禁用）。
+    // orbit_propagation's direction=backward (5.9.7) emits descending times in
+    // integration order; reading t[0]/t[last] produced an inverted interval like
+    // [4, 0], collapsing timelineMode and the animation export (TimelineBar
+    // disables itself on timeRange[0] >= timeRange[1]).
+    expect(trajectoryTimeRange([[4, 3, 2, 1, 0]])).toEqual([0, 4]);
+    expect(trajectoryTimeRange([[10, 5], [2, 1, 0]])).toEqual([0, 10]);
+    // 正反向混合（多产物同屏）同样按 min/max 取
+    // Mixed directions (several products on screen) still resolve by min/max.
+    expect(trajectoryTimeRange([[0, 1, 2], [10, 5]])).toEqual([0, 10]);
+  });
+
   it("空列表返回 null（时间轴禁用）", () => {
     expect(trajectoryTimeRange([])).toBeNull();
+  });
+
+  it("全空时刻列返回 null", () => {
+    expect(trajectoryTimeRange([[], []])).toBeNull();
   });
 });
 
