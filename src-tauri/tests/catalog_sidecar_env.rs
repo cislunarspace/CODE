@@ -1,9 +1,9 @@
 //! 显式 catalog 环境变量对真实 sidecar 的行为验证（#491）。
 //!
-//! 独立测试二进制：本文件内的 env 变异不与 sidecar_process.rs 的并行测试
-//! 互相污染。验证的是 app 注入的环境（E2M2E_CATALOG_DIR/ENABLED）经子进程
-//! 继承后，e2m2e 真的把产物写进指定目录并回执 record_id——而非只看 Config
-//! 读没读到变量。
+//! 独立测试二进制：env 由 common::install_catalog_env 装一次，本文件内的
+//! 断言不与 sidecar_process.rs 的并行测试互相污染。验证的是显式注入的环境
+//! （E2M2E_CATALOG_DIR/ENABLED）经子进程继承后，e2m2e 真的把产物写进指定
+//! 目录并回执 record_id——而非只看 Config 读没读到变量。
 //!
 //! 依赖：本仓库 uv 环境（`uv run e2m2e serve-stdio` 可用）。CI 无 Python
 //! 环境时用 `--skip sidecar` 跳过（测试名含 sidecar）。
@@ -12,49 +12,11 @@ use serde_json::json;
 
 use transfer_orbit_design_lib::sidecar::SidecarHandle;
 
-/// 库目录环境变量的临时沙盒：构造时改写进程环境，Drop 时还原原值。
-///
-/// 基线导入显式关闭（`E2M2E_CATALOG_BASELINE_IMPORT=0`）：否则首次打开空库
-/// 会从包内展开整个基线数据集，慢且与本测试断言无关。
-struct EnvGuard {
-    dir: std::path::PathBuf,
-    saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
-}
-
-impl EnvGuard {
-    fn install() -> Self {
-        let dir = std::env::temp_dir().join("tod-catalog-env-test");
-        let _ = std::fs::remove_dir_all(&dir);
-        let saved = [
-            "E2M2E_CATALOG_DIR",
-            "E2M2E_CATALOG_ENABLED",
-            "E2M2E_CATALOG_BASELINE_IMPORT",
-        ]
-        .into_iter()
-        .map(|key| (key, std::env::var_os(key)))
-        .collect();
-        std::env::set_var("E2M2E_CATALOG_DIR", &dir);
-        std::env::set_var("E2M2E_CATALOG_ENABLED", "1");
-        std::env::set_var("E2M2E_CATALOG_BASELINE_IMPORT", "0");
-        Self { dir, saved }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        for (key, value) in self.saved.drain(..) {
-            match value {
-                Some(v) => std::env::set_var(key, v),
-                None => std::env::remove_var(key),
-            }
-        }
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}
+mod common;
 
 #[tokio::test]
 async fn sidecar_design_orbit_with_explicit_catalog_env_yields_record_id() {
-    let guard = EnvGuard::install();
+    let catalog_dir = common::install_catalog_env("tod-catalog-env-test");
     let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let handle = SidecarHandle::spawn(&["uv", "run", "e2m2e", "serve-stdio"], Some(repo_root))
         .expect("拉起 sidecar 失败（uv 环境可用？）");
@@ -78,7 +40,7 @@ async fn sidecar_design_orbit_with_explicit_catalog_env_yields_record_id() {
     );
 
     // 注入的库目录被采用：记录真的落在显式指定的目录下
-    let records = guard.dir.join("records");
+    let records = catalog_dir.join("records");
     let json_count = std::fs::read_dir(&records)
         .map(|entries| {
             entries

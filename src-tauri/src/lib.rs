@@ -72,15 +72,16 @@ pub fn packaged_sidecar_command(resource_dir: &std::path::Path) -> (Vec<String>,
 /// 轨道库显式配置（#491）：给出要注入的环境变量计划，用户已显式设置的
 /// 变量不出现在计划里（它们优先）。
 ///
-/// 为什么必须显式注入：e2m2e 钉住的 5.9.4 里 `catalog_enabled` 硬编码为真、
-/// `catalog_dir` 缺省 `"catalog"` 相对 cwd（dev 落仓库根、打包落安装目录，
-/// 升级丢库）；上游 ADR 0047（v5.9.5）把两者默认翻转为关闭/None，未指定
-/// 时入库请求报 `CATALOG_NOT_CONFIGURED`，而本仓 `cmd.rs` 只在 `record_id`
-/// 非空时入项目树、无 else 分支——静默丢记录比显式报错更坏。
+/// 为什么必须显式注入：e2m2e ≥5.9.5（上游 ADR 0047；本仓自 4.8.6 起钉
+/// 5.9.7）的 `catalog_enabled` 默认随 $E2M2E_CATALOG_ENABLED 为关、
+/// `catalog_dir` 默认 None，未指定时库操作报 `CATALOG_NOT_CONFIGURED`、
+/// 产物型方法静默返回 `record_id=None`，而本仓 `cmd.rs` 只在 `record_id`
+/// 非空时入项目树、无 else 分支——静默丢记录比显式报错更坏。5.9.5 之前
+/// `catalog_enabled` 硬编码为真、`catalog_dir` 缺省 `"catalog"` 相对 cwd
+/// （dev 落仓库根、打包落安装目录，升级丢库），显式注入同时修掉那处漂移。
 ///
-/// `enabled` 与 `user_dir` 解耦：取不到用户目录时仍注入 `enabled=1`。无
-/// HOME/APPDATA（`config_dir()` 返回 None）时，5.9.4 下维持原 cwd 行为，
-/// ≥5.9.5 下由 e2m2e 如实报 `CATALOG_NOT_CONFIGURED`——比静默丢记录好。
+/// `enabled` 与 `user_dir` 解耦：取不到用户目录时仍注入 `enabled=1`；此时
+/// 目录没注入，e2m2e 如实报 `CATALOG_NOT_CONFIGURED`——比静默丢记录好。
 ///
 /// 不在 Rust 侧建目录或猜路径：库由 e2m2e 在指定目录上创建，目录不可写也
 /// 由它如实报错。

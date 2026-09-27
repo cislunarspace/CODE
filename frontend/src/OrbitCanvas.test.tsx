@@ -333,6 +333,52 @@ describe("时刻标记（每条轨迹一个）", () => {
     expect(markers[1].position.x).toBeCloseTo(12, 6);
     expect(markers[1].position.y).toBeCloseTo(1, 6);
   });
+
+  it("递减时刻列（direction=backward）插值不越界，端点时刻仍算区间内", () => {
+    // 反向预报的时刻序列自 epoch 递减（orbit_propagation direction=backward，
+    // 5.9.7），位置随时刻回退。旧实现按递增假设：区间判断取 tList[0]/tList[last]，
+    // 插值分母 Math.max(1e-6, t1 - t0) 在负 span 下把 alpha 放大百万倍。
+    // A backward-propagation series descends from the epoch (orbit_propagation
+    // direction=backward, 5.9.7) and its position retreats with time. The old
+    // implementation assumed ascending order: the range check used tList[0]/tList[last]
+    // and the interpolation denominator Math.max(1e-6, t1 - t0) inflated alpha a
+    // millionfold on a negative span.
+    const descTraj: number[][][] = [Array.from({ length: 5 }, (_, i) => [4 - i, 0, 0])];
+    const descTimes: number[][] = [[4, 3, 2, 1, 0]];
+    const render = (currentEt: number) => (
+      <OrbitCanvas
+        trajectories={descTraj}
+        times={descTimes}
+        currentEt={currentEt}
+        mu={MU}
+        libration={LIBRATION}
+        projection="3d"
+        center="barycenter"
+        onReady={() => {}}
+      />
+    );
+
+    const view = renderCanvas({ trajectories: descTraj, times: descTimes, currentEt: 2.5 });
+    flushFrames();
+    let markers = timeMarkers(lastScene());
+    expect(markers[0].visible).toBe(true);
+    expect(markers[0].position.x).toBeCloseTo(2.5, 6);
+
+    // 序列首元素（最大时刻）在区间内，不是越界
+    // The first element (the largest moment) is inside the range, not outside it.
+    view.rerender(render(4));
+    flushFrames();
+    markers = timeMarkers(lastScene());
+    expect(markers[0].visible).toBe(true);
+    expect(markers[0].position.x).toBeCloseTo(4, 6);
+
+    // 区间外仍隐藏
+    // Still hidden outside the range.
+    view.rerender(render(5));
+    flushFrames();
+    markers = timeMarkers(lastScene());
+    expect(markers[0].visible).toBe(false);
+  });
 });
 
 describe("中心点居中几何", () => {

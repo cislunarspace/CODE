@@ -42,6 +42,16 @@
       "exclusiveMinimum": 0.0,
       "title": "Output Step",
       "type": "number"
+    },
+    "direction": {
+      "default": "forward",
+      "description": "传播方向：forward 自 epoch 正向预报，backward 自 epoch 反向回溯；duration 恒为正的时长幅值",
+      "enum": [
+        "forward",
+        "backward"
+      ],
+      "title": "Direction",
+      "type": "string"
     }
   },
   "required": [

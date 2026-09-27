@@ -2,6 +2,29 @@
 
 > 自 4.8.3 起版本小节纯中文；GitHub Release 正文由对应小节生成。历史小节保持写成时的双语不动。
 
+## 4.8.6 (2026-09-27)
+
+### 功能
+
+- **采纳 e2m2e 5.9.7 的新能力（#503）**：pin 升 >=5.9.7 并重导工具 schema。`orbit_propagation` 新增 `direction`（backward 自历元反向回溯，duration 恒为正幅值）；`design_orbit` 新增 LYAPUNOV 与 RO 两类轨道（RO 共振比 p:q 限 2:1 / 3:1 / 3:2 / 4:1 / 4:3 五档），HALO 振幅上限按平动点分档（L1 ±26908 / L2 ±77000 km），NRHO 近月点上限放到 40000 km；`transfer_design` 新增 PCN 圆锥曲线拼接（到达模式给 `bplane_target`、出发模式给 `departure_asymptote`，二者互斥）；`spacetime_transform` 新增 EPPR 变换对，六个变换对钉成下拉。以上取值域按上游 `valid_ranges` 在提交前补条件校验。RO 不接族生成表单：族生产退出产品面（#489），需要 RO 族时经 AI 助手链路调 `orbit_family_generation`（纯 CR3BP 生成，不经星历修正）。
+- **反向预报的时间轴与画布适配**：`direction=backward` 的输出是递减时刻序列，此前会让时间轴与动画导出塌成空区间、画布时刻标记全灭（区间端点与插值查找都按递增序写死）；现区间取全量 min/max，标记插值按每行时刻的单调方向处理。
+- **机动事件迁到结构化契约（e2m2e #575）**：转移结果的时间轴事件优先读 `maneuver_events`（含 perilune 旗标，非脉冲事件不附 Δv 文本），旧 `details` 的 Δv 字段保留为回退一个版本；PCN 结果的成功提示回显 B 平面摘要（近月点高度、B·T、B·R、v∞），出发模式回显渐近线赤经赤纬与 C3。
+- **RO 的默认画像取上游实测可收敛的一组**：RO 星历修正对共振比敏感（实测 4:1 + 3.5 天弧 + 10 小时步长 78 秒收敛，3:1 同弧长/步长 418 秒后修正不收敛），故 RO 分支默认给 4:1 与该短弧画像，振幅留空取精确共振成员；`resonance_p` 的提示里写明这一限制。属上游待跟进项，本地不绕过。
+- **基线数据集随包分发与首用导入（#490 首步）**：e2m2e 5.9.5 起基线 CR3BP 族移出 wheel、改 Release 资产（上游 ADR 0047），release 构建期下载 zip 随包分发，sidecar 首次启动在 catalog 已配置时自动导入——同版本跳过、版本变化整族替换，即 #490 的 re-seed 语义；导入失败只告警，不阻断用户库。开发链路新增 `scripts/import_baseline.py`（`--zip` 或 `--download`）。
+
+### 修复
+
+- **升级后立即失效的调用面**：`facade_bridge` 的 `Config` 显式开 `catalog_enabled`（GUI 语义是产物自动入库，Rust 壳对 sidecar 已注入同名 env，#491），Python 测试与脚本路径不再拿到静默的 `record_id=None`；三个直接 spawn sidecar 的 Rust 集成测试补 catalog 环境（5.9.7 下不配置时入库不落盘且不回执 id），共用 `tests/common` 的一份注入；`tests/engine/conftest.py` 删掉 5.9.5 已移除的 `E2M2E_CATALOG_BASELINE_IMPORT` 死开关。
+- **提交校验只认 `orbit_type`，转移设计的专属字段从不参与校验**：旧实现取 `values["orbit_type"] || "HALO"`，transfer_design 没有该字段，于是总落到 HALO（一个它的适用表里不存在的分支），HMN/LGA/WSB 专属字段的必填与越界检查全部失效；分支解析收敛到 `branchSelection` 一处，表单渲染、默认值填充与提交校验同源（PCN 的异或校验也依赖它）。
+- **异常翻译补 E2M2EError 兜底**：库内统一基类落 `E2M2E_ERROR`、类名进 `details`，与上游信封翻译同口径；`e2m2e.api.OrbitError` 透传时一并带出其 `details` 载荷（上游 #677 的 status/cause/diagnostic 三元组）。
+
+### 工程
+
+- **轨道库落点改用户配置目录（#491、PR #498）**：Rust 壳在 app setup 注入 `E2M2E_CATALOG_ENABLED=1` 与 `E2M2E_CATALOG_DIR=<用户配置目录>/catalog`（Windows `%APPDATA%/transfer-orbit-design/catalog`，用户预设优先），库不再随工作目录漂移；本版是它的发布载体。
+- 打包冒烟新增基线断言：`scripts/smoke_mcp_serve.py --baseline <zip>` 开临时库目录、按 tag=baseline 查询并断言成员记录数，release 两个构建作业在 PyInstaller 之前下载基线 zip 且冒烟必传该参数——包内基线缺失或导入残缺在此变红。
+- 工具 schema 重导：新增 `valid_ranges.json` 与 `catalog_terminology.json`（无参工具，不进工具注册表），`orbit_stability.json` 随上游移除删除并同步注释；重导脚本显式写 LF，不再因 Windows 换行翻译产生纯换行噪音 diff。
+- 文档同步（#500）：AGENTS.md、CONTEXT.md 与输出指南改为“用户配置目录 + 基线首用导入”的表述，CONTEXT.md 新增 EPPR、B 平面目标、反向预报三条术语。
+
 ## 4.8.5 (2026-09-21)
 
 ### 文档

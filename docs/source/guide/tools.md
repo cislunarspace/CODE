@@ -2,12 +2,17 @@
 
 中栏工具面板接通八个工具：轨道族生成、任务轨道设计、参数空间扫描
 （catalog_sweep）、轨道保持、轨道预报、转移轨道设计、时空坐标转换与
-分区边界（spatiography_boundaries）；轨道稳定性因上游 placeholder
-（空参 schema）暂不接入。参数面板由工具的 JSON Schema 自动生成：字段范围、
+分区边界（spatiography_boundaries）；轨道稳定性已随上游移除（e2m2e 5.9.3
+的工具清单不再暴露它，空参 placeholder 一并消失），能力本体留在
+`e2m2e.algorithm.stability` 的 Python API，CLI 无对应子命令。参数面板由工具的
+JSON Schema 自动生成：字段范围、
 默认值与说明来自 e2m2e 的 Pydantic 模型；按 `orbit_type` 裁剪，只显示当前族
 适用的字段；Optional 字段以勾选控制传不传值（勾选即传、不勾视为未设置）。
 本页展开说明轨道族生成与转移设计，其余工具的参数见各 schema 与
 {doc}`../dev/architecture`。
+
+> 轨道族生成界面不暴露 RO（共振轨道）：族生产退出产品面（#489），需要 RO
+> 族时走 AI 助手链路或 e2m2e CLI；单条 RO 轨道在设计工具里可选。
 
 ## 轨道族生成（orbit_family_generation）
 
@@ -34,14 +39,20 @@
 
 ## 转移轨道设计（transfer_design）
 
-生成地月转移轨迹，支持 HMN（Hohmann 式）、LGA（月球借力）与 WSB（弱稳定
-边界）三类。参数面板按转移类型联动显隐：HMN 显示目标地心半径（默认
-384400 km，环月演示）；LGA/WSB 需要先在项目树选中一个轨道工件——提交时
-自动取其 CR3BP 状态末行换算到会合系物理单位注入目标星历，未选中时拦截
-提交并提示；LGA 无显式搜索参数时默认注入加密相位网格（360 点）。
+生成地月转移轨迹，支持 HMN（Hohmann 式）、LGA（月球借力）、WSB（弱稳定
+边界）与 PCN（圆锥曲线拼接）四类。参数面板按转移类型联动显隐：HMN 显示
+目标地心半径（默认 384400 km，环月演示）；LGA/WSB 需要先在项目树选中一个
+轨道工件——提交时自动取其 CR3BP 状态末行换算到会合系物理单位注入目标星历，
+未选中时拦截提交并提示；LGA 无显式搜索参数时默认注入加密相位网格（360 点）。
+PCN 显示两个目标参数化，**恰给其一**：到达模式填 `bplane_target`（月心 B 平面
+JSON，给定近月点高度与 B·T / B·R），出发模式填 `departure_asymptote`（出发
+双曲渐近线的赤经 / 赤纬 / C3 JSON）；两者都空或都填，提交前即拦截并标红。
 
 转移结果按 e2m2e ADR 0040 契约解析（会合系质心原点物理 km/km/s、TLI 起算
-秒），位置归一后上画布，出发/到达脉冲在时间轴上以 Δv 事件 chip 标注。
+秒），位置归一后上画布；机动事件取响应里的结构化 `maneuver_events`（出发 /
+到达脉冲，LGA/WSB 另有近月点旗标），在时间轴上以 Δv 事件 chip 标注。PCN
+结果的成功提示同时回显 B 平面摘要（近月点高度、B·T、B·R、v∞；出发模式回显
+渐近线赤经赤纬与 C3）。
 
 ## 分区边界（spatiography_boundaries）
 
@@ -51,11 +62,14 @@
 
 ## 其余工具
 
-17 个工具的 schema 已全部导出（`frontend/src/toolSchemas/`，含 7 个 catalog
-操作与 3 个分区解析工具）。任务轨道设计、轨道保持、轨道预报与时空坐标转换的
-参数以 schema 为准；轨道稳定性 schema 已导出，待上游放开后接入；
-参数空间扫描（catalog_sweep）在工具面板直接可用。
+19 个工具的 schema 已全部导出（`frontend/src/toolSchemas/`，含 6 个 catalog
+操作、5 个分区解析工具、6 个核心计算工具与 2 个无参查询工具 `valid_ranges` /
+`catalog_terminology`）。
+任务轨道设计、轨道保持、轨道预报与时空坐标转换的参数以 schema 为准；
+参数空间扫描（catalog_sweep）在工具面板直接可用；轨道稳定性界面上没有入口
+（上游 5.9.3 起不再暴露该工具）。
 catalog 管理操作的
 界面分布：查询/取用由目录浏览与画布叠加承担，删除在项目树右键菜单，标注
-与族成员提升在记录详情面板，教学案例包导出在过滤栏。需要脚本化工作流时
+在记录详情面板，教学案例包导出在过滤栏（catalog_promote 已随一轨一记录移除）。
+需要脚本化工作流时
 经 [e2m2e CLI](https://cislunarspace.github.io/CODE-core/) 使用。

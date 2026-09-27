@@ -10,8 +10,20 @@ on:
 
 # AI 会话运行时（omp ACP）固定版本：升级时改此处并跑
 # scripts/smoke_omp_acp.py 回归（协议行为以本机握手实测为准）
+#
+# 基线数据集（e2m2e ADR 0047：基线 CR3BP 族移出 wheel，改 Release 资产）：
+# 两个构建作业在打包 sidecar 前下载到 packaging/baseline/，由 spec 收进包、
+# sidecar 首启导入用户库。升级基线版本时改此处 URL 与 spec/smoke 的文件名
+# AI session runtime (omp ACP) pinned version: bump here and re-run
+# scripts/smoke_omp_acp.py (protocol behavior is verified by a real local
+# handshake). Baseline dataset (e2m2e ADR 0047: the baseline CR3BP families
+# left the wheel and became a Release asset): both build jobs download it into
+# packaging/baseline/ before packaging the sidecar; the spec bundles it and the
+# sidecar imports it into the user catalog on first start. Bumping the baseline
+# version means updating this URL plus the file names in the spec/smoke.
 env:
   OMP_VERSION: v18.1.11
+  E2M2E_BASELINE_URL: https://github.com/cislunarspace/CODE-core/releases/download/data-baseline-5.9.0/baseline-cr3bp-5.9.0.zip
 
 concurrency:
   group: release-${{ github.ref }}
@@ -106,12 +118,26 @@ jobs:
       - run: npm ci --prefix frontend
       - run: npm --prefix frontend run build
       - run: uv sync --group build --frozen
+      # 基线数据集随包分发（ADR 0047）：下载失败即红——宁可不发版，也不能把
+      # 没有预置族的包发出去（首用导入在用户端无从补救）
+      # The baseline dataset ships with the package (ADR 0047): a failed download
+      # turns the job red — better no release than a release without preloaded
+      # families (the user-side first-use import cannot recover them).
+      - name: Fetch baseline dataset (Release asset)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path packaging/baseline | Out-Null
+          curl -fL "$env:E2M2E_BASELINE_URL" -o packaging/baseline/baseline-cr3bp-5.9.0.zip
+          if ((Get-Item packaging/baseline/baseline-cr3bp-5.9.0.zip).Length -lt 100KB) {
+            throw "基线数据集下载不完整"
+          }
       - name: Build sidecar (PyInstaller onefile)
         run: uv run --no-sync pyinstaller packaging/transfer_orbit_design_sidecar.spec --noconfirm
       # 打包冒烟闸：design_orbit 真调用走完整星历链（R2S2 包内 lte440 打开、
-      # SPICE 内核加载、修正收敛），漏带依赖/数据的坏包在此变红，不进安装包
+      # SPICE 内核加载、修正收敛），漏带依赖/数据的坏包在此变红，不进安装包；
+      # --baseline 另断言包内基线数据集已落库
       - name: Smoke sidecar (design_orbit real call)
-        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/transfer-orbit-design-sidecar.exe --cwd . --kernels kernels
+        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/transfer-orbit-design-sidecar.exe --cwd . --kernels kernels --baseline packaging/baseline/baseline-cr3bp-5.9.0.zip
       - name: Stage sidecar into tauri resources
         shell: pwsh
         run: |
@@ -249,11 +275,19 @@ jobs:
       - run: npm --prefix frontend run build
       # calcephpy 在非 Windows 平台回落 sdist 现场编译，cmake 已在上方显式安装
       - run: uv sync --group build --frozen
+      # 基线数据集随包分发（ADR 0047），同 Windows 作业：下载失败即红
+      - name: Fetch baseline dataset (Release asset)
+        run: |
+          mkdir -p packaging/baseline
+          curl -fL -o packaging/baseline/baseline-cr3bp-5.9.0.zip "$E2M2E_BASELINE_URL"
+          [ "$(stat -c%s packaging/baseline/baseline-cr3bp-5.9.0.zip)" -gt 100000 ] || {
+            echo "基线数据集下载不完整"; exit 1;
+          }
       - name: Build sidecar (PyInstaller onefile)
         run: uv run --no-sync pyinstaller packaging/transfer_orbit_design_sidecar.spec --noconfirm
-      # 打包冒烟闸：同 Windows 作业，design_orbit 真调用守卫坏包
+      # 打包冒烟闸：同 Windows 作业，design_orbit 真调用 + 基线落库断言守卫坏包
       - name: Smoke sidecar (design_orbit real call)
-        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/transfer-orbit-design-sidecar --cwd . --kernels kernels
+        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/transfer-orbit-design-sidecar --cwd . --kernels kernels --baseline packaging/baseline/baseline-cr3bp-5.9.0.zip
       - name: Stage sidecar into tauri resources
         run: |
           mkdir -p src-tauri/binaries

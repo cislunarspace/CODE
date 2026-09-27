@@ -53,13 +53,15 @@ export const TOOL_REGISTRY: ToolEntry[] = [
   { name: "control_orbit", title: "轨道保持", schema: controlOrbitSchema as ToolSchema, artifactType: "ephemeris", hasTrajectory: true },
   { name: "orbit_propagation", title: "轨道预报", schema: propagationSchema as ToolSchema, artifactType: "ephemeris", hasTrajectory: true },
   { name: "transfer_design", title: "转移轨道设计", schema: transferSchema as ToolSchema, artifactType: "transfer", hasTrajectory: true },
-  // orbit_stability 不在注册表：上游 e2m2e 将其标为 placeholder（空参 schema，
-  // 必然调用失败，待记录引用式入参落地后放开）；恢复时统一参数命名
-  //（表单取值/适用性字段/实际入参三套名字曾不一致）。
-  // orbit_stability stays out of the registry: upstream e2m2e marks it as a
-  // placeholder (empty-arg schema, guaranteed to fail until record-reference
-  // inputs land); when restoring, unify the parameter naming (the form value,
-  // applicability fields, and actual arguments previously disagreed).
+  // orbit_stability 已随上游移除（e2m2e 5.9.3 的工具清单不再暴露它，空参
+  // schema 的 placeholder 一并消失），toolSchemas/orbit_stability.json 同步
+  // 删除；能力本体 e2m2e.algorithm.stability 仍在，只有 Python API 可达，
+  // CLI 没有对应子命令（5.9.7 实测 21 个子命令里没有稳定性）。
+  // orbit_stability is gone with upstream (e2m2e 5.9.3 dropped it from the tool
+  // list, taking the empty-arg placeholder schema with it), so
+  // toolSchemas/orbit_stability.json was deleted in step; the capability itself
+  // (e2m2e.algorithm.stability) remains, reachable through its Python API only;
+  // the CLI exposes no matching subcommand.
   { name: "spacetime_transform", title: "时空坐标转换", schema: transformSchema as ToolSchema, artifactType: "orbit", hasTrajectory: true },
   // 分区边界：产出进区域图层（regionLayer），非轨迹、不入库
   // Spatiography boundaries: feeds the region layer (regionLayer) — not trajectories, not cataloged.

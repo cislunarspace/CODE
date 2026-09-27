@@ -32,6 +32,19 @@
       "description": "轨道族（dro/halo/nrho/lissajous/dpo/axial/spo/lpo/horseshoe/elfo 等）",
       "title": "Orbit Family"
     },
+    "family_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "生成批次标识（ADR 0045）：整族查询的句柄——返回该次生成的全部成员记录",
+      "title": "Family Id"
+    },
     "libration_point": {
       "anyOf": [
         {
@@ -165,7 +178,7 @@
         }
       ],
       "default": null,
-      "description": "转移类型等值过滤（HMN/LGA/WSB/low_thrust；#574 transfer record）",
+      "description": "转移类型等值过滤（HMN/LGA/WSB/low_thrust/PCN；#574 transfer record）",
       "title": "Transfer Type"
     },
     "delta_v_min_km_s": {

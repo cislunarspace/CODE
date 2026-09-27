@@ -13,6 +13,31 @@ Windows 为 `%APPDATA%/transfer-orbit-design/catalog`，Linux 为
 Jacobi 区间、振幅区间；谱系指针记录上下游因果链）。重启后项目树经
 `catalog_query` 恢复清单，单条记录经 `catalog_get` 懒加载轨迹。
 
+## 基线数据集（预置族）
+
+e2m2e 5.9.5 起，基线 CR3BP 族（13 个族、数百条成员记录）不再随 Python 包
+分发，改为 GitHub Release 资产显式导入。CODE 的安装包把它随包分发：安装包
+内带一份基线 zip，应用**首次启动**时在轨道库已配置的前提下自动解压导入，导入
+条数写进应用日志。
+
+导入是幂等的，按族对位基线版本：库中已有同版本基线族时跳过（用户对基线成员
+的增删得到尊重），基线版本变化时整族替换为新的基线成员。因此升级安装包只会
+把基线族换到新版本，不会覆盖或重复用户自己的记录。
+
+开发/脚本链路没有那一步，用脚本手动导入同一份 zip：
+
+```bash
+# 从 Release 下载默认基线包并导入（库目录取 $E2M2E_CATALOG_DIR，
+# 未设置时用用户配置目录下的 catalog/）
+uv run python scripts/import_baseline.py --download
+
+# 或导入本地已有的 zip
+uv run python scripts/import_baseline.py --zip packaging/baseline/baseline-cr3bp-5.9.0.zip
+```
+
+导入失败（zip 损坏、数据集残缺）不会阻断应用启动：只记警告跳过，用户自己的
+记录与库的可用性不受影响。
+
 ## 库即数据格式
 
 轨道库是 e2m2e catalog 格式（见

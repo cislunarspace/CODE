@@ -11,9 +11,12 @@ import {
   formatRangePrompt,
   getFieldApplicability,
   withParamDefaults,
+  switchBranch,
+  validateToolParams,
   TU_SECONDS,
 } from "./index";
 import type { ToolSchema } from "../schema";
+import { toolEntry } from "../schema";
 
 describe("参数覆写层 (paramOverlay)", () => {
   it("17 个单位字段正确注册且首项为标准单位 (toStandard = 1.0)", () => {
@@ -76,11 +79,11 @@ describe("参数覆写层 (paramOverlay)", () => {
     expect(convertValue("phase", Math.PI, "弧度", "周期份额")).toBeCloseTo(0.5, 4);
   });
 
-  it("15 种 design_orbit 轨道类型分支默认值齐备", () => {
+  it("17 种 design_orbit 轨道类型分支默认值齐备", () => {
     const expectedTypes = [
       "HALO", "DRO", "DPO", "NRHO", "LISSAJOUS", "AXIAL",
       "L4", "L5", "L4_SPO", "L5_SPO", "L4_LPO", "L5_LPO",
-      "L4_HORSESHOE", "L5_HORSESHOE", "ELFO"
+      "L4_HORSESHOE", "L5_HORSESHOE", "ELFO", "LYAPUNOV", "RO"
     ];
     for (const t of expectedTypes) {
       const defs = getBranchDefaults("design_orbit", t);
@@ -135,7 +138,7 @@ describe("参数覆写层 (paramOverlay)", () => {
     expect(elfoFields).toContain("arg_of_pericenter");
   });
 
-  it("分支键类型预置下拉与分支默认值一一对应：design_orbit 15 项、轨道族生成 8 项", () => {
+  it("分支键类型预置下拉与分支默认值一一对应：design_orbit 17 项、轨道族生成 8 项", () => {
     // 顺序是展示顺序，不与默认值表键序绑定；只约束覆盖一致
     // Dropdown order is presentation-only; assert coverage, not order.
     expect([...BRANCH_TYPE_OPTIONS["design_orbit"]].map((o) => o.value).sort()).toEqual(
@@ -222,7 +225,193 @@ describe("转移设计类型联动 (transfer_design)", () => {
     });
   });
 
-  it("ENUM_OPTIONS.transfer_type 提供四项中文标签", () => {
-    expect(ENUM_OPTIONS.transfer_type.map((o) => o.value)).toEqual(["HMN", "LGA", "WSB", "low_thrust"]);
+  it("ENUM_OPTIONS.transfer_type 提供五项中文标签（5.9.7 起含 PCN）", () => {
+    expect(ENUM_OPTIONS.transfer_type.map((o) => o.value)).toEqual([
+      "HMN",
+      "LGA",
+      "WSB",
+      "low_thrust",
+      "PCN",
+    ]);
+  });
+
+  it("PCN 分支默认值：transfer_type 自身 + 搜索用 tof_range；目标参数化不给默认", () => {
+    // bplane_target / departure_asymptote 互斥，默认任一侧都会让另一侧
+    // 变成静默不可达的错支，必须由用户选。
+    // bplane_target / departure_asymptote are mutually exclusive; defaulting
+    // either one silently makes the other the wrong branch, so the user picks.
+    expect(getBranchDefaults("transfer_design", "PCN")).toEqual({
+      transfer_type: "PCN",
+      tof_range: [3, 6],
+    });
+  });
+
+  it("PCN 适用字段：两个目标参数化都渲染，公共字段照旧，不显 target_ephemeris", () => {
+    const pcn = getFieldApplicability("transfer_design", "PCN");
+    expect(pcn).toContain("bplane_target");
+    expect(pcn).toContain("departure_asymptote");
+    expect(pcn).not.toContain("target_orbit_radius_km");
+    expect(pcn).not.toContain("lga_search_params");
+    expect(pcn).not.toContain("target_ephemeris");
+    for (const common of ["transfer_type", "tli_epoch", "parking_alt_km", "incl_deg", "flight_path_deg", "tof_range"]) {
+      expect(pcn).toContain(common);
+    }
+  });
+});
+
+describe("switchBranch 切分支时的参数迁移", () => {
+  const schema = toolEntry("design_orbit").schema;
+
+  it("HALO→RO：上一分支的默认值与模型默认值都不算用户输入，RO 画像落到位且可直接提交", () => {
+    // 挂载后的 HALO 参数（output_step 仍是模型默认 3600，amplitude 是 HALO 分支默认 30000）
+    const mounted = withParamDefaults("design_orbit", schema, {}, "orbit_type", "HALO")!;
+    expect(mounted.output_step).toBe(3600);
+    expect(mounted.amplitude).toBe(30000);
+
+    const switched = switchBranch(
+      "design_orbit",
+      schema,
+      { ...mounted, orbit_type: "RO" },
+      "orbit_type",
+      "RO",
+      "HALO",
+    );
+    expect(switched.orbit_type).toBe("RO");
+    expect(switched.output_step).toBe(36000);
+    expect(switched.duration).toBe(300000);
+    expect(switched.resonance_p).toBe(4);
+    expect(switched.resonance_q).toBe(1);
+    // HALO 的 amplitude 不该跟过来：RO 的振幅要留空才取精确共振成员，跟着来会被
+    // RO 自己的值域校验（145000~340000）拦停，主路径上选 RO 即无法提交
+    // HALO's amplitude must not follow: RO needs it empty for the exact member, and
+    // the carried 30000 would trip RO's own range check (145000~340000), making RO
+    // unsubmittable on the primary path.
+    expect("amplitude" in switched).toBe(false);
+    // 组件里切分支是两步：switchBranch 迁移 + 随后的 withParamDefaults 补默认值
+    //（被交回默认值的公共字段如 epoch 在第二步落回），故断言按最终落定态来
+    // In the component a branch switch is two steps: switchBranch migrates, then
+    // withParamDefaults refills defaults (shared fields handed back to their defaults,
+    // like epoch, land there), so assert the settled state.
+    const settled = withParamDefaults("design_orbit", schema, switched, "orbit_type", "RO")!;
+    expect(settled.epoch).toEqual([2024, 1, 1, 0, 0, 0.0]);
+    expect(settled.correction_method).toBe("two_level");
+    expect(settled.output_step).toBe(36000);
+    expect(validateToolParams("design_orbit", schema, settled)).toEqual([]);
+  });
+
+  it("用户改过的值不被新分支默认值覆盖，也不因等于旧分支默认值被丢掉", () => {
+    const mounted = withParamDefaults("design_orbit", schema, {}, "orbit_type", "HALO")!;
+    // output_step 改过（≠ 模型默认值）：保留
+    const typedStep = switchBranch(
+      "design_orbit",
+      schema,
+      { ...mounted, output_step: 7200 },
+      "orbit_type",
+      "RO",
+      "HALO",
+    );
+    expect(typedStep.output_step).toBe(7200);
+    // amplitude 改过（≠ HALO 默认值）：跟着切到 DRO
+    // A changed amplitude (≠ HALO's default) follows into DRO.
+    const typedAmp = switchBranch(
+      "design_orbit",
+      schema,
+      { ...mounted, amplitude: 45000 },
+      "orbit_type",
+      "DRO",
+      "HALO",
+    );
+    expect(typedAmp.amplitude).toBe(45000);
+    // 没改过的 amplitude（= HALO 默认值）换成 DRO 自己的默认值
+    // An untouched amplitude (= HALO's default) gives way to DRO's own default.
+    const untouched = switchBranch(
+      "design_orbit",
+      schema,
+      { ...mounted },
+      "orbit_type",
+      "DRO",
+      "HALO",
+    );
+    expect(untouched.amplitude).toBe(60000);
+  });
+
+  it("新分支不适用的字段被丢弃；转移设计的 tof_range 由 PCN 默认值补上", () => {
+    const halo = switchBranch(
+      "design_orbit",
+      schema,
+      { ...withParamDefaults("design_orbit", schema, {}, "orbit_type", "HALO")! },
+      "orbit_type",
+      "DRO",
+      "HALO",
+    );
+    expect("north_south" in halo).toBe(false);
+
+    const transfer = toolEntry("transfer_design").schema;
+    const hmn = withParamDefaults("transfer_design", transfer, {}, "transfer_type", "HMN")!;
+    const pcn = switchBranch("transfer_design", transfer, { ...hmn, tof_range: null }, "transfer_type", "PCN", "HMN");
+    expect(pcn.tof_range).toEqual([3, 6]);
+    // HMN 的目标半径不属于 PCN 适用字段
+    // HMN's target radius is not applicable to PCN.
+    expect("target_orbit_radius_km" in pcn).toBe(false);
+  });
+});
+
+describe("e2m2e 5.9.7 新能力接入", () => {
+  it("design_orbit 新增 LYAPUNOV / RO 分支：下拉、默认值与适用字段齐备", () => {
+    const values = BRANCH_TYPE_OPTIONS["design_orbit"].map((o) => o.value);
+    expect(values).toContain("LYAPUNOV");
+    expect(values).toContain("RO");
+
+    // LYAPUNOV 供平动点与振幅；RO 只给共振比、相位与实测可收敛的短弧画像
+    //（amplitude 留空 = 精确共振成员，上游 RO 星历冒烟同口径）
+    // LYAPUNOV carries the libration point and amplitude; RO gives only the
+    // resonance pair, phase, and the short-arc profile measured to converge (an
+    // empty amplitude selects the exact member, as in upstream's RO ephemeris smoke).
+    expect(getBranchDefaults("design_orbit", "LYAPUNOV")).toEqual({
+      amplitude: 12000,
+      phase: 0.0,
+      collinear_point: 2,
+    });
+    expect(getBranchDefaults("design_orbit", "RO")).toEqual({
+      resonance_p: 4,
+      resonance_q: 1,
+      phase: 0.0,
+      duration: 300000,
+      output_step: 36000,
+    });
+    expect("amplitude" in getBranchDefaults("design_orbit", "RO")).toBe(false);
+
+    // 生效结果而不只是表值：分支默认值必须先于模型默认值填入，否则 schema 的
+    // output_step 默认 3600 会压掉 RO 画像的 36000（表里对、表单里错）。
+    // The effective result, not just the table: branch defaults must be filled
+    // before model defaults, else the schema's output_step default 3600 shadows
+    // RO's 36000 (right in the table, wrong in the form).
+    const filled = withParamDefaults("design_orbit", toolEntry("design_orbit").schema, {}, "orbit_type", "RO")!;
+    expect(filled.output_step).toBe(36000);
+    expect(filled.duration).toBe(300000);
+    expect(filled.resonance_p).toBe(4);
+    expect(filled.resonance_q).toBe(1);
+    // 模型默认值仍照填（RO 没覆盖的字段）
+    // Model defaults still apply for fields RO does not cover.
+    expect(filled.correction_method).toBe("two_level");
+    expect(filled.epoch).toEqual([2024, 1, 1, 0, 0, 0.0]);
+
+    expect(getFieldApplicability("design_orbit", "LYAPUNOV")).toContain("amplitude");
+    expect(getFieldApplicability("design_orbit", "LYAPUNOV")).toContain("collinear_point");
+    const ro = getFieldApplicability("design_orbit", "RO");
+    expect(ro).toContain("resonance_p");
+    expect(ro).toContain("resonance_q");
+    expect(ro).toContain("amplitude");
+  });
+
+  it("ENUM_OPTIONS.transform_type 覆盖六个变换对（含 EPPR）", () => {
+    expect(ENUM_OPTIONS.transform_type.map((o) => o.value)).toEqual([
+      "synodic_to_j2000",
+      "j2000_to_synodic",
+      "j2000_to_eppr",
+      "eppr_to_j2000",
+      "gcrs_to_ebcrs",
+      "ebcrs_to_gcrs",
+    ]);
   });
 });

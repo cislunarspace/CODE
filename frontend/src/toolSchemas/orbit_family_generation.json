@@ -1,9 +1,9 @@
 {
   "additionalProperties": false,
-  "description": "轨道族生成输入（二档 Facade.orbit_family_generation）。\n\n公开参数用平动点统一术语（``libration_point``，1=L1 … 5=L5），由\nFacade 映射到各族算法参数。按 ``orbit_type`` 分派校验取值域\n（与 ``DesignOrbitRequest`` 同构）：共线族（Halo/NRHO/Axial）仅\nL1/L2，Lissajous 支持 L1/L2/L3，三角族（SPO/LPO/Horseshoe）仅\nL4/L5，DRO 是月心族不绑定平动点（请求不得携带 ``libration_point``）。\n八族均已实现：周期族返回严格周期成员，Lissajous\n返回拟周期有界轨迹的参数采样（族上显式标注 quasi-periodic）。\n\n按族适用的字段：\n\n- HALO/AXIAL：``max_amplitude_km`` （带符号，区分北/南或上/下族）\n- NRHO：``north_south``、``perilune_height_max_km``、``continuation_direction``\n- LISSAJOUS：``amplitude_in_km``、``amplitude_out_km``、``phase_in``、``phase_out``\n- SPO/LPO/HORSESHOE：振幅上下限、延拓方向与 ``match_tolerance_km``\n- DRO：振幅上下限（距月心距离 min/max 均值，km）\n\n``sampling_mode`` 显式登记各族固定的首版采样规则；传入其他规则会\n结构化拒绝，而不是静默改用默认算法。",
+  "description": "轨道族生成输入（二档 Facade.orbit_family_generation）。\n\n公开参数用平动点统一术语（``libration_point``，1=L1 … 5=L5），由\nFacade 映射到各族算法参数。按 ``orbit_type`` 分派校验取值域\n（与 ``DesignOrbitRequest`` 同构）：共线族（Halo/NRHO/Axial）仅\nL1/L2，Lissajous 支持 L1/L2/L3，三角族（SPO/LPO/Horseshoe）仅\nL4/L5，DRO 是月心族、RO 是地心族，均不绑定平动点（请求不得携带\n``libration_point``）。九族均已实现：周期族返回严格周期成员，\nLissajous 返回拟周期有界轨迹的参数采样（族上显式标注 quasi-periodic）。\n\n按族适用的字段：\n\n- HALO/AXIAL：``max_amplitude_km`` （带符号，区分北/南或上/下族）\n- NRHO：``north_south``、``perilune_height_max_km``、``continuation_direction``\n- LISSAJOUS：``amplitude_in_km``、``amplitude_out_km``、``phase_in``、``phase_out``\n- SPO/LPO/HORSESHOE：振幅上下限、延拓方向与 ``match_tolerance_km``\n- DRO：振幅上下限（距月心距离 min/max 均值，km）\n- RO：``resonance_p``/``resonance_q`` + 振幅上下限（距地心距离\n  min/max 均值，km）\n\n``sampling_mode`` 显式登记各族固定的首版采样规则；传入其他规则会\n结构化拒绝，而不是静默改用默认算法。",
   "properties": {
     "orbit_type": {
-      "description": "HALO/NRHO/AXIAL/LISSAJOUS/SPO/LPO/HORSESHOE/DRO",
+      "description": "HALO/NRHO/AXIAL/LISSAJOUS/SPO/LPO/HORSESHOE/DRO/RO",
       "title": "Orbit Type",
       "type": "string"
     },
@@ -19,7 +19,7 @@
         }
       ],
       "default": null,
-      "description": "平动点编号：1=L1 … 5=L5；缺省按族填默认；DRO 不适用",
+      "description": "平动点编号：1=L1 … 5=L5；缺省按族填默认；DRO/RO 不用",
       "title": "Libration Point"
     },
     "max_amplitude_km": {
@@ -45,8 +45,36 @@
         }
       ],
       "default": null,
-      "description": "族振幅下限（km），仅 SPO/LPO/HORSESHOE/DRO 用",
+      "description": "族振幅下限（km），仅 SPO/LPO/HORSESHOE/DRO/RO 用",
       "title": "Min Amplitude Km"
+    },
+    "resonance_p": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "共振比卫星侧整数（p:q = 卫星:月球），仅 RO 用",
+      "title": "Resonance P"
+    },
+    "resonance_q": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "共振比月球侧整数，仅 RO 用",
+      "title": "Resonance Q"
     },
     "north_south": {
       "anyOf": [

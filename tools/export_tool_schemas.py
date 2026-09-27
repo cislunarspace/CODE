@@ -28,7 +28,16 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     for spec in tools.tool_specs(Facade()):
         path = out_dir / f"{spec.name}.json"
-        path.write_text(json.dumps(spec.input_schema, ensure_ascii=False, indent=2), encoding="utf-8")
+        # newline="\n"：显式写 LF。Windows 上默认换行翻译会写出 CRLF，
+        # 与 .editorconfig 的 LF 约定相悖，且使每次重导都产生纯换行噪音 diff。
+        # newline="\n": write LF explicitly. The default newline translation on
+        # Windows emits CRLF, contradicting the LF convention in .editorconfig
+        # and turning every re-export into pure line-ending churn.
+        path.write_text(
+            json.dumps(spec.input_schema, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+            newline="\n",
+        )
         print(f"{spec.name}: {path.name}")
 
 

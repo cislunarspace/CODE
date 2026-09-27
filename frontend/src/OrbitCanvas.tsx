@@ -912,21 +912,39 @@ export function OrbitCanvas({
         frame === "inertial" ? inertialGeometries?.[i] ?? trajectories[i] : trajectories[i];
       const tList = times?.[i];
       const et = currentEt;
-      if (
-        et === null || et === undefined || !pts || pts.length === 0 ||
-        !tList || tList.length === 0 || et < tList[0] || et > tList[tList.length - 1]
-      ) {
+      if (!pts || pts.length === 0 || !tList || tList.length === 0 || et === null || et === undefined) {
+        marker.visible = false;
+        return;
+      }
+      // 时刻列可能递减：orbit_propagation 的 direction=backward（5.9.7）自 epoch
+      // 反向回溯，积分次序即时间倒序。整列在存储上仍单调，据此定方向——越界判断
+      // 用 [tMin, tMax]，查找谓词随方向翻转，插值仍是相邻两点间的线性。
+      // The time column may descend: orbit_propagation's direction=backward (5.9.7)
+      // integrates backwards from the epoch, so integration order is reverse time
+      // order. The column is still monotonic in storage; pick the direction from it:
+      // bounds use [tMin, tMax], the lookup predicate flips with it, and the
+      // interpolation stays linear between adjacent points.
+      const ascending = tList[tList.length - 1] >= tList[0];
+      const tMin = ascending ? tList[0] : tList[tList.length - 1];
+      const tMax = ascending ? tList[tList.length - 1] : tList[0];
+      if (et < tMin || et > tMax) {
         marker.visible = false;
         return;
       }
 
-      let idx = tList.findIndex((t) => t >= et);
+      let idx = ascending ? tList.findIndex((t) => t >= et) : tList.findIndex((t) => t <= et);
       if (idx <= 0) idx = 1;
       if (idx >= tList.length) idx = tList.length - 1;
 
       const t0 = tList[idx - 1];
       const t1 = tList[idx];
-      const alpha = (et - t0) / Math.max(1e-6, t1 - t0);
+      // span 在递减序下为负，符号折进分母：alpha 仍在 [0, 1]。旧式
+      // Math.max(1e-6, span) 会把负 span 抬成 1e-6，把 alpha 放大六个数量级。
+      // span is negative in descending order; folding its sign into the denominator
+      // keeps alpha inside [0, 1]. The old Math.max(1e-6, span) clamped a negative
+      // span up to 1e-6 and blew alpha up by six orders of magnitude.
+      const span = t1 - t0;
+      const alpha = Math.abs(span) < 1e-6 ? 0 : (et - t0) / span;
       const p0 = pts[idx - 1] || pts[0];
       const p1 = pts[idx] || pts[0];
 

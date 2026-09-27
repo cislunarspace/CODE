@@ -1,9 +1,73 @@
 {
+  "$defs": {
+    "BplaneTarget": {
+      "additionalProperties": false,
+      "description": "PCN 到达模式目标：月心 B-plane（Vallado 定义，#635）。\n\nB 平面坐标：``bdot_t_km`` 沿 T̂ = normalize(ẑ×Ŝ)、``bdot_r_km`` 沿\nR̂ = Ŝ×T̂（Ŝ 为入射渐近线速度方向）；``perilune_alt_km`` 为月面以上\n近月点高度。",
+      "properties": {
+        "perilune_alt_km": {
+          "description": "目标近月点高度 (km，月面以上)",
+          "exclusiveMinimum": 0.0,
+          "title": "Perilune Alt Km",
+          "type": "number"
+        },
+        "bdot_t_km": {
+          "description": "目标 B·T (km)",
+          "title": "Bdot T Km",
+          "type": "number"
+        },
+        "bdot_r_km": {
+          "default": 0.0,
+          "description": "目标 B·R (km)，默认 0",
+          "title": "Bdot R Km",
+          "type": "number"
+        }
+      },
+      "required": [
+        "perilune_alt_km",
+        "bdot_t_km"
+      ],
+      "title": "BplaneTarget",
+      "type": "object"
+    },
+    "DepartureAsymptote": {
+      "additionalProperties": false,
+      "description": "地球出发双曲渐近线参数化（TLI 设计入口，#635）。",
+      "properties": {
+        "rha_deg": {
+          "description": "渐近线赤经 (deg)",
+          "exclusiveMaximum": 360.0,
+          "minimum": 0.0,
+          "title": "Rha Deg",
+          "type": "number"
+        },
+        "dha_deg": {
+          "description": "渐近线赤纬 (deg)",
+          "maximum": 90.0,
+          "minimum": -90.0,
+          "title": "Dha Deg",
+          "type": "number"
+        },
+        "c3_km2_s2": {
+          "description": "C3 能量 (km²/s²)，双曲出发须 >0",
+          "exclusiveMinimum": 0.0,
+          "title": "C3 Km2 S2",
+          "type": "number"
+        }
+      },
+      "required": [
+        "rha_deg",
+        "dha_deg",
+        "c3_km2_s2"
+      ],
+      "title": "DepartureAsymptote",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "description": "转移轨道设计输入（对齐 algorithm/transfer 的 transfer_orbit 参数）。",
   "properties": {
     "transfer_type": {
-      "description": "HMN/LGA/WSB/low_thrust",
+      "description": "HMN/LGA/WSB/low_thrust/PCN（patched-conic 目标参数化）",
       "title": "Transfer Type",
       "type": "string"
     },
@@ -20,7 +84,7 @@
     },
     "incl_deg": {
       "default": 28.5,
-      "description": "轨道倾角 (度)",
+      "description": "轨道倾角 (度；PCN 路径不参与构造)",
       "maximum": 180.0,
       "minimum": 0.0,
       "title": "Incl Deg",
@@ -28,7 +92,7 @@
     },
     "flight_path_deg": {
       "default": 0.0,
-      "description": "航迹角 (度，仅支持 0)",
+      "description": "航迹角 (度，仅支持 0；PCN 路径不参与构造)",
       "maximum": 0.0,
       "minimum": 0.0,
       "title": "Flight Path Deg",
@@ -36,7 +100,7 @@
     },
     "target_ephemeris": {
       "default": null,
-      "description": "目标星历（EphemerisTable/NominalOrbit/ndarray），LGA/WSB 必需。坐标系契约按转移类型区分：LGA/WSB 要求会合旋转系（synodic）物理单位（km, km/s）状态，编排器直接无量纲化，不做惯性系→旋转系转换，orbit_propagation/design_orbit 产出的惯性星历必须先经 spacetime_transform(j2000_to_synodic) 转换后再传入，否则目标态几何全错；HMN/low_thrust 按地心惯性系 km/km/s 状态解释。",
+      "description": "目标星历（EphemerisTable/NominalOrbit/ndarray），LGA/WSB 必需。坐标系契约按转移类型区分：LGA/WSB 要求会合旋转系（synodic）物理单位（km, km/s）状态，编排器直接无量纲化，不做惯性系→旋转系转换，orbit_propagation/design_orbit 产出的惯性星历必须先经 spacetime_transform(j2000_to_synodic) 转换后再传入，否则目标态几何全错；HMN/low_thrust 按地心惯性系 km/km/s 状态解释；PCN 不使用（月球取 CR3BP圆型理想化几何）。",
       "title": "Target Ephemeris"
     },
     "target_orbit_radius_km": {
@@ -59,6 +123,8 @@
           "items": {
             "type": "number"
           },
+          "maxItems": 2,
+          "minItems": 2,
           "type": "array"
         },
         {
@@ -66,7 +132,7 @@
         }
       ],
       "default": null,
-      "description": "飞行时间范围 [min, max]（天）",
+      "description": "飞行时间范围 [min, max]（天；须为有限数对且 min < max）：HMN 作 Lambert 扫描窗口、WSB 作搜索窗口、PCN 覆盖 PcnSearchParams.tof_range_days（到达与出发两种模式共用的 tof 搜索网格）；LGA/low_thrust 不使用",
       "title": "Tof Range"
     },
     "lga_search_params": {
@@ -195,6 +261,30 @@
       "default": null,
       "description": "top-N 可行解契约（#583，ADR 0040 增补；可选）：返回至多 N 个可行候选（按上报 Δv 升序，选中解标记），推荐值 DEFAULT_TOP_N=5。缺省 None 不开启，行为与单解契约逐字段一致",
       "title": "Top N"
+    },
+    "bplane_target": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BplaneTarget"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "PCN 到达模式目标：月心 B-plane（#635；与 departure_asymptote 二选一）。给定近月点高度与 B·T/B·R，打靶求解出发渐近线使其命中"
+    },
+    "departure_asymptote": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DepartureAsymptote"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "PCN 出发模式渐近线（#635；与 bplane_target 二选一）。给定出发双曲渐近线，无迭代解算月心 B-plane 与 LOI 脉冲"
     }
   },
   "required": [
