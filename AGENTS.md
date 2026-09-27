@@ -28,7 +28,7 @@ ParamsPanel（frontend/src/schema.ts:TOOL_REGISTRY 的 JSON Schema 生成表单�
 
 - 帧格式见 `src-tauri/src/sidecar/frames.rs`：`magic 0x324D_3245 | dtype(f32/f64) | ndim | shape | data`。
 - 事件名只有三个：`sidecar-progress`、`assistant-event`、`update-download-progress`。
-- 产物自动入 e2m2e catalog（`catalog/` 目录），取用走 `catalog_query` / `get_artifact`（后者懒加载大数组）。
+- 产物自动入 e2m2e catalog（用户配置目录下的 `catalog/`，Rust 壳经 `E2M2E_CATALOG_DIR` / `E2M2E_CATALOG_ENABLED` 注入；随包分发的基线数据集首启按版本导入），取用走 `catalog_query` / `get_artifact`（后者懒加载大数组）。
 - **AI 助手是并行的第二条链路**：`assistant_send` → `omp acp` → 本二进制 `--assistant-mcp-bridge`（MCP 桥）→ `e2m2e mcp-serve` + 宿主工具（`scenario_write` / `scenario_list`）。只读工具（`assistant/events.rs:READ_ONLY_TOOLS`）免确认，其余出工具卡片审批；凭据永不进前端。
 - 契约同步机制：唯一 codegen 是 `tools/export_tool_schemas.py`（e2m2e Pydantic request → `frontend/src/toolSchemas/<tool>.json`，**升级 e2m2e 后必须重跑**）；Rust ↔ TS 类型无 codegen，靠 `cmd.rs` ↔ `sidecarApi.ts` 手工对偶；跨层数值常量手工同步并在注释标注（`paramOverlay` 的 `TU_SECONDS=375676.97` 与 `cr3bp.ts` 的 `375190.26` 是两种口径，勿混用）。
 
@@ -44,7 +44,7 @@ ParamsPanel（frontend/src/schema.ts:TOOL_REGISTRY 的 JSON Schema 生成表单�
 | `scripts/` `tools/` | 手工/发布期脚本（不进测试套件）与 codegen |
 | `docs/` | `adr/`（决策记录正典）、`architecture/`、`specs/`、`source/`（Sphinx）、`development.md`（写作与日志规范） |
 | `kernels/` `data/` | SPICE 内核（Git LFS）、CR3BP 数据集 |
-| `catalog/` `output/` | 运行期产物目录，不提交 |
+| `catalog/` `output/` | 运行期产物目录，不提交；仓库根 `catalog/` 只服务 Python 领域层默认与脚本（GUI 落用户配置目录） |
 
 ## Development Commands
 
