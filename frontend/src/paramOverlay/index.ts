@@ -297,6 +297,12 @@ export function branchSelection(
  *     值域是 145000~340000，提交校验当场拦停，承诺的"振幅留空取精确共振成员"
  *     画像根本到不了用户手里。
  *  用户真正改过的值（与两个默认值都不同）原样保留。
+ *
+ *  `previousBranch` 必填：缺了它这条规则会静默退回旧行为（旧分支默认值照旧跟随），
+ *  声明成可选等于给未来的新调用点留一个静默回退的坑。
+ *  `previousBranch` is required: without it the rule silently reverts to the old
+ *  behavior (the previous branch's defaults follow again), so an optional parameter
+ *  would leave a silent-regression trap for future callers.
  *  Migrates parameters when the branch type switches: only values that are genuinely
  *  user input carry over, and the new branch's defaults take over the rest. "Genuinely
  *  user input" means neither the model default nor the previous branch's default —
@@ -314,10 +320,10 @@ export function switchBranch(
   values: Record<string, unknown>,
   branchKey: string,
   branchType: string,
-  previousBranch?: string,
+  previousBranch: string,
 ): Record<string, unknown> {
   const pruned: Record<string, unknown> = { [branchKey]: branchType };
-  const previousDefaults = previousBranch ? getBranchDefaults(toolName, previousBranch) : {};
+  const previousDefaults = getBranchDefaults(toolName, previousBranch);
   for (const field of getFieldApplicability(toolName, branchType)) {
     if (field === branchKey) continue;
     const val = values[field];
