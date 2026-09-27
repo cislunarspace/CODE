@@ -237,4 +237,4 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 
 配置变更跑 `/setup-ouyangjiahong-skills`，面板状态迁移跑 `/github-project`。
 
-技能（尤其带默认值的配置类技能）给的默认值不是仓库决策。落盘前先读相关的 `docs/adr/` 与 `CONTRIBUTING.md`；默认值与已记录决策冲突时以仓库决策为准，把冲突摆给维护者拍板，不默默覆盖。实例：技能默认集里的 `wontfix` 标签，已随 ADR 0029 的标签迁移删除，语义由 `type/*`、面板终态 `No action` 与 `needs-info` 承担，不应重建。
+技能（尤其带默认值的配置类技能）给的默认值不是仓库决策。落盘前先读相关的 `docs/adr/` 与 `CONTRIBUTING.md`；默认值与已记录决策冲突时以仓库决策为准，把冲突摆给维护者拍板，不默默覆盖。实例：技能默认集里的 `wontfix` 标签，已随 ADR 0029 的标签迁移删除，语义由面板终态 `No action` 承担，不应重建。

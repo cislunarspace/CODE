@@ -12,7 +12,7 @@
 
 当技能提到某个角色时（如“打上 AFK 就绪的分诊标签”），使用本表中对应的标签字符串。
 
-`wontfix` 没有对应标签，这是 ADR 0029 的刻意选择：旧默认集里的 `wontfix` 已随标签迁移删除，其语义由 `type/*`、面板终态 `No action` 与 `needs-info` 承担。分诊到 `wontfix` 时，issue 以 Not planned 原因关闭，面板 Status 置为 `No action`，不重建该标签。
+`wontfix` 没有对应标签，这是 ADR 0029 的刻意选择：旧默认集里的 `wontfix` 已随标签迁移删除，其语义由面板终态 `No action` 承担。分诊到 `wontfix` 时，issue 以 Not planned 原因关闭，面板 Status 置为 `No action`，不重建该标签。
 
 ## 分类角色
 
