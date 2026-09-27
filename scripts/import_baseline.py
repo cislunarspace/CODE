@@ -104,12 +104,14 @@ def main() -> int:
 
     catalog_dir = args.catalog_dir or _default_catalog_dir()
 
-    # 在 import e2m2e 之前钉住库目录：Config 从环境构造，这里是它的唯一输入
-    # Pin the catalog directory before importing e2m2e: Config builds from the
-    # environment and this is its only input.
-    os.environ["E2M2E_CATALOG_DIR"] = str(catalog_dir)
-    os.environ.setdefault("E2M2E_CATALOG_ENABLED", "1")
-
+    # 库目录直接传给 CatalogStore，不经 Config：e2m2e 的这两个环境变量只在
+    # Config 字段的 default_factory 处被读，数据层（data/catalog/*）不读环境，
+    # 故本脚本不需要写环境变量。E2M2E_CATALOG_DIR 的读取发生在
+    # _default_catalog_dir 里（作为缺省值来源）。
+    # The catalog directory goes straight to CatalogStore, bypassing Config: e2m2e
+    # reads those two env vars only in Config's field default_factory, and the data
+    # layer (data/catalog/*) reads no environment at all, so this script writes
+    # none. E2M2E_CATALOG_DIR is read in _default_catalog_dir, as the default.
     from e2m2e.data.catalog import CatalogStore
     from e2m2e.data.catalog.baseline import import_baseline
 

@@ -63,7 +63,8 @@ JSON，给定近月点高度与 B·T / B·R），出发模式填 `departure_asym
 ## 其余工具
 
 19 个工具的 schema 已全部导出（`frontend/src/toolSchemas/`，含 6 个 catalog
-操作、3 个分区解析工具与 2 个无参查询工具 `valid_ranges` / `catalog_terminology`）。
+操作、5 个分区解析工具、6 个核心计算工具与 2 个无参查询工具 `valid_ranges` /
+`catalog_terminology`）。
 任务轨道设计、轨道保持、轨道预报与时空坐标转换的参数以 schema 为准；
 参数空间扫描（catalog_sweep）在工具面板直接可用；轨道稳定性界面上没有入口
 （上游 5.9.3 起不再暴露该工具）。
