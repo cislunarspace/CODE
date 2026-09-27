@@ -11,7 +11,11 @@ use serde_json::json;
 use transfer_orbit_design_lib::cmd::artifact_from_catalog_get;
 use transfer_orbit_design_lib::sidecar::SidecarHandle;
 
+mod common;
+
 async fn spawn() -> SidecarHandle {
+    // 未显式配置 catalog 时 e2m2e 5.9.7 让 record_id 静默为 None（ADR 0047）
+    common::install_catalog_env("tod-design-eph-catalog");
     let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     SidecarHandle::spawn(&["uv", "run", "e2m2e", "serve-stdio"], Some(repo_root))
         .expect("拉起 sidecar 失败（uv 环境可用？）")

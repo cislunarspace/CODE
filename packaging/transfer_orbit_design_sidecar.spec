@@ -16,10 +16,16 @@ stdin/stdout 管道不受影响。
 "No ephemeris files are opened"（4.6.0 及之前版本的实际缺陷，发布流水线
 的 sidecar 冒烟步骤即为此守卫）。
 
+基线数据集（ADR 0036/0047）：e2m2e 5.9.5 起基线 CR3BP 族移出 wheel，release
+流水线在构建前把 zip 下到 packaging/baseline/，这里整目录收进包（不解压，
+首启由 sidecar_main 导入）。目录缺失只告警——本地临时构建不受罚，发布闸
+由 smoke 的 --baseline 把关。
+
 构建：uv run pyinstaller packaging/transfer_orbit_design_sidecar.spec --noconfirm
 产物：dist/transfer-orbit-design-sidecar(.exe)，随后复制到 src-tauri/binaries/ 供 tauri 打包。
 """
 
+import logging
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
@@ -28,6 +34,14 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 spec_dir = Path(SPECPATH).resolve()
 
 datas = collect_data_files("e2m2e") + collect_data_files("R2S2")
+baseline_dir = spec_dir / "baseline"
+if baseline_dir.is_dir() and any(baseline_dir.glob("*.zip")):
+    datas += [(str(baseline_dir), "baseline")]
+else:
+    logging.warning(
+        "packaging/baseline/ 内无基线 zip，包内不含预置族；"
+        "release 流水线应在构建前下载（见 .github/workflows/release.yml）"
+    )
 binaries = []
 hiddenimports = [
     # calcephpy（e2m2e→r2s2 传递依赖）为 C 扩展包，可能经懒加载躲过静态分析

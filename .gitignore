@@ -86,6 +86,9 @@ Desktop.ini
 /results/
 /out
 
+# 基线数据集 zip（release 构建期下载，随包分发，见 release.yml）
+/packaging/baseline/
+
 # GUI 与本地配置
 gui_defaults.json   # 用户自定义默认值（可能含本地路径）
 e2m2e               # 符号链接（指向 ~/codes/e2m2e/e2m2e，由 setup_symlink.sh 管理）
