@@ -18,16 +18,15 @@ import dayjs from "dayjs";
 import { type SchemaProperty, type ToolSchema } from "./schema";
 import {
   branchSelection,
+  switchBranch,
   UNIT_DEFINITIONS,
   toStandardValue,
   fromStandardValue,
-  getBranchDefaults,
   getActiveFields,
   ENUM_OPTIONS,
   BRANCH_TYPE_OPTIONS,
   FIELD_TOOLTIPS,
   formatRangePrompt,
-  getFieldApplicability,
   withParamDefaults,
 } from "./paramOverlay";
 
@@ -80,21 +79,7 @@ export function ParamsPanel({ toolName, schema, values, onChange, fieldErrors }:
     // 切分支类型（orbit_type / transfer_type）时联动
     // Linked updates when the branch type (orbit_type / transfer_type) switches.
     if (fieldName === branchKey && typeof displayVal === "string") {
-      const newBranch = getBranchDefaults(toolName, displayVal);
-      const allowed = getFieldApplicability(toolName, displayVal);
-      const pruned: any = { [branchKey]: displayVal };
-      for (const f of allowed) {
-        const val = next[f];
-        if (val !== undefined && f !== branchKey) {
-          pruned[f] = val;
-        }
-      }
-      for (const [k, defVal] of Object.entries(newBranch)) {
-        if (pruned[k] === undefined) {
-          pruned[k] = defVal;
-        }
-      }
-      onChange(pruned);
+      onChange(switchBranch(toolName, schema, next, branchKey, displayVal));
       return;
     }
 

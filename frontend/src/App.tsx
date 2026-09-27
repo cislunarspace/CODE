@@ -1303,10 +1303,16 @@ export default function App() {
       // PCN 回显（5.9.7）：响应带 bplane / departure_asymptote 时把摘要发成成功
       // 提示——这两个字段是 PCN 几何的唯一出口（Δv 总数看不出打靶是否命中），
       // 其余工具维持 run.complete。
+      // 摘要按用户提交的参数化选边，而不是按字段是否非空：出发模式成功时上游
+      // 同时回显 bplane（pcn.py `_solve_departure_mode` 两字段都填），先判
+      // bplane 会把出发模式的赤经/赤纬/C3 回显永远藏掉。
       // PCN echo (5.9.7): when the response carries bplane / departure_asymptote,
       // send the summary as the success toast — those fields are the only outlet for
       // the PCN geometry (total Δv alone does not show whether the targeting hit);
-      // other tools keep run.complete.
+      // other tools keep run.complete. The summary picks the side the user actually
+      // submitted, not whichever field is non-null: a successful departure-mode run
+      // also echoes bplane (pcn.py's _solve_departure_mode fills both), so testing
+      // bplane first would hide the departure-mode rha/dha/C3 echo forever.
       const transferData = (resp.data ?? {}) as Record<string, unknown>;
       const bplane =
         selectedTool === "transfer_design" ? (transferData.bplane as BplaneInfo | null | undefined) : null;
@@ -1314,13 +1320,25 @@ export default function App() {
         selectedTool === "transfer_design"
           ? (transferData.departure_asymptote as DepartureAsymptoteInfo | null | undefined)
           : null;
+      const wantsAsymptote =
+        selectedTool === "transfer_design" &&
+        cleaned.departure_asymptote !== undefined &&
+        cleaned.departure_asymptote !== null;
       // 软失败（stagnated/infeasible）时 delta_v 是 inf，摘要里不写 “Infinity km/s”
       // A soft failure (stagnated/infeasible) reports delta_v as inf; the summary
       // must not read "Infinity km/s".
       const dvText = Number.isFinite(Number(transferData.delta_v))
         ? Number(transferData.delta_v).toFixed(2)
         : "—";
-      if (bplane) {
+      if (wantsAsymptote && asymptote) {
+        message.success(
+          t("run.pcn_asymptote")
+            .replace("{dv}", dvText)
+            .replace("{rha}", asymptote.rha_deg.toFixed(2))
+            .replace("{dha}", asymptote.dha_deg.toFixed(2))
+            .replace("{c3}", asymptote.c3_km2_s2.toFixed(3)),
+        );
+      } else if (bplane) {
         message.success(
           t("run.pcn_bplane")
             .replace("{dv}", dvText)
@@ -1328,14 +1346,6 @@ export default function App() {
             .replace("{bt}", bplane.bdot_t_km.toFixed(1))
             .replace("{br}", bplane.bdot_r_km.toFixed(1))
             .replace("{vinf}", bplane.v_inf_km_s.toFixed(3)),
-        );
-      } else if (asymptote) {
-        message.success(
-          t("run.pcn_asymptote")
-            .replace("{dv}", dvText)
-            .replace("{rha}", asymptote.rha_deg.toFixed(2))
-            .replace("{dha}", asymptote.dha_deg.toFixed(2))
-            .replace("{c3}", asymptote.c3_km2_s2.toFixed(3)),
         );
       } else {
         message.success(t("run.complete"));

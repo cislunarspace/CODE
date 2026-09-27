@@ -286,6 +286,44 @@ export function branchSelection(
   return { key, type: (values[key] as string) || (key === "transfer_type" ? "HMN" : "HALO") };
 }
 
+/** 切分支类型（orbit_type / transfer_type）时的参数迁移：保留新分支适用的已填值，
+ *  新分支的默认值接管空位，以及**仍是模型默认值**的字段。
+ *
+ *  后者是关键：挂载时 `withParamDefaults` 已把模型默认值填进来，用户没动过的字段
+ *  就此"非空"，若把它当作已填值沿用，新分支更具体的默认永远落不了地——
+ *  design_orbit 的 HALO→RO 就是这样：output_step 停在模型默认 3600，而 RO 的实测
+ *  收敛画像要 36000（用户看不出差别，提交的弧长分辨率却整个变了）。用户真正改过的
+ *  值（≠ 模型默认值）仍原样保留。
+ *  Migrates parameters when the branch type switches: values applicable to the new
+ *  branch are kept, and the new branch's defaults take over empty slots plus fields
+ *  still holding the model default. That last rule matters: mounting already filled
+ *  the model defaults, so an untouched field is "non-empty"; treating it as user input
+ *  would stop the new branch's more specific default from ever landing (design_orbit's
+ *  HALO→RO leaves output_step at the model default 3600 while RO's measured profile
+ *  needs 36000). Values the user really changed (≠ model default) are kept as-is. */
+export function switchBranch(
+  toolName: string,
+  schema: ToolSchema,
+  values: Record<string, unknown>,
+  branchKey: string,
+  branchType: string,
+): Record<string, unknown> {
+  const pruned: Record<string, unknown> = { [branchKey]: branchType };
+  for (const field of getFieldApplicability(toolName, branchType)) {
+    if (field === branchKey) continue;
+    const val = values[field];
+    if (val !== undefined) pruned[field] = val;
+  }
+  for (const [field, defVal] of Object.entries(getBranchDefaults(toolName, branchType))) {
+    const modelDefault = schema.properties[field]?.default;
+    const carried = pruned[field];
+    if (carried === undefined || (modelDefault !== undefined && carried === modelDefault)) {
+      pruned[field] = defVal;
+    }
+  }
+  return pruned;
+}
+
 /** 分支键类型预置下拉（键 = 工具名，字段为 orbit_type）；transfer_design 的
  *  transfer_type 走 ENUM_OPTIONS，不在此列。 */
 /** Branch-key type preset dropdowns (keyed by tool name, field orbit_type);

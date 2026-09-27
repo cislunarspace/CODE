@@ -11,6 +11,7 @@ import {
   formatRangePrompt,
   getFieldApplicability,
   withParamDefaults,
+  switchBranch,
   TU_SECONDS,
 } from "./index";
 import type { ToolSchema } from "../schema";
@@ -254,6 +255,56 @@ describe("转移设计类型联动 (transfer_design)", () => {
     for (const common of ["transfer_type", "tli_epoch", "parking_alt_km", "incl_deg", "flight_path_deg", "tof_range"]) {
       expect(pcn).toContain(common);
     }
+  });
+});
+
+describe("switchBranch 切分支时的参数迁移", () => {
+  const schema = toolEntry("design_orbit").schema;
+
+  it("HALO→RO：模型默认值不算用户输入，RO 画像落到位；用户改过的值保留", () => {
+    // 挂载后的 HALO 参数（output_step 仍是模型默认 3600）
+    const mounted = withParamDefaults("design_orbit", schema, {}, "orbit_type", "HALO")!;
+    expect(mounted.output_step).toBe(3600);
+
+    const switched = switchBranch("design_orbit", schema, { ...mounted, orbit_type: "RO" }, "orbit_type", "RO");
+    expect(switched.orbit_type).toBe("RO");
+    expect(switched.output_step).toBe(36000);
+    expect(switched.duration).toBe(300000);
+    expect(switched.resonance_p).toBe(4);
+    expect(switched.resonance_q).toBe(1);
+    // 公共字段照旧带过去
+    // Shared fields still carry over.
+    expect(switched.epoch).toEqual([2024, 1, 1, 0, 0, 0.0]);
+    expect(switched.correction_method).toBe("two_level");
+    // HALO 的 amplitude 属于 RO 适用字段，按既有迁移规则带过去（越界由提交校验拦）
+    // HALO's amplitude is applicable to RO and carries over per the existing
+    // migration rule (submission validation catches the out-of-range value).
+    expect(switched.amplitude).toBe(30000);
+
+    // 用户改过的 output_step（≠ 模型默认值）不被新分支默认值覆盖
+    // An output_step the user changed (≠ model default) is not overwritten.
+    const typed = switchBranch(
+      "design_orbit",
+      schema,
+      { ...mounted, output_step: 7200 },
+      "orbit_type",
+      "RO",
+    );
+    expect(typed.output_step).toBe(7200);
+  });
+
+  it("新分支不适用的字段被丢弃；转移设计的 tof_range 由 PCN 默认值补上", () => {
+    const halo = switchBranch("design_orbit", schema, { ...withParamDefaults("design_orbit", schema, {}, "orbit_type", "HALO")! }, "orbit_type", "DRO");
+    expect("north_south" in halo).toBe(false);
+    expect(halo.amplitude).toBe(30000);
+
+    const transfer = toolEntry("transfer_design").schema;
+    const hmn = withParamDefaults("transfer_design", transfer, {}, "transfer_type", "HMN")!;
+    const pcn = switchBranch("transfer_design", transfer, { ...hmn, tof_range: null }, "transfer_type", "PCN");
+    expect(pcn.tof_range).toEqual([3, 6]);
+    // HMN 的目标半径不属于 PCN 适用字段
+    // HMN's target radius is not applicable to PCN.
+    expect("target_orbit_radius_km" in pcn).toBe(false);
   });
 });
 
