@@ -109,7 +109,7 @@ _Avoid_: 轨道设计、脚本
 _Avoid_: 单条轨道设计（那是 `design_orbit`）、批量并发跑多条单轨道
 
 **稳定性分析** (`orbit_stability`):
-e2m2e 的轨道稳定性分析能力（Floquet 乘子、稳定性指数、分类与分岔检测），实现留在 `e2m2e.algorithm.stability`。GUI 与本仓均不暴露该入口：上游 e2m2e 5.9.3 的工具清单已移除 `orbit_stability`（此前的空参 placeholder schema 一并消失），需要时用 e2m2e CLI。
+e2m2e 的轨道稳定性分析能力（Floquet 乘子、稳定性指数、分类与分岔检测），实现留在 `e2m2e.algorithm.stability`，只有 Python API 可达。GUI 与本仓均不暴露该入口：上游 e2m2e 5.9.3 的工具清单已移除 `orbit_stability`（此前的空参 placeholder schema 一并消失），CLI 也没有对应子命令，需要时在脚本里直接调该 Python API。
 _Avoid_: 轨道设计、轨道族生成
 
 **转移设计** (`transfer_design`):

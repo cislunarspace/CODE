@@ -3,8 +3,9 @@
 中栏工具面板接通八个工具：轨道族生成、任务轨道设计、参数空间扫描
 （catalog_sweep）、轨道保持、轨道预报、转移轨道设计、时空坐标转换与
 分区边界（spatiography_boundaries）；轨道稳定性已随上游移除（e2m2e 5.9.3
-的工具清单不再暴露它，空参 placeholder 一并消失），能力本体仍在 e2m2e
-算法层与 CLI。参数面板由工具的 JSON Schema 自动生成：字段范围、
+的工具清单不再暴露它，空参 placeholder 一并消失），能力本体留在
+`e2m2e.algorithm.stability` 的 Python API，CLI 无对应子命令。参数面板由工具的
+JSON Schema 自动生成：字段范围、
 默认值与说明来自 e2m2e 的 Pydantic 模型；按 `orbit_type` 裁剪，只显示当前族
 适用的字段；Optional 字段以勾选控制传不传值（勾选即传、不勾视为未设置）。
 本页展开说明轨道族生成与转移设计，其余工具的参数见各 schema 与
@@ -61,11 +62,13 @@ JSON，给定近月点高度与 B·T / B·R），出发模式填 `departure_asym
 
 ## 其余工具
 
-17 个工具的 schema 已全部导出（`frontend/src/toolSchemas/`，含 7 个 catalog
-操作与 3 个分区解析工具）。任务轨道设计、轨道保持、轨道预报与时空坐标转换的
-参数以 schema 为准；轨道稳定性 schema 已导出，待上游放开后接入；
-参数空间扫描（catalog_sweep）在工具面板直接可用。
+19 个工具的 schema 已全部导出（`frontend/src/toolSchemas/`，含 6 个 catalog
+操作、3 个分区解析工具与 2 个无参查询工具 `valid_ranges` / `catalog_terminology`）。
+任务轨道设计、轨道保持、轨道预报与时空坐标转换的参数以 schema 为准；
+参数空间扫描（catalog_sweep）在工具面板直接可用；轨道稳定性界面上没有入口
+（上游 5.9.3 起不再暴露该工具）。
 catalog 管理操作的
 界面分布：查询/取用由目录浏览与画布叠加承担，删除在项目树右键菜单，标注
-与族成员提升在记录详情面板，教学案例包导出在过滤栏。需要脚本化工作流时
+在记录详情面板，教学案例包导出在过滤栏（catalog_promote 已随一轨一记录移除）。
+需要脚本化工作流时
 经 [e2m2e CLI](https://cislunarspace.github.io/CODE-core/) 使用。
