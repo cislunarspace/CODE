@@ -44,9 +44,18 @@ DESIGN_ARGS = {
     "correction_method": "segmented",
 }
 
-#: 基线数据集成员记录数下限（5.9.0 束共 13 族 592 条成员）。断言防的是
-#: 部分导入与整包漏带，不钉精确值——上游加成员不应让冒烟变红。
+#: 基线数据集门槛：成员记录数下限（5.9.0 束共 13 族 592 条成员）+ 族数下限。
+#: 单看条数会漏掉"缺族"——去掉 5 个族仍有 533 条，落在 500 之上，缺了预置族的
+#: 安装包照样能过闸；族数下限防这一头，条数下限防"某族只导入一部分"。两者都留
+#: 余量（不钉精确值），上游加族加成员不会让冒烟变红。
+#: Thresholds for the baseline dataset: a floor on member records (the 5.9.0 bundle
+#: has 13 families / 592 members) plus a floor on families. Record count alone misses
+#: missing families (dropping 5 families still leaves 533, above 500, so a package
+#: without preloaded families would pass); the family floor covers that side, the
+#: record floor covers a partially imported family. Both keep headroom (no pinned
+#: exact values) so upstream adding families or members never turns the smoke red.
 MIN_BASELINE_RECORDS = 500
+MIN_BASELINE_FAMILIES = 13
 
 
 def main() -> int:
@@ -160,6 +169,7 @@ def main() -> int:
     # whatever this query returns is exactly what the bundled baseline data
     # produced (missing bundle → 0 records → red).
     baseline_count = None
+    baseline_families = 0
     if baseline_tmp:
         send(
             {
@@ -174,12 +184,14 @@ def main() -> int:
         qcontent = qresult.get("content", [])
         qtext = qcontent[0].get("text", "") if qcontent else ""
         try:
-            baseline_count = len(json.loads(qtext).get("data", {}).get("records", []))
+            records = json.loads(qtext).get("data", {}).get("records", [])
+            baseline_count = len(records)
+            baseline_families = len({r.get("family_id") for r in records if r.get("family_id")})
         except (json.JSONDecodeError, AttributeError):
             print(f"FAIL: catalog_query 返回无法解析：{qtext[:400]}")
             proc.kill()
             return 1
-        print(f"tools/call catalog_query(tag=baseline) → {baseline_count} 条记录")
+        print(f"tools/call catalog_query(tag=baseline) → {baseline_count} 条记录 / {baseline_families} 族")
 
     proc.terminate()
     try:
@@ -193,10 +205,13 @@ def main() -> int:
     if is_error or "converged" not in text:
         print("FAIL: design_orbit 未收敛或返回错误")
         return 1
-    if baseline_count is not None and baseline_count < MIN_BASELINE_RECORDS:
+    if baseline_count is not None and (
+        baseline_count < MIN_BASELINE_RECORDS or baseline_families < MIN_BASELINE_FAMILIES
+    ):
         print(
-            f"FAIL: 库内基线记录 {baseline_count} 条，少于 {MIN_BASELINE_RECORDS}——"
-            "包内基线数据集缺失或导入残缺（检查构建前的下载步骤与 spec 的 datas）"
+            f"FAIL: 库内基线 {baseline_count} 条 / {baseline_families} 族，少于 "
+            f"{MIN_BASELINE_RECORDS} 条 / {MIN_BASELINE_FAMILIES} 族——包内基线数据集缺失、"
+            "缺族或导入残缺（检查构建前的下载步骤与 spec 的 datas）"
         )
         return 1
     print("OK")
