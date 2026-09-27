@@ -51,7 +51,7 @@ Issue 不用 kind 标签，分类由模板创建时自动打的标签承担（`t
 
 ## Project 流水线
 
-本仓库与 [e2m2e](https://github.com/cislunarspace/CODE-core) 共用一块推进面板「[cislunarspace Issue Management](https://github.com/users/ouyangjiahong26/projects/1)」，Repository 字段区分来源，两个仓的工作同屏排序：
+本仓库与 [e2m2e](https://github.com/cislunarspace/CODE-core) 共用一块推进面板 “[cislunarspace Issue Management](https://github.com/orgs/cislunarspace/projects/4)”，Repository 字段区分来源，两个仓的工作同屏排序：
 
 | 状态 | 含义 |
 |---|---|
