@@ -354,11 +354,21 @@ export function withParamDefaults(
     next[branchKey] = branchType;
     changed = true;
   }
-  for (const field of active) {
-    fill(field, schema.properties[field]?.default);
-  }
+  // 分支默认值先于模型默认值填入：两者都覆盖同一字段时，更具体的分支值优先。
+  // fill 只填空位，故这个顺序就决定用户没填时谁生效——RO 的 output_step 是
+  // 现存的唯一冲突（schema 默认 3600 会压掉 RO 实测画像的 36000，界面上看不
+  // 出差别，但提交的弧长分辨率完全变了）。
+  // Branch defaults are filled before model defaults: when both cover a field,
+  // the more specific branch value wins. fill only touches empty slots, so this
+  // order decides what applies when the user typed nothing — RO's output_step is
+  // the one existing collision (the schema default 3600 would shadow the 36000 of
+  // RO's measured profile: invisible in the form, but it changes the submitted
+  // arc resolution wholesale).
   for (const [field, defVal] of Object.entries(getBranchDefaults(toolName, branchType))) {
     fill(field, defVal);
+  }
+  for (const field of active) {
+    fill(field, schema.properties[field]?.default);
   }
   return changed ? next : null;
 }
@@ -437,7 +447,7 @@ export const FIELD_TOOLTIPS: Record<string, string> = {
   phase: "轨道初始相位（0~1 周期份额）。DRO/DPO 默认 0.5001；NRHO 默认 0.5；Halo 默认 0.0。",
   collinear_point: "共线平动点编号：1=L1, 2=L2, 3=L3。LYAPUNOV 用 1 或 2。",
   north_south: "Halo / NRHO 轨道的南北族分类：1=北族 (Class I, z>0), 2=南族 (Class II, z<0)。",
-  perilune_height: "近月点高度（km）。NRHO 1000~40000 km（默认 5000）；ELFO 默认 200 km。",
+  perilune_height: "近月点高度（km）。NRHO 100~40000 km（默认 5000）；ELFO 默认 200 km。",
   resonance_p:
     "共振比卫星侧整数（p:q = 卫星:月球）。仅 RO 用，须与 resonance_q 组成支持档位之一：2:1 / 3:1 / 3:2 / 4:1 / 4:3。星历修正对共振比敏感：4:1（默认画像）收敛，3:1 实测不收敛（上游待跟进），其余档位未验证；换档位时同时调整弧长与步长再试。",
   resonance_q: "共振比月球侧整数，仅 RO 用，与 resonance_p 成对。",

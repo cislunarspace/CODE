@@ -14,6 +14,7 @@ import {
   TU_SECONDS,
 } from "./index";
 import type { ToolSchema } from "../schema";
+import { toolEntry } from "../schema";
 
 describe("参数覆写层 (paramOverlay)", () => {
   it("17 个单位字段正确注册且首项为标准单位 (toStandard = 1.0)", () => {
@@ -280,6 +281,21 @@ describe("e2m2e 5.9.7 新能力接入", () => {
       output_step: 36000,
     });
     expect("amplitude" in getBranchDefaults("design_orbit", "RO")).toBe(false);
+
+    // 生效结果而不只是表值：分支默认值必须先于模型默认值填入，否则 schema 的
+    // output_step 默认 3600 会压掉 RO 画像的 36000（表里对、表单里错）。
+    // The effective result, not just the table: branch defaults must be filled
+    // before model defaults, else the schema's output_step default 3600 shadows
+    // RO's 36000 (right in the table, wrong in the form).
+    const filled = withParamDefaults("design_orbit", toolEntry("design_orbit").schema, {}, "orbit_type", "RO")!;
+    expect(filled.output_step).toBe(36000);
+    expect(filled.duration).toBe(300000);
+    expect(filled.resonance_p).toBe(4);
+    expect(filled.resonance_q).toBe(1);
+    // 模型默认值仍照填（RO 没覆盖的字段）
+    // Model defaults still apply for fields RO does not cover.
+    expect(filled.correction_method).toBe("two_level");
+    expect(filled.epoch).toEqual([2024, 1, 1, 0, 0, 0.0]);
 
     expect(getFieldApplicability("design_orbit", "LYAPUNOV")).toContain("amplitude");
     expect(getFieldApplicability("design_orbit", "LYAPUNOV")).toContain("collinear_point");
