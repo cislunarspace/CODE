@@ -286,33 +286,48 @@ export function branchSelection(
   return { key, type: (values[key] as string) || (key === "transfer_type" ? "HMN" : "HALO") };
 }
 
-/** 切分支类型（orbit_type / transfer_type）时的参数迁移：保留新分支适用的已填值，
- *  新分支的默认值接管空位，以及**仍是模型默认值**的字段。
+/** 切分支类型（orbit_type / transfer_type）时的参数迁移：只带走真正属于用户输入的值，
+ *  新分支的默认值接管其余字段。
  *
- *  后者是关键：挂载时 `withParamDefaults` 已把模型默认值填进来，用户没动过的字段
- *  就此"非空"，若把它当作已填值沿用，新分支更具体的默认永远落不了地——
- *  design_orbit 的 HALO→RO 就是这样：output_step 停在模型默认 3600，而 RO 的实测
- *  收敛画像要 36000（用户看不出差别，提交的弧长分辨率却整个变了）。用户真正改过的
- *  值（≠ 模型默认值）仍原样保留。
- *  Migrates parameters when the branch type switches: values applicable to the new
- *  branch are kept, and the new branch's defaults take over empty slots plus fields
- *  still holding the model default. That last rule matters: mounting already filled
- *  the model defaults, so an untouched field is "non-empty"; treating it as user input
- *  would stop the new branch's more specific default from ever landing (design_orbit's
- *  HALO→RO leaves output_step at the model default 3600 while RO's measured profile
- *  needs 36000). Values the user really changed (≠ model default) are kept as-is. */
+ *  "真正属于用户输入" = 既不是模型默认值、也不是上一分支的默认值。前两者都是自动
+ *  填进去的，用户没动过它们；把它们当已填值沿用会有两种实际后果：
+ *  1. 新分支更具体的默认永远落不了地——design_orbit 的 HALO→RO 会让 output_step
+ *     停在模型默认 3600，而 RO 的实测收敛画像要 36000；
+ *  2. 旧分支的残留值把新分支卡死——HALO 的 amplitude=30000 跟着切到 RO，而 RO 的
+ *     值域是 145000~340000，提交校验当场拦停，承诺的"振幅留空取精确共振成员"
+ *     画像根本到不了用户手里。
+ *  用户真正改过的值（与两个默认值都不同）原样保留。
+ *  Migrates parameters when the branch type switches: only values that are genuinely
+ *  user input carry over, and the new branch's defaults take over the rest. "Genuinely
+ *  user input" means neither the model default nor the previous branch's default —
+ *  both were filled in automatically. Treating them as user input has two real
+ *  consequences: (1) the new branch's more specific default can never land
+ *  (design_orbit's HALO→RO leaves output_step at the model default 3600 while RO's
+ *  measured profile needs 36000); (2) the old branch's leftover value blocks the new
+ *  one (HALO's amplitude=30000 follows into RO, whose domain is 145000~340000, so
+ *  submission validation stops it and the promised "empty amplitude selects the exact
+ *  member" profile never reaches the user). Values the user really changed (differing
+ *  from both defaults) are kept as-is. */
 export function switchBranch(
   toolName: string,
   schema: ToolSchema,
   values: Record<string, unknown>,
   branchKey: string,
   branchType: string,
+  previousBranch?: string,
 ): Record<string, unknown> {
   const pruned: Record<string, unknown> = { [branchKey]: branchType };
+  const previousDefaults = previousBranch ? getBranchDefaults(toolName, previousBranch) : {};
   for (const field of getFieldApplicability(toolName, branchType)) {
     if (field === branchKey) continue;
     const val = values[field];
-    if (val !== undefined) pruned[field] = val;
+    if (val === undefined) continue;
+    const modelDefault = schema.properties[field]?.default;
+    const isModelDefault = modelDefault !== undefined && val === modelDefault;
+    const isPreviousBranchDefault = field in previousDefaults && val === previousDefaults[field];
+    if (!isModelDefault && !isPreviousBranchDefault) {
+      pruned[field] = val;
+    }
   }
   for (const [field, defVal] of Object.entries(getBranchDefaults(toolName, branchType))) {
     const modelDefault = schema.properties[field]?.default;

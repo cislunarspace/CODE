@@ -79,7 +79,7 @@ export function ParamsPanel({ toolName, schema, values, onChange, fieldErrors }:
     // 切分支类型（orbit_type / transfer_type）时联动
     // Linked updates when the branch type (orbit_type / transfer_type) switches.
     if (fieldName === branchKey && typeof displayVal === "string") {
-      onChange(switchBranch(toolName, schema, next, branchKey, displayVal));
+      onChange(switchBranch(toolName, schema, next, branchKey, displayVal, branchType));
       return;
     }
 
