@@ -18,10 +18,12 @@
 /
 ├── CONTEXT.md
 ├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
+│   ├── 0008-output-as-persistence.md
+│   └── 0021-canvas-timeline.md
 └── src/
 ```
+
+本仓库没有上下文级 ADR：`src/**/docs/adr/` 不存在，全部决策集中在 `docs/adr/`，编号从 0001 连续到 0031。
 
 ## 使用术语表的词汇
 

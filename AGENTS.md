@@ -188,7 +188,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - 创建走 GitHub 的五类模板（Bug / Feature / Idea / Research / Task），标题前缀与 type 标签由模板预填。
 - 面板唯一自动入板规则是子 issue，普通 issue 建成后不自动入板，须手动加入：
 
-      gh project item-add 1 --owner ouyangjiahong26 --url <issue 的 URL>
+      gh project item-add 4 --owner cislunarspace --url <issue 的 URL>
 
   入板后状态自动置为 Inbox，不用手设；Inbox 之后的推进与 Priority、Start Date 由维护者手动维护（面板结构、状态语义与自动联动的完整说明见 CONTRIBUTING.md 的 Project 流水线一节）。
 
@@ -224,3 +224,17 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - **验证行为**：按影响范围运行相关检查；测试可观察行为、边界和错误路径，不测试实现细节。无法测试时说明原因并做可行的烟雾验证。
 - **审慎依赖**：优先现有依赖和标准库；新增依赖前确认必要性、维护状态和成本，并说明理由。
 - **清楚沟通**：说明做了什么、为什么、验证结果和已知风险；对不确定性给出具体事实，提交信息描述实际改动。
+
+## Agent skills
+
+工程技能的仓库级配置在 `docs/agents/`，技能在读代码库之前先读它们：
+
+| 文件 | 内容 | 消费者 |
+|---|---|---|
+| `docs/agents/issue-tracker.md` | tracker 类型、`gh` 命令、PR 是否作为请求渠道、GitHub Project 面板与字段 ID | `/triage`、`/open-pr`、`/merge-pr`、`/github-project`、`/code-review` |
+| `docs/agents/triage-labels.md` | 分诊角色到实际标签字符串的映射 | `/triage` |
+| `docs/agents/domain.md` | 领域文档（`CONTEXT.md`、`docs/adr/`）的读取与用词约定 | 全部工程技能；`/domain-modeling` 按需写入 |
+
+配置变更跑 `/setup-ouyangjiahong-skills`，面板状态迁移跑 `/github-project`。
+
+技能（尤其带默认值的配置类技能）给的默认值不是仓库决策。落盘前先读相关的 `docs/adr/` 与 `CONTRIBUTING.md`；默认值与已记录决策冲突时以仓库决策为准，把冲突摆给维护者拍板，不默默覆盖。实例：技能默认集里的 `wontfix` 标签，已随 ADR 0029 的标签迁移删除，语义由 `type/*`、面板终态 `No action` 与 `needs-info` 承担，不应重建。
