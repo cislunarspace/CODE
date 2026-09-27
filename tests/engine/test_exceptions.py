@@ -88,14 +88,17 @@ class TestTranslateE2M2EErrorBase:
         assert err.cause is raw
 
     def test_named_subclass_wins_over_base(self):
-        """具名子类分支优先于基类兜底（RustExtensionUnavailable 不可被吞）。
+        """具名子类分支优先于基类兜底，且不带上兜底的 details 载荷。
 
-        Named subclass branches take precedence over the base catch-all
-        (RustExtensionUnavailableError must not be swallowed)."""
+        Named subclass branches take precedence over the base catch-all and do
+        not carry the catch-all's details payload (RustExtensionUnavailableError
+        must not be swallowed)."""
         from e2m2e.exceptions import RustExtensionUnavailableError
 
         raw = RustExtensionUnavailableError("missing symbol")
-        assert translate_exception(raw).code == "BACKEND_UNAVAILABLE"
+        err = translate_exception(raw)
+        assert err.code == "BACKEND_UNAVAILABLE"
+        assert err.details is None
 
 
 class TestTranslateApiOrbitErrorDetails:

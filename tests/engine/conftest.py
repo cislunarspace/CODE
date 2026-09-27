@@ -219,7 +219,7 @@ class _FakeControlResult:
 
 
 @pytest.fixture()
-def catalog_bridge(tmp_path, monkeypatch):
+def catalog_bridge(tmp_path):
     """指向 tmp 库目录的 FacadeBridge（产物自动入库不污染真实库）。
 
     5.9.5 起基线数据集移出 wheel，开库不再自动导入任何记录（ADR 0047），

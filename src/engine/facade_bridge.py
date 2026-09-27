@@ -563,18 +563,11 @@ class FacadeBridge:
                 config.kernel_dir = self._kernel_dir
             if self._catalog_dir:
                 config.catalog_dir = self._catalog_dir
-            # 5.9.5 起 catalog_enabled 默认随 $E2M2E_CATALOG_ENABLED 为关
-            # （ADR 0047：库不猜路径、不隐式建库），未开时产品型方法成功后
+            # 5.9.5 起 catalog_enabled 默认随 $E2M2E_CATALOG_ENABLED 为关（ADR
+            # 0047：库不猜路径、不隐式建库），未开时产物型方法成功后
             # record_id 静默为 None。本仓的 GUI 语义是产物自动入库（ADR
             # 0008），Rust 壳已对 sidecar 注入同名 env（#491）；这里钉住
             # Python 测试与脚本路径的同一语义。
-            # Since 5.9.5 catalog_enabled defaults to off via
-            # $E2M2E_CATALOG_ENABLED (ADR 0047: the library neither guesses a
-            # path nor creates one implicitly); with it off, artifact methods
-            # return a silently-None record_id. This repo's GUI semantics is
-            # auto-ingestion (ADR 0008), which the Rust shell already injects
-            # for the sidecar (#491); pin the same semantics here for the
-            # Python test and script paths.
             config.catalog_enabled = True
             self._facade_obj = Facade(config=config)
         return self._facade_obj
