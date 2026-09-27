@@ -77,7 +77,17 @@ def import_baseline_once(argv: list[str]) -> None:
                 archive.extractall(extracted)
             imported = import_baseline(CatalogStore(catalog_dir), _bundle_dir(extracted))
         logger.info("基线数据集首用导入：%d 条记录（%s）", imported, zips[-1].name)
-    except (zipfile.BadZipFile, FileNotFoundError, KeyError) as exc:
+    except Exception as exc:
+        # 契约是“坏基线只告警、不阻断主链路”：整包损坏是 BadZipFile，单束 JSON
+        # 或 NPZ 损坏则是 json/np.load 抛的 ValueError/OSError，import_baseline
+        # 自己还会抛 FileNotFoundError/KeyError。这里是进程启动路径，逐类枚举
+        # 必然漏项，且漏掉的那类会让 sidecar 首启直接死掉——比缺预置族更坏。
+        # The contract is "a bad baseline warns and never blocks the main chain":
+        # a corrupt archive is BadZipFile, a corrupt per-family JSON/NPZ surfaces as
+        # json/np.load's ValueError/OSError, and import_baseline itself raises
+        # FileNotFoundError/KeyError. Enumerating classes here is guaranteed to miss
+        # one, and a miss kills the sidecar at startup, which is worse than missing
+        # preloaded families.
         logger.warning("基线数据集导入失败，跳过（用户库仍可用）：%s", exc)
 
 

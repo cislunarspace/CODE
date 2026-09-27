@@ -54,8 +54,6 @@ import zipfile
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-
 #: 基线数据集 Release 资产（与 .github/workflows/release.yml 的同一个 URL）
 DEFAULT_BASELINE_URL = (
     "https://github.com/cislunarspace/CODE-core/releases/download/"
