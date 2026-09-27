@@ -9,6 +9,8 @@ user-friendly message).
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class OrbitError(Exception):
     """结构化错误，包含错误码和用户友好消息。
@@ -17,11 +19,15 @@ class OrbitError(Exception):
         code: 错误码（如 ``"CORRECTION_DIVERGED"``）。
         message: 可读错误信息。
         cause: 原始异常（如有）。
+        details: 上游结构化载荷（如 ``e2m2e.api.OrbitError.details`` 的
+            ``status``/``cause``/``diagnostic`` 三元组）；无载荷时为 None。
 
     Structured error carrying an error code and a user-friendly message.
     Attributes: ``code`` — error code (e.g. ``"CORRECTION_DIVERGED"``);
     ``message`` — human-readable error text; ``cause`` — the original
-    exception, if any.
+    exception, if any; ``details`` — the upstream structured payload (e.g.
+    the ``status``/``cause``/``diagnostic`` triple of
+    ``e2m2e.api.OrbitError.details``), None when there is none.
     """
 
     def __init__(
@@ -29,11 +35,13 @@ class OrbitError(Exception):
         code: str,
         message: str,
         cause: Exception | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.cause = cause
+        self.details = details
 
 
 def translate_exception(e: Exception) -> OrbitError:
@@ -45,8 +53,11 @@ def translate_exception(e: Exception) -> OrbitError:
       前缀匹配的类型化传播失败，上游 #349）
     - RustExtensionUnavailableError -> BACKEND_UNAVAILABLE（5.6.6 起禁止
       Rust 缺失静默回退 Python，上游 #378）
+    - E2M2EError（库内统一基类）  -> E2M2E_ERROR（5.9.7 起承接信封翻译；
+      具名子类分支优先，未具名映射的库内错误落到这里，类名进 details）
     - e2m2e.api OrbitError        -> 透传（Facade 接缝的结构化错误，码与消息
-      已是用户可读契约，如族生成的 INVALID_PARAMS/DESIGN_FAILED）
+      已是用户可读契约，如族生成的 INVALID_PARAMS/DESIGN_FAILED；
+      details 一并透传）
     - FileNotFoundError         -> KERNEL_NOT_FOUND
     - NotImplementedError        -> NOT_IMPLEMENTED
     - ValueError                -> INVALID_PARAMS
@@ -59,12 +70,15 @@ def translate_exception(e: Exception) -> OrbitError:
     failure matched by message prefix, upstream #349);
     RustExtensionUnavailableError -> BACKEND_UNAVAILABLE (since 5.6.6 the
     silent Python fallback on missing Rust is forbidden, upstream #378);
-    e2m2e.api OrbitError -> passed through (the structured error of the
-    Facade seam; code and message are already a user-readable contract,
-    e.g. INVALID_PARAMS/DESIGN_FAILED for family generation);
-    FileNotFoundError -> KERNEL_NOT_FOUND; NotImplementedError ->
-    NOT_IMPLEMENTED; ValueError -> INVALID_PARAMS; anything else ->
-    UNKNOWN_ERROR.
+    E2M2EError (the library's common base) -> E2M2E_ERROR (since 5.9.7
+    where envelope translation lands; named subclass branches take
+    precedence, library errors without a named mapping fall here with the
+    class name in details); e2m2e.api OrbitError -> passed through (the
+    structured error of the Facade seam; code and message are already a
+    user-readable contract, e.g. INVALID_PARAMS/DESIGN_FAILED for family
+    generation, details included); FileNotFoundError ->
+    KERNEL_NOT_FOUND; NotImplementedError -> NOT_IMPLEMENTED; ValueError
+    -> INVALID_PARAMS; anything else -> UNKNOWN_ERROR.
     """
     try:
         from e2m2e.algorithm.design.design_orbit import DesignNotConvergedError
@@ -84,7 +98,11 @@ def translate_exception(e: Exception) -> OrbitError:
         pass
 
     try:
-        from e2m2e.exceptions import PropagationFailure, RustExtensionUnavailableError
+        from e2m2e.exceptions import (
+            E2M2EError,
+            PropagationFailure,
+            RustExtensionUnavailableError,
+        )
 
         if isinstance(e, PropagationFailure):
             return OrbitError(
@@ -98,6 +116,21 @@ def translate_exception(e: Exception) -> OrbitError:
                 message=f"e2m2e Rust 计算内核不可用: {e}",
                 cause=e,
             )
+        # 库内统一基类的兜底（5.9.7 起 E2M2EError 成为信封翻译的落点）：
+        # 具体子类分支必须在前面，这里只接住还没被具名映射的库内错误，
+        # 保留类名便于定位，消息为空时退化为类名。
+        # Catch-all for the library's common base (since 5.9.7 E2M2EError is
+        # where envelope translation lands). Specific subclass branches must
+        # come first; this only picks up library errors with no named mapping,
+        # keeping the class name for pinpointing and degrading to it when the
+        # message is empty.
+        if isinstance(e, E2M2EError):
+            return OrbitError(
+                code="E2M2E_ERROR",
+                message=str(e) or type(e).__name__,
+                cause=e,
+                details={"exception": type(e).__name__},
+            )
     except ImportError:
         pass
 
@@ -110,7 +143,18 @@ def translate_exception(e: Exception) -> OrbitError:
         from e2m2e.api.models import OrbitError as E2M2EOrbitError
 
         if isinstance(e, E2M2EOrbitError):
-            return OrbitError(code=e.code, message=e.message, cause=e)
+            # details 是上游载荷契约（如传播失败的 status/cause/diagnostic
+            # 三元组，上游 #677）：原样透传，不在传输层解析或改写。
+            # details is the upstream payload contract (e.g. the
+            # status/cause/diagnostic triple of propagation failures,
+            # upstream #677): pass it through verbatim — the transport layer
+            # neither parses nor rewrites it.
+            return OrbitError(
+                code=e.code,
+                message=e.message,
+                cause=e,
+                details=getattr(e, "details", None),
+            )
     except ImportError:
         pass
 
