@@ -32,7 +32,7 @@ def _summary(
     tags: list | None = None,
     note: str = "",
 ) -> SimpleNamespace:
-    from e2m2e.data.templates import ConvergenceState, FailureCause
+    from e2m2e.status import ConvergenceState, FailureCause
 
     return SimpleNamespace(
         record_id=record_id,

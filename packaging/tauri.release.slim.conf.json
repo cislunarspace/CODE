@@ -11,7 +11,8 @@
     ],
     "createUpdaterArtifacts": true,
     "resources": {
-      "binaries/*": "binaries/"
+      "binaries/*": "binaries/",
+      "resources/assistant/*": "resources/assistant/"
     },
     "windows": {
       "nsis": {

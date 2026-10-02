@@ -1,12 +1,12 @@
 // 助手边栏（CONTEXT.md 术语：助手边栏）：右侧可折叠、可拖宽的人机交互
-// 面板。负责：折叠/宽度持久化、omp 未安装空态引导、会话恢复（回放事件
-// 流重建）、live 事件折叠、发送/清空。会话与 agent loop 在 omp（ACP），
+// 面板。负责：折叠/宽度持久化、pi 未安装空态引导、会话恢复（回放事件
+// 流重建）、live 事件折叠、发送/清空。会话与 agent loop 在 pi（RPC），
 // 这里只做显示与交互转发。
 // Assistant sidebar (CONTEXT.md term): the collapsible, drag-resizable
 // human-interaction panel on the right. Handles: collapse/width persistence,
-// the omp-not-installed empty state, session restore (replay event stream
+// the pi-not-installed empty state, session restore (replay event stream
 // rebuilds the timeline), folding the live event stream, send/clear. The
-// session and agent loop live in omp (ACP); this only renders and forwards.
+// session and agent loop live in pi (RPC); this only renders and forwards.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Input, Popconfirm, Spin, Tooltip, Typography, message } from "antd";
@@ -41,7 +41,7 @@ const { Text } = Typography;
 
 const COLLAPSED_KEY = "tod-assistant-collapsed";
 const WIDTH_KEY = "tod-assistant-width";
-/** 最近会话 id 的前端索引（消息内容永不复制：正文在 omp 会话里） */
+/** 最近会话 id 的前端索引（消息内容永不复制：正文在 pi 会话里） */
 const LAST_SESSION_KEY = "tod-assistant-last-session";
 const DEFAULT_WIDTH = 340;
 const MIN_WIDTH = 280;
@@ -87,11 +87,11 @@ export function AssistantSidebar({
   const producedRef = useRef(onArtifactProduced);
   producedRef.current = onArtifactProduced;
 
-  // 初始载入：omp 可用性 + 会话索引 + 上次会话（有则触发回放重建）
+  // 初始载入：pi 可用性 + 会话索引 + 上次会话（有则触发回放重建）
   const loadState = useCallback(async () => {
     try {
       const info = await assistantGetState();
-      setAvailable(info.ompConfigured);
+      setAvailable(info.piConfigured);
       setSessions(info.sessions);
       setCurrentSessionId(info.sessionId);
       setConfigOptions(info.configOptions ?? []);
@@ -118,14 +118,14 @@ export function AssistantSidebar({
   useEffect(() => {
     void (async () => {
       const info = await loadState();
-      if (info?.ompConfigured && !info.sessionId) {
+      if (info?.piConfigured && !info.sessionId) {
         await restoreLastSession();
         await loadState();
       }
     })();
   }, [loadState, restoreLastSession]);
 
-  // 订阅 ACP 事件流（delta / tool_* / user_message / reset / error）。
+  // 订阅助手事件流（delta / tool_* / user_message / reset / error）。
   // tool_done 携带 record_id 时触发 A1 自动登记入项目树。
   useEffect(() => {
     // listen 是异步的：StrictMode 双挂载（挂载→清理→再挂载）下，清理先于
@@ -159,7 +159,7 @@ export function AssistantSidebar({
   const toggleCollapsed = (next: boolean) => {
     setCollapsed(next);
     localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
-    // 展开时刷新一次状态（可能在设置弹窗里刚配置过 omp）
+    // 展开时刷新一次状态（可能在设置弹窗里刚配置过 pi）
     if (!next) void loadState();
   };
 
@@ -193,7 +193,7 @@ export function AssistantSidebar({
   const handleSend = () => sendText(draft.trim());
 
   // 中断续跑（#461）：以固定引导文本作为普通用户消息发送——运行态、
-  // 事件流全部复用（真中断由 ACP cancelled 驱动，不再有假中断协议）。
+  // 事件流全部复用（真中断由 pi aborted 驱动，不再有假中断协议）。
   const handleContinue = () => {
     void sendText(t("assistant.continue_prompt"));
   };
@@ -238,7 +238,7 @@ export function AssistantSidebar({
     }
   };
 
-  // 折叠态：右边缘一条常显入口按钮（omp 不可用小圆点提示）
+  // 折叠态：右边缘一条常显入口按钮（pi 不可用小圆点提示）
   if (collapsed) {
     return (
       <div
@@ -355,7 +355,7 @@ export function AssistantSidebar({
           <Spin size="small" />
         </div>
       ) : available === false ? (
-        // 空态引导：omp 未安装/不可执行
+        // 空态引导：pi 未安装/不可执行
         <div
           style={{
             flex: 1,
@@ -370,7 +370,7 @@ export function AssistantSidebar({
         >
           <RobotOutlined style={{ fontSize: 32, opacity: 0.4 }} />
           <Text type="secondary" style={{ fontSize: 12 }}>
-            {t("assistant.empty_omp")}
+            {t("assistant.empty_pi")}
           </Text>
           <Button type="primary" icon={<SettingOutlined />} onClick={onOpenSettings}>
             {t("assistant.go_settings")}
@@ -385,7 +385,7 @@ export function AssistantSidebar({
             onApplyScenario={onApplyScenario}
             onContinue={running ? undefined : handleContinue}
           />
-          {/* 输入区：配置条（模型/思考/模式，omp configOptions 动态渲染） */}
+          {/* 输入区：配置条（模型/思考，Rust 构造的 pi 配置面动态渲染） */}
           <div
             style={{
               padding: 8,
@@ -412,7 +412,7 @@ export function AssistantSidebar({
               />
               {running && (
                 // 生成中：停止按钮（取消不引导）。发送按钮并存——生成中
-                // 发送即引导（后端发新 prompt，omp 取消当前轮续跑）
+                // 发送即引导（后端以 steer 排队续跑，上下文保留）
                 <Button
                   type="primary"
                   icon={<StopOutlined />}

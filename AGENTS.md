@@ -29,7 +29,7 @@ ParamsPanel（frontend/src/schema.ts:TOOL_REGISTRY 的 JSON Schema 生成表单�
 - 帧格式见 `src-tauri/src/sidecar/frames.rs`：`magic 0x324D_3245 | dtype(f32/f64) | ndim | shape | data`。
 - 事件名只有三个：`sidecar-progress`、`assistant-event`、`update-download-progress`。
 - 产物自动入 e2m2e catalog（用户配置目录下的 `catalog/`，Rust 壳经 `E2M2E_CATALOG_DIR` / `E2M2E_CATALOG_ENABLED` 注入；随包分发的基线数据集首启按版本导入），取用走 `catalog_query` / `get_artifact`（后者懒加载大数组）。
-- **AI 助手是并行的第二条链路**：`assistant_send` → `omp acp` → 本二进制 `--assistant-mcp-bridge`（MCP 桥）→ `e2m2e mcp-serve` + 宿主工具（`scenario_write` / `scenario_list`）。只读工具（`assistant/events.rs:READ_ONLY_TOOLS`）免确认，其余出工具卡片审批；凭据永不进前端。
+- **AI 助手是并行的第二条链路**：`assistant_send` → `pi --mode rpc`（桥接扩展 `resources/assistant/tod-bridge.ts` 注册 tod MCP）→ 本二进制 `--assistant-mcp-bridge`（MCP 桥）→ `e2m2e mcp-serve` + 宿主工具（`scenario_write` / `scenario_list`）。只读工具（扩展白名单）免确认，其余出工具卡片审批；凭据永不进前端。
 - 契约同步机制：唯一 codegen 是 `tools/export_tool_schemas.py`（e2m2e Pydantic request → `frontend/src/toolSchemas/<tool>.json`，**升级 e2m2e 后必须重跑**）；Rust ↔ TS 类型无 codegen，靠 `cmd.rs` ↔ `sidecarApi.ts` 手工对偶；跨层数值常量手工同步并在注释标注（`paramOverlay` 的 `TU_SECONDS=375676.97` 与 `cr3bp.ts` 的 `375190.26` 是两种口径，勿混用）。
 
 ## Key Directories
@@ -37,7 +37,7 @@ ParamsPanel（frontend/src/schema.ts:TOOL_REGISTRY 的 JSON Schema 生成表单�
 | 目录 | 用途 |
 |---|---|
 | `src/model/` `src/engine/` `src/commons/` | Python 领域资产：数据类（`Artifact`/`Project`）、e2m2e 接缝（`facade_bridge`/`catalog_service`/`exceptions`）、单位/常量/路径/内核 |
-| `src-tauri/src/` | Rust 壳：`cmd.rs`（22 个 Tauri command）、`sidecar/`（帧协议客户端）、`assistant/`（omp ACP 适配）、`state.rs`、`update.rs` |
+| `src-tauri/src/` | Rust 壳：`cmd.rs`（22 个 Tauri command）、`sidecar/`（帧协议客户端）、`assistant/`（pi RPC 适配）、`state.rs`、`update.rs` |
 | `frontend/src/` | React 界面；组件 `PascalCase.tsx`，逻辑模块 `camelCase.ts` |
 | `tests/` `src-tauri/tests/` `frontend/src/*.test.tsx` | 三套测试，与实现同树 |
 | `packaging/` | PyInstaller sidecar spec、release 配置、`scripts/validate-release.sh` |
@@ -102,7 +102,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - **Python 3.13 钉死**（`>=3.13,<3.14`；calcephpy 预编译轮子只有 cp313，原因见 `pyproject.toml` 注释）。包管理只用 **uv**：`uv.lock` 入库、index 钉 `https://pypi.org/simple`；重锁用 `uv lock --upgrade-package calcephpy`；Windows 的 calcephpy 走 `[tool.uv.sources]` 预编译 wheel，勿删。
 - **Node.js ≥ 20**（README），前端测试实际需要 ≥ 22.13（jsdom 30）。包管理用 **npm**（`package-lock.json` 入库），命令一律带 `--prefix frontend`。
 - **Rust 稳定版工具链**，edition 2021，Tauri 2，`Cargo.lock` 入库。
-- **打包**：PyInstaller onefile 产 sidecar（`packaging/transfer_orbit_design_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历——漏收即坏包）；release 分 slim（无 kernels，供更新通道）与全量（含 kernels，供新装）；omp 钉版本随包分发（`release.yml` env）。
+- **打包**：PyInstaller onefile 产 sidecar（`packaging/transfer_orbit_design_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历——漏收即坏包）；release 分 slim（无 kernels，供更新通道）与全量（含 kernels，供新装）；pi 钉版本随包分发（`release.yml` env）。
 - **依赖门槛**（见下方编码准则的审慎依赖条）：先用已有依赖与标准库，新增依赖须说明原因。
 
 ## Testing & QA
@@ -111,11 +111,11 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 
 - marker 只有 `spice`（需 SPICE 内核真算）与 `slow`；日常跑 `-m "not spice"`，真路径冒烟 `uv run pytest tests/engine/test_facade_bridge_e2m2e_smoke.py -m spice`。
 - **CI 只跑 Python**（`-m "not spice"`）；cargo test 与 npm test 不在任何 workflow，改 Rust / 前端必须本地跑对应测试。
-- Rust 侧：无 Python 环境用 `cargo test --manifest-path src-tauri/Cargo.toml -- --skip sidecar`；`assistant_acp` 依赖 python3 且须串行跑。
+- Rust 侧：无 Python 环境用 `cargo test --manifest-path src-tauri/Cargo.toml -- --skip sidecar`；`assistant_pi_rpc` 依赖 python3 且须串行跑。
 - 命名与组织：Python `test_<module>.py` 镜像 `src/`，方法 `test_<行为>_<期望>`；前端 `describe` / `it` 用中文并带 issue 号；Rust 集成测试一文件一主题放 `src-tauri/tests/`，golden 夹具在 `src-tauri/tests/fixtures/`。
 - 断言：标量 `pytest.approx`、数组 `np.testing.assert_allclose`（atol 1e-6 量级）、Rust f32 容差 1e-6。随机数不设种子——不断言随机值，只断言形状或由输入推导的期望。
 - 共享设施：`tests/conftest.py`（注入 `SPICE_KERNEL_DIR`、Agg 后端、隔离 `CATALOG_DIR`）、`tests/engine/conftest.py`（fake e2m2e 结果族、`mock_design_orbit`）。
-- 打包冒烟：`scripts/smoke_mcp_serve.py`（release 发布闸）、`scripts/smoke_omp_acp.py`（omp ACP 链路）——手工或发布期跑，不进测试套件。
+- 打包冒烟：`scripts/smoke_mcp_serve.py`（release 发布闸）、`scripts/smoke_pi_rpc.py`（pi RPC 链路）——手工或发布期跑，不进测试套件。
 - 无覆盖率门槛；验证按下方编码准则的验证行为、按根因修复两条执行，修 bug 先复现。
 
 ---

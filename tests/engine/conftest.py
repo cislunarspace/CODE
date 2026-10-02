@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from e2m2e.data.templates import ConvergenceState, FailureCause
 from e2m2e.data.types import EphemerisTable
+from e2m2e.status import ConvergenceState, FailureCause
 
 
 class _FakeCorrection:

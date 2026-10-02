@@ -1,7 +1,7 @@
 // 工具卡片：一次工具调用在对话流中的可视记录（CONTEXT.md 术语：工具卡片）。
 // 状态机：proposed（待确认）→ running（不定态进度）→ done / error
-//（用户拒绝走 omp 的 failed 终态，卡片呈 error 态并显示拒绝原因）。
-// omp ACP 基座：审批经 omp 审批表单（Approve/Deny），协议不携带改后参数，
+//（用户拒绝走 failed 终态，卡片呈 error 态并显示拒绝原因）。
+// pi RPC 基座：审批经扩展 select 对话框（批准/拒绝），协议不携带改后参数，
 // 故无改参入口；参数全文展示供审阅。
 
 import { useEffect, useState } from "react";
@@ -49,7 +49,7 @@ export function ToolCardView({
   const { t } = useTranslation();
   const [elapsed, setElapsed] = useState(0);
 
-  // 运行中每秒刷新耗时（omp 更新流不携带分数制进度，耗时是不定态指示）
+  // 运行中每秒刷新耗时（pi 事件流不携带分数制进度，耗时是不定态指示）
   useEffect(() => {
     if (card.status !== "running") return;
     const base = card.startedAt ?? Date.now();

@@ -43,19 +43,21 @@ React 前端（frontend/） ←Tauri IPC→ Rust 壳（src-tauri/）
 - **视图保持**：布局不变的重绘不重置相机；每批新轨迹数据到达做一次视图适配
   （按包围盒复位相机，5% 余量），此后重绘保持用户视角（CONTEXT.md 领域语义）。
 
-## AI 助手链路（ADR 0022/0023/0025/0026）
+## AI 助手链路（ADR 0022/0023/0025/0027/0032）
 
-agent loop 宿主在 Rust 后端（`src-tauri/src/assistant/`：llm / prompt /
-store / summary）：reqwest 调 OpenAI 兼容协议（SSE 流式），流式增量经
-Tauri event 推前端；API key 存 OS keychain（keyring crate），不进 webview
-JS 上下文。工具调用走独立常驻的 `mcp-serve` 进程（Rust 侧 `mcp.rs` 实现
-initialize / tools/list / tools/call 三个方法的最小 JSON-RPC stdio client），
-进程管理沿用 ADR 0019 的懒启动＋崩溃自愈＋Job Object 兜底。并发语义：
-AI 只读查询（mcp-serve 线程池）与画布长计算（serve-stdio 串行单例）互不
-阻塞。工具结果进 LLM 上下文前过摘要层，轨迹等大数组不进上下文，只带
-record_id 与诊断摘要；计算与改库工具的调用在前端以工具卡片分级确认，
-只读查询免确认。会话以 JSONL 持久化在用户配置目录
-（`sessions/<id>.jsonl`），支持多会话切换与续聊回放。
+会话运行时是随应用分发的 pi（`pi --mode rpc`，JSONL over stdio）：模型
+配置与凭据由 pi 原生配置管理（本应用不保存），会话 JSONL 落在应用配置
+目录 `pi-sessions/`（`PI_CODING_AGENT_SESSION_DIR`，与终端 pi 会话
+隔离）。Rust 后端（`src-tauri/src/assistant/`：rpc 传输 / pi 进程管理 /
+事件转换）持有 RPC 连接与门禁，pi 会话事件单一转换为 `assistant-event`
+推前端；引导走 pi 原生 steer（排队续跑，上下文保留），停止走 abort。
+工具链路：pi 进程加载桥接扩展（`resources/assistant/tod-bridge.ts`），
+扩展注册 tod MCP 服务器并拉起本二进制 `--assistant-mcp-bridge` 模式
+（mcp.rs 最小 JSON-RPC stdio client 连 `e2m2e mcp-serve` + 宿主情景工
+具），工具名形如 `mcp__tod__<工具名>`。审批闸在扩展的 tool_call 拦截：
+只读白名单免确认，其余经 extension_ui_request 子协议出工具卡片分级确
+认。会话索引由 Rust 扫描会话目录（RPC 无列表命令）；切换会话经
+switch_session + get_messages 折成回放事件流重建 UI。
 
 ## 顶层结构（最终形态）
 
@@ -65,7 +67,7 @@ transfer-orbit-design/
 │   └── src/               # 组件、schema 驱动表单、i18n、画布、助手边栏、录制导出
 ├── src-tauri/             # Rust 壳（Tauri 2）
 │   ├── src/sidecar/       # 帧解析（frames）+ 子进程管理（process）
-│   ├── src/assistant/     # agent loop（llm / prompt / store / summary）
+│   ├── src/assistant/     # pi RPC 适配（rpc / pi 进程 / 事件转换 / 桥接）
 │   ├── src/mcp.rs         # 最小 MCP stdio client（连 mcp-serve）
 │   ├── src/cmd.rs         # Tauri command（工具执行/目录查询/项目状态）
 │   └── tests/             # 协议夹具测试 + 真实子进程集成测试
@@ -159,7 +161,6 @@ class FacadeBridge:
         产物自动入轨道库（record_id 回执）。"""
 
     def generate_family(self, **params) -> FamilyResultData: ...
-    def analyze_stability(self, **params) -> StabilityResultData: ...
     def control_orbit(self, ephemeris_data, source_mu, **params) -> ControlResultData:
         """input_record_id 直连库中记录（Facade 解析星历段并写谱系），
         无记录时回退内存星历重建 EphemerisTable。"""
@@ -259,7 +260,7 @@ WebGLRenderer + OrbitControls（旋转/缩放/平移）
 
 ## 工具范围（当前）
 
-中栏工具面板接通 8 个工具：轨道族生成、任务轨道设计、参数空间扫描（catalog_sweep）、轨道保持、轨道预报、转移轨道设计、时空坐标转换、分区边界（spatiography_boundaries，产出进画布区域图层；前端 `TOOL_REGISTRY` 注册，经通用 `run_tool` 通道下发；轨道稳定性已随上游移除，5.9.3 起 e2m2e 工具清单不再暴露它）。19 个工具 schema（6 个 catalog 操作、5 个分区解析工具、6 个核心计算工具与 2 个无参查询工具 valid_ranges / catalog_terminology）已全部导出，catalog 操作的界面分布：query/get 服务目录浏览与轨迹叠加，sweep 在工具面板，delete 在项目树右键菜单，export 在筛选栏“导出包”，tag 在记录详情面板（catalog_promote 已随一轨一记录移除）。AI 助手经 mcp-serve 调用同一套 e2m2e 工具，不受注册表限制。
+中栏工具面板接通 8 个工具：轨道族生成、任务轨道设计、参数空间扫描（catalog_sweep）、轨道保持、轨道预报、转移轨道设计、时空坐标转换、分区边界（spatiography_boundaries，产出进画布区域图层；前端 `TOOL_REGISTRY` 注册，经通用 `run_tool` 通道下发；轨道稳定性已随上游整体移除，5.9.8 起算法层模块 `e2m2e.algorithm.stability` 整体删除）。21 个工具 schema（6 个 catalog 操作、5 个分区解析工具、6 个核心计算工具、2 个无参查询工具 valid_ranges / catalog_terminology，以及 5.9.8 新增的任务级工具 low_thrust_preliminary / mission_architecture_search，不进 GUI 表单）已全部导出，catalog 操作的界面分布：query/get 服务目录浏览与轨迹叠加，sweep 在工具面板，delete 在项目树右键菜单，export 在筛选栏“导出包”，tag 在记录详情面板（catalog_promote 已随一轨一记录移除）。AI 助手经 mcp-serve 调用同一套 e2m2e 工具，不受注册表限制。
 原则不变：不承诺 GUI 承载 e2m2e 全部算法能力，需要脚本化工作流时直接使用
 [e2m2e CLI](https://github.com/cislunarspace/CODE-core)。
 

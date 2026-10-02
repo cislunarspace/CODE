@@ -8,21 +8,21 @@ on:
   # Branch dispatch rehearses the builds; validation and publishing run only on tag refs.
   workflow_dispatch:
 
-# AI 会话运行时（omp ACP）固定版本：升级时改此处并跑
-# scripts/smoke_omp_acp.py 回归（协议行为以本机握手实测为准）
+# AI 会话运行时（pi RPC，ADR 0032）固定版本：升级时改此处并跑
+# scripts/smoke_pi_rpc.py 回归（协议行为以本机握手实测为准）
 #
 # 基线数据集（e2m2e ADR 0047：基线 CR3BP 族移出 wheel，改 Release 资产）：
 # 两个构建作业在打包 sidecar 前下载到 packaging/baseline/，由 spec 收进包、
 # sidecar 首启导入用户库。升级基线版本时改此处 URL 与 spec/smoke 的文件名
-# AI session runtime (omp ACP) pinned version: bump here and re-run
-# scripts/smoke_omp_acp.py (protocol behavior is verified by a real local
+# AI session runtime (pi RPC, ADR 0032) pinned version: bump here and re-run
+# scripts/smoke_pi_rpc.py (protocol behavior is verified by a real local
 # handshake). Baseline dataset (e2m2e ADR 0047: the baseline CR3BP families
 # left the wheel and became a Release asset): both build jobs download it into
 # packaging/baseline/ before packaging the sidecar; the spec bundles it and the
 # sidecar imports it into the user catalog on first start. Bumping the baseline
 # version means updating this URL plus the file names in the spec/smoke.
 env:
-  OMP_VERSION: v18.1.11
+  PI_VERSION: v1.0.0
   E2M2E_BASELINE_URL: https://github.com/cislunarspace/CODE-core/releases/download/data-baseline-5.9.0/baseline-cr3bp-5.9.0.zip
 
 concurrency:
@@ -143,13 +143,17 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path src-tauri/binaries
           Copy-Item dist/transfer-orbit-design-sidecar.exe src-tauri/binaries/transfer-orbit-design-sidecar.exe
-      # AI 会话运行时 omp 固定版本随包分发（dev 走 TOD_OMP_BIN/PATH；
-      # 分发解析资源目录 binaries/omp.exe，不依赖用户预装）
-      - name: Stage pinned omp into tauri resources
+      # AI 会话运行时 pi 固定版本随包分发（dev 走 TOD_PI_BIN/PATH；
+      # 分发解析资源目录 binaries/pi.exe，不依赖用户预装）。zip 解包后
+      # 取包内 pi/pi.exe（裸二进制即可跑 RPC，版本号非关键路径）。
+      - name: Stage pinned pi into tauri resources
         shell: pwsh
         run: |
-          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/omp-windows-x64.exe" -o src-tauri/binaries/omp.exe
-          if ((Get-Item src-tauri/binaries/omp.exe).Length -lt 10MB) { throw "omp 下载不完整" }
+          curl -fsSL "https://github.com/earendil-works/pi/releases/download/${{ env.PI_VERSION }}/pi-windows-x64.zip" -o $env:TEMP\pi.zip
+          Expand-Archive -Path $env:TEMP\pi.zip -DestinationPath $env:TEMP\pi-unpack -Force
+          Copy-Item $env:TEMP\pi-unpack\pi\pi.exe src-tauri/binaries/pi.exe
+          if ((Get-Item src-tauri/binaries/pi.exe).Length -lt 10MB) { throw "pi 下载不完整" }
+          src-tauri/binaries/pi.exe --version
       # 增量更新第一步：瘦身包（不含 kernels/ 星历，约省 170MB）——应用内更新
       # 通道专用。装机端 kernels/ 已存在且 NSIS 覆盖安装不动既有文件，星历不
       # 随每次更新重下；全量包仅供新装用户，仍含完整星历
@@ -293,31 +297,34 @@ jobs:
           mkdir -p src-tauri/binaries
           cp dist/transfer-orbit-design-sidecar src-tauri/binaries/transfer-orbit-design-sidecar
           chmod +x src-tauri/binaries/transfer-orbit-design-sidecar
-      # AI 会话运行时 omp 固定版本随包分发（同 Windows 作业）；资产按目标架构
-      # 选取（amd64→x64、aarch64→arm64），--version 冒烟要求与 runner 同架构。
-      # aarch64 特例：omp 是 Go arm64 二进制（64KB 页对齐），AppImage 打包时
-      # linuxdeploy 对 AppDir 内所有 ELF 无条件 patchelf 会把它打坏（ldd 退出
-      # 码 1、运行段错误；x64 不受影响），故 aarch64 包内放自解包壳 + omp.gz
-      # （非 ELF 不被扫描），首用解包到用户缓存——壳语义见 packaging/scripts/
-      # omp-wrapper.sh。amd64 维持裸二进制不动。
-      - name: Stage pinned omp into tauri resources
+      # AI 会话运行时 pi 固定版本随包分发（同 Windows 作业）；tar.gz 解包
+      # 取包内 pi/pi 裸二进制（RPC 模式不依赖包内 native/assets，实测裸放
+      # 可跑；--version 在无同级 package.json 时显示 0.0.0，冒烟只验可执行）。
+      # aarch64 特例：pi 是 Bun 编译 ELF，AppImage 打包时 linuxdeploy 对
+      # AppDir 内所有 ELF 无条件 patchelf --set-rpath，非常规对齐的 arm64
+      # ELF 可能被打坏（omp 时代 Go arm64 二进制的实测教训），故 aarch64
+      # 无条件放自解包壳 + pi.gz（非 ELF 不被扫描），首用解包到用户缓存
+      # ——壳语义见 packaging/scripts/pi-wrapper.sh。amd64 裸放。
+      - name: Stage pinned pi into tauri resources
         run: |
           case "${{ matrix.arch }}" in
-            amd64)   OMP_ASSET=omp-linux-x64 ;;
-            aarch64) OMP_ASSET=omp-linux-arm64 ;;
+            amd64)   PI_ASSET=pi-linux-x64.tar.gz ;;
+            aarch64) PI_ASSET=pi-linux-arm64.tar.gz ;;
             *) echo "未知架构 ${{ matrix.arch }}"; exit 1 ;;
           esac
-          curl -fsSL "https://github.com/can1357/oh-my-pi/releases/download/${{ env.OMP_VERSION }}/${OMP_ASSET}" -o /tmp/omp-download
-          chmod +x /tmp/omp-download
-          [ "$(stat -c%s /tmp/omp-download)" -gt 10000000 ] || { echo "omp 下载不完整"; exit 1; }
-          /tmp/omp-download --version
+          curl -fsSL "https://github.com/earendil-works/pi/releases/download/${{ env.PI_VERSION }}/${PI_ASSET}" -o /tmp/pi-download.tgz
+          [ "$(stat -c%s /tmp/pi-download.tgz)" -gt 10000000 ] || { echo "pi 下载不完整"; exit 1; }
+          mkdir -p /tmp/pi-unpack
+          tar -xzf /tmp/pi-download.tgz -C /tmp/pi-unpack
+          chmod +x /tmp/pi-unpack/pi/pi
+          /tmp/pi-unpack/pi/pi --version
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            gzip -9 -c /tmp/omp-download > src-tauri/binaries/omp.gz
-            sed "s/__OMP_VERSION__/${{ env.OMP_VERSION }}/" packaging/scripts/omp-wrapper.sh > src-tauri/binaries/omp
-            chmod +x src-tauri/binaries/omp
-            src-tauri/binaries/omp --version
+            gzip -9 -c /tmp/pi-unpack/pi/pi > src-tauri/binaries/pi.gz
+            sed "s/__PI_VERSION__/${{ env.PI_VERSION }}/" packaging/scripts/pi-wrapper.sh > src-tauri/binaries/pi
+            chmod +x src-tauri/binaries/pi
+            src-tauri/binaries/pi --version
           else
-            mv /tmp/omp-download src-tauri/binaries/omp
+            cp /tmp/pi-unpack/pi/pi src-tauri/binaries/pi
           fi
       # 增量更新第一步：瘦身 AppImage（不含 kernels/），同 Windows 作业
       - name: Build slim AppImage (updater channel)

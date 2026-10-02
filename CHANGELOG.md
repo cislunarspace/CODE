@@ -2,6 +2,14 @@
 
 > 自 4.8.3 起版本小节纯中文；GitHub Release 正文由对应小节生成。历史小节保持写成时的双语不动。
 
+
+## 4.9.0 (2026-10-02)
+
+### 功能
+
+- **AI 会话运行时切换为 pi（ADR 0032）**：分发体积从 omp 时代的 230–278 MB 降到 43–45 MB。协议从 omp 私有 ACP 改为 pi 原生 RPC（`pi --mode rpc`，JSONL over stdio）；工具审批改为桥接扩展的 tool_call 拦截（只读白名单免确认，其余经 extension_ui_request 出工具卡片，批准/拒绝）；生成中再发消息走 pi 原生 steer（排队到当前轮工具批后继续，上下文保留，不再取消旧轮）；配置条去掉“模式”项（omp 规划模式无 pi 对应），模型与思考档来自 pi 原生配置。模型凭据改由 pi 管理：终端跑交互式 `pi` 完成 provider 登录（设置分区按钮直开）。旧 omp 会话历史不迁移（omp 侧 JSONL 留在原地，应用内不可见）；omp 可自行卸载。
+- **采纳 e2m2e 5.9.8**：pin 升 >=5.9.8；状态枚举导入迁 `e2m2e.status`（旧路径 ImportError）；稳定性分析桥接随上游删除 `e2m2e.algorithm.stability` 一并移除（Python API 亦不复存在）；schema 重导新增任务级工具 `low_thrust_preliminary` 与 `mission_architecture_search`（不进 GUI 表单，留档供 AI 助手链路调用）；随版获得上游 SPICE 纯 Rust 内循环提速与 design_halo / design_nrho 修复。
+
 ## 4.8.6 (2026-09-27)
 
 ### 功能

@@ -1,0 +1,349 @@
+{
+  "$defs": {
+    "LowThrustNodeSpec": {
+      "additionalProperties": false,
+      "description": "多 leg 链节点（rendezvous 位置+速度匹配 / flyby V∞ 旋转）。\n\n节点级语义（flyby 必填 mu/r_p、rendezvous 须为 None、末节点必须\nrendezvous 等）由算法层 ``SimsFlanaganNode``/``SimsFlanaganMultiLegProblem``\n校验，其 ``ValueError`` 翻译为 INVALID_PARAMS 且消息更精确。",
+      "properties": {
+        "kind": {
+          "description": "节点类型；末节点必须 rendezvous（算法层校验）",
+          "enum": [
+            "rendezvous",
+            "flyby"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "state": {
+          "description": "节点状态 [x,y,z,vx,vy,vz]（中心体惯性系，km, km/s）",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "title": "State",
+          "type": "array"
+        },
+        "mu_km3_s2": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "flyby 天体引力常数（km³/s²）；flyby 必填、rendezvous 须为 None",
+          "title": "Mu Km3 S2"
+        },
+        "r_p_min_km": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "flyby 最小近心点半径（km）；flyby 必填、rendezvous 须为 None",
+          "title": "R P Min Km"
+        }
+      },
+      "required": [
+        "kind",
+        "state"
+      ],
+      "title": "LowThrustNodeSpec",
+      "type": "object"
+    },
+    "LowThrustPropulsionSpec": {
+      "additionalProperties": false,
+      "description": "低推力推进配置（常推力 / SEP 二选一，透传 ``SimsFlanaganPropulsion``）。",
+      "properties": {
+        "isp_s": {
+          "description": "比冲（s）",
+          "exclusiveMinimum": 0.0,
+          "title": "Isp S",
+          "type": "number"
+        },
+        "t_max_n": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "常推力模式最大推力（N）；与 p0_w 恰一指定",
+          "title": "T Max N"
+        },
+        "p0_w": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SEP 模式 1 AU 处推进阵列功率（W）；与 t_max_n 恰一指定",
+          "title": "P0 W"
+        },
+        "p_bus_w": {
+          "default": 0.0,
+          "description": "平台常耗功率（W，仅 SEP 模式）",
+          "minimum": 0.0,
+          "title": "P Bus W",
+          "type": "number"
+        },
+        "efficiency": {
+          "default": 1.0,
+          "description": "功率-推力映射效率 η∈(0,1]",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Efficiency",
+          "type": "number"
+        },
+        "r_helio_km": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "SEP 功率评估固定日心距（km）；None 用段中点瞬时 |r|",
+          "title": "R Helio Km"
+        }
+      },
+      "required": [
+        "isp_s"
+      ],
+      "title": "LowThrustPropulsionSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "低推力转移 Sims-Flanagan 预设计输入（#725，ADR 0054 决策 2/3）。\n\n链结构：固定出发状态 → nodes[0] → … → 末节点，共 ``len(nodes)`` 个 leg；\n单 leg 转移 = 一个 rendezvous 节点。TOF 边界形状/序关系与节点语义由\n算法层校验（消息更精确），此处只做链维度与成本配置一致性。",
+  "properties": {
+    "backend": {
+      "description": "保真度档（ADR 0050）：conic 二体封闭解 / ephemeris 星历 N 体数值传播",
+      "enum": [
+        "conic",
+        "ephemeris"
+      ],
+      "title": "Backend",
+      "type": "string"
+    },
+    "epoch": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "出发历元 UTC（ISO 字符串或 [年,月,日,时,分,秒]）；backend=ephemeris 必填，conic 档须为 None",
+      "title": "Epoch"
+    },
+    "bodies": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "星历档天体集（SPICE 天体名，须含 origin，如 [\"EARTH\",\"MOON\",\"SUN\"]）；backend=ephemeris 必填，conic 档须为 None",
+      "title": "Bodies"
+    },
+    "origin": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "星历档坐标原点天体（SPICE 天体名，中心引力由其提供）；backend=ephemeris 必填，conic 档须为 None",
+      "title": "Origin"
+    },
+    "departure_state": {
+      "description": "出发状态 [x,y,z,vx,vy,vz]（中心体惯性系，km, km/s）",
+      "items": {
+        "type": "number"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Departure State",
+      "type": "array"
+    },
+    "nodes": {
+      "description": "节点链（出发 → nodes[0] → … → 末节点）；单 leg = 一个 rendezvous 节点",
+      "items": {
+        "$ref": "#/$defs/LowThrustNodeSpec"
+      },
+      "minItems": 1,
+      "title": "Nodes",
+      "type": "array"
+    },
+    "leg_tofs_s": {
+      "description": "逐 leg 名义飞行时间（s），长度 = 节点数",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 1,
+      "title": "Leg Tofs S",
+      "type": "array"
+    },
+    "mu_km3_s2": {
+      "description": "中心天体引力常数（km³/s²）；日心问题取 e2m2e.data.constants 的 SUN.gm",
+      "exclusiveMinimum": 0.0,
+      "title": "Mu Km3 S2",
+      "type": "number"
+    },
+    "initial_mass_kg": {
+      "description": "初始质量（kg）",
+      "exclusiveMinimum": 0.0,
+      "title": "Initial Mass Kg",
+      "type": "number"
+    },
+    "propulsion": {
+      "$ref": "#/$defs/LowThrustPropulsionSpec",
+      "description": "推进配置（常推力/SEP 二选一）"
+    },
+    "n_segments": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      ],
+      "default": 20,
+      "description": "每 leg 段数（≥2；统一整数或逐 leg 列表，长度 = 节点数）",
+      "title": "N Segments"
+    },
+    "cost": {
+      "default": "min_fuel",
+      "description": "成本函数（定义见 sims_flanagan 模块 docstring）",
+      "enum": [
+        "min_fuel",
+        "min_time",
+        "weighted",
+        "gtoc"
+      ],
+      "title": "Cost",
+      "type": "string"
+    },
+    "cost_weights": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "仅 weighted：[w_dv, w_t]，均 > 0；其余 cost 必须为 None",
+      "title": "Cost Weights"
+    },
+    "tof_bounds_s": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "逐 leg TOF 决策变量边界（s）；(2,) 共享对或 (节点数, 2)；min_time/weighted 必填，其余 cost 须为 None",
+      "title": "Tof Bounds S"
+    },
+    "guess": {
+      "anyOf": [
+        {
+          "const": "edelbaum",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "初猜：Edelbaum 闭式螺旋（按 leg）；None 用零/默认初猜",
+      "title": "Guess"
+    },
+    "ftol": {
+      "default": 1e-09,
+      "description": "SLSQP 目标容差",
+      "exclusiveMinimum": 0.0,
+      "title": "Ftol",
+      "type": "number"
+    },
+    "maxiter": {
+      "default": 200,
+      "description": "SLSQP 最大迭代数",
+      "minimum": 1,
+      "title": "Maxiter",
+      "type": "integer"
+    },
+    "use_analytic_jac": {
+      "default": true,
+      "description": "True 用解析雅可比（f&g STM 链），False 退回数值差分",
+      "title": "Use Analytic Jac",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "backend",
+    "departure_state",
+    "nodes",
+    "leg_tofs_s",
+    "mu_km3_s2",
+    "initial_mass_kg",
+    "propulsion"
+  ],
+  "title": "LowThrustPreliminaryRequest",
+  "type": "object"
+}

@@ -1,9 +1,10 @@
-"""tests for FacadeBridge.generate_family / analyze_stability（轨道族生成 + 稳定性分析）。
+"""tests for FacadeBridge.generate_family（轨道族生成）。
 
 mock 测试验证 DTO 装配与参数透传；末尾真路径测试用真实 e2m2e（纯 CR3BP，
 不需要 SPICE 内核），验证族生成可正常运行。5.7.1 起族生成走七族统一入口；
 5.9.3 接口类分家（e2m2e ADR 0043）后入口在 ``Facade().catalog``（Catalog
-类），mock 桩打在 Catalog 方法上。
+类），mock 桩打在 Catalog 方法上。稳定性分析随 e2m2e 5.9.8 删除
+``e2m2e.algorithm.stability`` 一并移除。
 """
 
 from __future__ import annotations
@@ -20,7 +21,6 @@ from src.engine.facade_bridge import (
     FacadeBridge,
     FamilyGenerationRequest,
     FamilyResultData,
-    StabilityResultData,
 )
 
 # ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ def _fake_response(
     member_parameters: dict | None = None,
 ) -> SimpleNamespace:
     """构造 FamilyGenerationResponse 形状的假响应（默认携带完整轨迹的成员）。"""
-    from e2m2e.data.templates import ConvergenceState, FailureCause
+    from e2m2e.status import ConvergenceState, FailureCause
 
     if member_parameters is None:
         member_parameters = {"libration_point": params.get("libration_point", 2)}
@@ -190,7 +190,7 @@ class TestGenerateFamily:
 
     def test_periodic_members_resampled(self, monkeypatch):
         """周期族成员只携带初态与周期时，桥接层按周期重采样整条轨迹。"""
-        from e2m2e.data.templates import ConvergenceState, FailureCause
+        from e2m2e.status import ConvergenceState, FailureCause
 
         response = SimpleNamespace(
             status=ConvergenceState.CONVERGED,
@@ -227,7 +227,7 @@ class TestGenerateFamily:
 
     def test_empty_family_raises(self, monkeypatch):
         """响应无成员时抛 OrbitError(FAMILY_FAILED)，附上游消息。"""
-        from e2m2e.data.templates import ConvergenceState, FailureCause
+        from e2m2e.status import ConvergenceState, FailureCause
 
         from src.engine.exceptions import OrbitError
 
@@ -282,92 +282,6 @@ class TestGenerateFamily:
         with pytest.raises(OrbitError) as exc_info:
             FacadeBridge().generate_family(orbit_type="HALO", north_south=2)
         assert exc_info.value.code == "INVALID_PARAMS"
-
-
-# ---------------------------------------------------------------------------
-# analyze_stability mock 测试
-# ---------------------------------------------------------------------------
-
-
-class _FakeStabilityAnalysis:
-    """Fake StabilityAnalysis：analyze() 返回纯数据结果容器。"""
-
-    instances: list = []
-
-    def __init__(self, orbit=None, dynamics=None) -> None:
-        _FakeStabilityAnalysis.instances.append(self)
-        self.orbit = orbit
-        self.dynamics = dynamics
-
-    def analyze(self) -> SimpleNamespace:
-        return SimpleNamespace(
-            monodromy_matrix=np.eye(6),
-            eigenvalues=np.array([1.0, -1.0, 0.5 + 0.5j, 0.5 - 0.5j, 2.0, 0.5]),
-            stability_indices={"nu1": 1.5, "nu2": 0.8, "nu3": 1.1, "broucke": 2.3},
-            classification={
-                "stability_type": SimpleNamespace(value="hyperbolic"),
-                "is_stable": False,
-                "is_unstable": True,
-                "stability_margin": -1.0,
-            },
-            bifurcation={
-                "bifurcation_type": SimpleNamespace(value="none"),
-                "bifurcation_detected": False,
-            },
-            numerical_errors={"monodromy": None},
-        )
-
-
-@pytest.fixture()
-def mock_stability(monkeypatch):
-    monkeypatch.setattr(
-        "e2m2e.algorithm.stability.StabilityAnalysis",
-        _FakeStabilityAnalysis,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "e2m2e.algorithm.dynamics.CR3BP_Dynamics",
-        lambda system: object(),
-        raising=False,
-    )
-    return _FakeStabilityAnalysis
-
-
-class TestAnalyzeStability:
-    def test_returns_dto(self, mock_stability):
-        n = 1000
-        data = FacadeBridge().analyze_stability(
-            states=np.random.randn(n, 6),
-            times=np.linspace(0, 1, n),
-            mu=0.01215,
-        )
-        assert isinstance(data, StabilityResultData)
-        assert data.monodromy_matrix.shape == (6, 6)
-        assert data.eigenvalues.shape == (6,)
-        assert data.stability_indices["nu1"] == pytest.approx(1.5)
-        assert data.classification["stability_type"].value == "hyperbolic"
-        assert data.bifurcation["bifurcation_detected"] is False
-
-    def test_receives_orbit_with_system(self, mock_stability):
-        """构造的 Orbit 应绑定 system（analyze 内部从 system 取 mu）。"""
-        FacadeBridge().analyze_stability(
-            states=np.random.randn(10, 6),
-            times=np.linspace(0, 1, 10),
-            mu=0.01215,
-        )
-        orbit = mock_stability.instances[-1].orbit
-        assert orbit.system is not None
-        assert orbit.system.mu == pytest.approx(0.01215)
-
-    def test_mu_none_uses_earth_moon_default(self, mock_stability):
-        """mu 缺失（旧 Artifact）时用 e2m2e 地月系统默认质量比，而非硬编码常量。"""
-        FacadeBridge().analyze_stability(
-            states=np.random.randn(10, 6),
-            times=np.linspace(0, 1, 10),
-            mu=None,
-        )
-        orbit = mock_stability.instances[-1].orbit
-        assert orbit.system.mu == pytest.approx(EARTH_MOON_MU)
 
 
 # ---------------------------------------------------------------------------
@@ -451,13 +365,3 @@ def test_generate_dro_family_real_pipeline(tmp_path):
     assert data.family_id is not None
     records = bridge.catalog_query(family_id=data.family_id)
     assert len(records) == data.n_orbits
-
-
-def test_analyze_stability_real_pipeline():
-    """真 e2m2e：对族成员做稳定性分析应返回完整结果。"""
-    data = FacadeBridge().generate_family(libration_point=2, max_amplitude_km=5000.0, n_orbits=3)
-    stab = FacadeBridge().analyze_stability(data.states[0], data.times[0], data.mu)
-    assert stab.monodromy_matrix.shape == (6, 6)
-    assert stab.eigenvalues.shape == (6,)
-    assert set(stab.stability_indices) == {"nu1", "nu2", "nu3", "broucke"}
-    assert "stability_type" in stab.classification

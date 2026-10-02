@@ -1,18 +1,20 @@
-//! MCP stdio 桥接服务：omp 的 ACP mcpServers 入口（`--assistant-mcp-bridge`
-//! 子进程模式），把 e2m2e 工具与宿主情景工具暴露给 omp 会话。
+//! MCP stdio 桥接服务：pi 桥接扩展（tod-bridge.ts）拉起的
+//! `--assistant-mcp-bridge` 子进程模式，把 e2m2e 工具与宿主情景工具暴露
+//! 给 pi 会话（ADR 0032）。
 //!
-//! 职责（计划条目 2）：
+//! 职责（与 omp 时代相同，仅拉起方由 ACP mcpServers 换为扩展
+//! registerMcpServer）：
 //! - `tools/list`：mcp-serve 的名称/描述/inputSchema 原样透出 + 宿主
 //!   `scenario_write`/`scenario_list`（OpenAI function 定义转 MCP 形态）；
 //! - `tools/call`：宿主工具本地执行（固定目录、覆盖语义、MCP 信封口径与
 //!   mcp-serve 一致）；其余原样转发 mcp-serve（含崩溃自愈与进度转发）；
-//! - 进度：客户端（omp）带 progressToken 时，把 mcp-serve 的
+//! - 进度：客户端（pi）带 progressToken 时，把 mcp-serve 的
 //!   notifications/progress 按 token 原路转发。
 //!
-//! 拉起：omp 在 session/new 收到
-//! `{name: "tod", command: <本应用二进制>, args: ["--assistant-mcp-bridge"], env: []}`
-//! 后作为子进程启动本模式；mcp-serve 命令经 `TOD_MCP_COMMAND_JSON` /
-//! `TOD_MCP_CWD` 环境变量传入（app setup 写入 omp 环境，无任何密钥）。
+//! 拉起：扩展在 pi 会话启动时按 registerMcpServer 配置启动本模式
+//! （command=本应用二进制，args=[--assistant-mcp-bridge]）；mcp-serve 命令
+//! 经 `TOD_MCP_COMMAND_JSON` / `TOD_MCP_CWD` 环境变量传入（app setup 写入
+//! pi 环境，无任何密钥）。
 
 use std::sync::Arc;
 
@@ -27,20 +29,6 @@ use crate::mcp::{self, McpState, ProgressSink};
 /// 本应用二进制作为 MCP 桥接子进程拉起时的 argv 标记。
 pub const BRIDGE_ARG: &str = "--assistant-mcp-bridge";
 
-/// ACP session/new 的 mcpServers 桥接条目（cwd 即会话目录，env 必须给
-/// 空数组——omp 18.1.11 对缺失 env 的条目内部报错）。
-pub fn bridge_server_entry() -> Value {
-    let exe = std::env::current_exe()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    json!({
-        "name": super::events::BRIDGE_SERVER_NAME,
-        "command": exe,
-        "args": [BRIDGE_ARG],
-        "env": []
-    })
-}
-
 /// 子进程入口：从环境取 mcp-serve 配置并同步跑桥接直到 stdin EOF。
 pub fn run_bridge_process() {
     let argv: Vec<String> = match std::env::var("TOD_MCP_COMMAND_JSON")
@@ -49,7 +37,7 @@ pub fn run_bridge_process() {
     {
         Some(v) if !v.is_empty() => v,
         _ => {
-            eprintln!("tod-bridge: 缺少 TOD_MCP_COMMAND_JSON（应由 omp 从应用环境继承）");
+            eprintln!("tod-bridge: 缺少 TOD_MCP_COMMAND_JSON（应由 pi 从应用环境继承）");
             std::process::exit(1);
         }
     };
@@ -126,7 +114,7 @@ where
             ),
         }
     }
-    // stdin EOF：omp 关闭了桥接，正常退出
+    // stdin EOF：pi 关闭了桥接，正常退出
     Ok(())
 }
 
@@ -182,7 +170,7 @@ async fn tools_call(
         return Ok(call_result(envelope, is_error));
     }
 
-    // 进度转发：mcp-serve 的分数制 [0,1] + 可读消息按 omp 的 token 原路回
+    // 进度转发：mcp-serve 的分数制 [0,1] + 可读消息按 pi 的 token 原路回
     let sink: Option<ProgressSink> = progress_token.map(|token| {
         let tx = out_tx.clone();
         Arc::new(move |fraction: f64, message: Option<String>| {
@@ -299,16 +287,6 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("mcp-serve"));
-    }
-
-    #[tokio::test]
-    async fn bridge_server_entry_shape_matches_omp_contract() {
-        let entry = bridge_server_entry();
-        assert_eq!(entry["name"], "tod");
-        assert!(entry["command"].as_str().unwrap().contains("transfer"));
-        assert_eq!(entry["args"][0], "--assistant-mcp-bridge");
-        // env 必须存在且是数组（omp 18.1.11 对缺失 env 的条目内部报错）
-        assert!(entry["env"].as_array().is_some());
     }
 
 }
