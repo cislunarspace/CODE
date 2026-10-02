@@ -111,22 +111,6 @@ class PropagationResultData:
 
 
 @dataclass
-class StabilityResultData:
-    """稳定性分析结果 DTO。纯数据，不含 e2m2e 对象引用。
-
-    数组字段（monodromy/eigenvalues）保留 ndarray；落盘时由调用方
-    tolist 序列化。
-    """
-
-    monodromy_matrix: Any | None  # (6,6)
-    eigenvalues: Any | None  # (6,)
-    stability_indices: dict  # {nu1, nu2, nu3, broucke}
-    classification: dict
-    bifurcation: dict
-    numerical_errors: dict
-
-
-@dataclass
 class ControlResultData:
     """轨道保持结果 DTO。纯数据，不含 e2m2e 对象引用。"""
 
@@ -329,7 +313,7 @@ class ToolSpec:
     request_model: type[BaseModel] | None  # Pydantic 模型（None = 无正式模型）
     # e2m2e 接口类方法名（== TOOL_REGISTRY 键，与 tool_inventory 跨类清单对齐，
     # e2m2e ADR 0043）。注意：FacadeBridge 方法名另见 FacadeBridge 类
-    # （design_orbit/control_orbit/generate_family/analyze_stability），与本字段
+    # （design_orbit/control_orbit/generate_family），与本字段
     # 不一一同名。
     facade_method: str
     label: str  # UI 显示名
@@ -603,7 +587,7 @@ class FacadeBridge:
         Raises:
             OrbitError: 经翻译的结构化错误。
         """
-        from e2m2e.data.templates import ConvergenceState
+        from e2m2e.status import ConvergenceState
 
         from src.commons.units import SECONDS_PER_YEAR
         from src.engine.exceptions import translate_exception
@@ -768,7 +752,7 @@ class FacadeBridge:
             response = self._facade().transfer_design(**params)
         except Exception as e:
             raise translate_exception(e) from e
-        from e2m2e.data.templates import ConvergenceState
+        from e2m2e.status import ConvergenceState
 
         trajectory = (
             np.asarray(response.trajectory, dtype=float)
@@ -791,8 +775,8 @@ class FacadeBridge:
         None 时剔除（走模型默认三体），dict 由调用方解析 JSON。会合系位置
         由 GCRS km 经 ``gcrs_to_synodic`` 转换（产物不入轨道库）。
         """
-        from e2m2e.data.templates import ConvergenceState
         from e2m2e.data.templates.seed import EARTH_MOON_MU
+        from e2m2e.status import ConvergenceState
 
         from src.commons.units import SECONDS_PER_YEAR
         from src.engine.exceptions import OrbitError, translate_exception
@@ -853,7 +837,7 @@ class FacadeBridge:
           轨迹，在此按周期重采样到固定点数；Lissajous 拟周期成员已携带
           等长完整轨迹，原样堆叠。
         """
-        from e2m2e.data.templates import ConvergenceState
+        from e2m2e.status import ConvergenceState
 
         from src.engine.exceptions import OrbitError, translate_exception
 
@@ -953,52 +937,3 @@ class FacadeBridge:
             lambda: self._facade().catalog.catalog_export(dest=dest, **filters)
         )
         return int(response.exported_count)
-
-    def analyze_stability(self, states: Any, times: Any, mu: float | None) -> StabilityResultData:
-        """对 CR3BP 周期轨道做稳定性分析，返回跨线程 DTO。
-
-        从 Artifact 数据构造 e2m2e Orbit + CR3BP_System（mu 取自 Artifact
-        extra，缺失时按地月系统默认值兜底，见 viz_adapter.build_cr3bp_system），
-        调 ``algorithm/stability.StabilityAnalysis``。纯 CR3BP 计算，不需要
-        SPICE 内核。
-
-        Args:
-            states: CR3BP 周期轨道状态 (n,6)（Artifact.state_data）。
-            times: 时间序列 (n,)（Artifact.times）。
-            mu: 质量比（Artifact.extra["mu"]），None 时用默认地月系统。
-
-        Returns:
-            StabilityResultData：单值矩阵 / Floquet 乘子 / 稳定性指数 /
-            分类 / 分岔（数组保持 ndarray）。
-
-        Raises:
-            OrbitError: 经翻译的结构化错误。
-        """
-        from e2m2e.algorithm.dynamics import CR3BP_Dynamics
-        from e2m2e.algorithm.stability import StabilityAnalysis
-        from e2m2e.data.templates.seed import EARTH_MOON_MU
-        from e2m2e.data.types import Orbit
-
-        from src.engine.exceptions import translate_exception
-        from src.engine.viz_adapter import build_cr3bp_system
-
-        try:
-            system = build_cr3bp_system(mu if mu is not None else EARTH_MOON_MU)
-            dynamics = CR3BP_Dynamics(system)
-            orbit = Orbit(states=states, times=times, system=system)
-            result = StabilityAnalysis(orbit=orbit, dynamics=dynamics).analyze()
-        except Exception as e:
-            raise translate_exception(e) from e
-
-        return StabilityResultData(
-            monodromy_matrix=(
-                np.asarray(result.monodromy_matrix) if result.monodromy_matrix is not None else None
-            ),
-            eigenvalues=(
-                np.asarray(result.eigenvalues) if result.eigenvalues is not None else None
-            ),
-            stability_indices=result.stability_indices,
-            classification=result.classification,
-            bifurcation=result.bifurcation,
-            numerical_errors=result.numerical_errors,
-        )

@@ -12,7 +12,8 @@
     "createUpdaterArtifacts": true,
     "resources": {
       "../kernels": "kernels",
-      "binaries/*": "binaries/"
+      "binaries/*": "binaries/",
+      "resources/assistant/*": "resources/assistant/"
     },
     "linux": {
       "rpm": {

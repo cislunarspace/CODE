@@ -1,0 +1,88 @@
+{
+  "additionalProperties": false,
+  "description": "行星际 MGA 链网格搜索输入（#723，ADR 0054）。\n\n纯网格搜索：发射窗口按 ``launch_window_step_days`` 进给，逐 leg TOF 区间按\n``leg_tof_step_days`` 进给，两者笛卡尔积的全部组合逐格求解。中间天体即飞越\n体（无动力 V∞ 旋转）。",
+  "properties": {
+    "body_sequence": {
+      "description": "天体序列（SPICE 天体名，首项出发体，中间天体为飞越体，如 EVEJ）",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 2,
+      "title": "Body Sequence",
+      "type": "array"
+    },
+    "launch_window": {
+      "description": "发射窗口两端点 [start, end]（UTC ISO 字符串或 JD_TDB 浮点数；网格含 start、按步长进给）",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ]
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "title": "Launch Window",
+      "type": "array"
+    },
+    "launch_window_step_days": {
+      "default": 1.0,
+      "description": "发射历元网格步长（天）",
+      "exclusiveMinimum": 0.0,
+      "title": "Launch Window Step Days",
+      "type": "number"
+    },
+    "leg_tof_ranges": {
+      "description": "逐 leg 飞行时间范围 [[min, max], ...]（天；长度 = 天体序列长度 − 1）",
+      "items": {
+        "items": {
+          "type": "number"
+        },
+        "type": "array"
+      },
+      "minItems": 1,
+      "title": "Leg Tof Ranges",
+      "type": "array"
+    },
+    "leg_tof_step_days": {
+      "default": 1.0,
+      "description": "逐 leg TOF 网格步长（天，全 leg 共用）",
+      "exclusiveMinimum": 0.0,
+      "title": "Leg Tof Step Days",
+      "type": "number"
+    },
+    "min_flyby_pericenter_km": {
+      "description": "逐飞越天体最小近心点半径 (km)，长度 = 天体序列长度 − 2（两体序列为空表；体半径倍数换算由调用方负责）",
+      "items": {
+        "type": "number"
+      },
+      "title": "Min Flyby Pericenter Km",
+      "type": "array"
+    },
+    "v_inf_match_tol_km_s": {
+      "default": 0.1,
+      "description": "无动力 flyby 的 |v∞in|=|v∞out| 等模筛选容差 (km/s)，超差格剔除",
+      "minimum": 0.0,
+      "title": "V Inf Match Tol Km S",
+      "type": "number"
+    },
+    "top_n": {
+      "default": 5,
+      "description": "返回候选数上限（按总 ΔV 升序）",
+      "maximum": 50,
+      "minimum": 1,
+      "title": "Top N",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "body_sequence",
+    "launch_window",
+    "leg_tof_ranges"
+  ],
+  "title": "MissionArchitectureSearchRequest",
+  "type": "object"
+}

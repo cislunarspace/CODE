@@ -2244,8 +2244,8 @@ export default function App() {
               </Col>
             </Row>
 
-            {/* AI 助手分区：omp 会话运行时入口状态与原生配置流程（模型
-                服务与凭据由 omp 管理，本应用不收集不展示） */}
+            {/* AI 助手分区：pi 会话运行时入口状态与原生配置流程（模型
+                服务与凭据由 pi 管理，本应用不收集不展示） */}
             <Divider titlePlacement="start" style={{ margin: "12px 0 8px" }}>
               <Text strong style={{ fontSize: 13 }}>
                 {t("assistant.settings.section_title")}

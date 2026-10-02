@@ -56,7 +56,7 @@ class TestTranslatePropagationNewContract:
 
     def test_design_not_converged_message_carries_cause(self):
         from e2m2e.algorithm.design.design_orbit import DesignNotConvergedError
-        from e2m2e.data.templates import ConvergenceState, FailureCause
+        from e2m2e.status import ConvergenceState, FailureCause
 
         # status/cause 须一致（ResultStatus 构造校验），停滞对停滞
         # status/cause must agree (validated on ResultStatus construction): stalled maps to stalled

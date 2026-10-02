@@ -22,7 +22,7 @@ import {
 } from "./api";
 vi.mock("./api", () => ({
   assistantGetState: vi.fn().mockResolvedValue({
-    ompConfigured: true,
+    piConfigured: true,
     connected: true,
     sessionId: "s1",
     sessions: [{ id: "s1", title: null, updatedAt: null, messageCount: null }],
@@ -35,7 +35,7 @@ vi.mock("./api", () => ({
       },
     ],
     running: false,
-    ompPath: "/usr/bin/omp",
+    piPath: "/usr/bin/pi",
   }),
   onAssistantEvent: vi.fn().mockImplementation(async (cb: (payload: { kind: string }) => void) => {
     lastHandler = cb;
@@ -158,7 +158,7 @@ describe("AssistantSidebar 清空确认（#450）", () => {
 });
 
 // —— 中断与引导（#453）：生成中停止按钮与发送按钮并存，输入框保持可输入；
-// 生成中发送即引导（omp 语义：取消当前轮并以新消息续跑） ——
+// 生成中发送即引导（pi steer：排队到当前轮工具批后续跑，上下文保留） ——
 
 describe("AssistantSidebar 中断与引导（#453）", () => {
   it("发送中停止按钮出现、输入框仍可输入、发送按钮保持可用", async () => {
@@ -263,18 +263,18 @@ describe("AssistantSidebar 中断续跑（#461）", () => {
   });
 });
 
-// —— omp 空态（ADR 0030）：未配置时给出明确引导而不是崩溃/静默 ——
+// —— pi 空态（ADR 0032）：未配置时给出明确引导而不是崩溃/静默 ——
 
-describe("AssistantSidebar omp 空态", () => {
-  it("ompConfigured=false 时显示未安装引导，去设置按钮回调 onOpenSettings", async () => {
+describe("AssistantSidebar pi 空态", () => {
+  it("piConfigured=false 时显示未安装引导，去设置按钮回调 onOpenSettings", async () => {
     vi.mocked(assistantGetState).mockResolvedValueOnce({
-      ompConfigured: false,
+      piConfigured: false,
       connected: false,
       sessionId: null,
       sessions: [],
       configOptions: [],
       running: false,
-      ompPath: null,
+      piPath: null,
       legacyConfig: false,
     });
     const onOpenSettings = vi.fn();
@@ -286,7 +286,7 @@ describe("AssistantSidebar omp 空态", () => {
         onOpenSettings={onOpenSettings}
       />,
     );
-    expect(await screen.findByText(/未找到可用的 omp/)).toBeDefined();
+    expect(await screen.findByText(/未找到可用的 pi/)).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: /去设置/ }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
     // 空态不出输入框（助手不可用，不提供假输入）

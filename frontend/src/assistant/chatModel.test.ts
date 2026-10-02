@@ -1,4 +1,4 @@
-// chatModel 单测：live/回放事件折叠（omp ACP 基座：后端是唯一事件源，
+// chatModel 单测：live/回放事件折叠（pi RPC 基座：后端是唯一事件源，
 // 回放与实时流同一契约，前端只折叠）。
 
 import { describe, it, expect } from "vitest";

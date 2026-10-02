@@ -1,6 +1,6 @@
 // 会话显示模型：把 live 事件流与回放事件流（同一 `AssistantEventPayload`
 // 契约）增量归并为气泡 + 工具卡片。纯函数，便于单测。
-// omp ACP 基座：后端是唯一事件源（含用户气泡），前端只折叠不重建。
+// pi RPC 基座：后端是唯一事件源（含用户气泡），前端只折叠不重建。
 
 import type { AssistantEventPayload } from "./api";
 import type { ToolCardData } from "./ToolCardView";

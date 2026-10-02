@@ -292,7 +292,7 @@ wheels = [
 
 [[package]]
 name = "e2m2e"
-version = "5.9.7"
+version = "5.9.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
@@ -305,11 +305,11 @@ dependencies = [
     { name = "spiceypy" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/38/e9/59739d4e156a70b58a47c8ca4042cfa5fe0bc10a3dc1fb9b97bb6fa047b5/e2m2e-5.9.7.tar.gz", hash = "sha256:61ff171ff1ed56ea5733cbea50399b7032c3d14bb2d8ef5135c1491872b9bd35", size = 6006424, upload-time = "2026-09-26T14:38:16.435Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f0/ad/7852b80952123ad3a385c169521dec0d15f1f56445115e89c1b2632f9713/e2m2e-5.9.8.tar.gz", hash = "sha256:156196bf7cbb77e57a3ad7a15f35009a2a3aa1cb9fc0036299690ca60f66b884", size = 3942958, upload-time = "2026-10-02T09:17:16.309Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/96/2f/48aed673e38efac8851190dd44ad3b4d78aac9b825c4ce2013a50c9716fa/e2m2e-5.9.7-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:c812dd954c90869d4c4b9325cf3bf515343c5226a0ea7aa6996f54c3ef9fee4f", size = 8157268, upload-time = "2026-09-26T14:38:11.01Z" },
-    { url = "https://files.pythonhosted.org/packages/e6/92/4b36ca47fddf90ad21fa8f36f8c2f51e5a448d94c9a66f01ebd155c9c5e9/e2m2e-5.9.7-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:2bedf22842221f63f4f444f5f7666f4a901962f9dffdc587ba9d5babe10ce789", size = 8303426, upload-time = "2026-09-26T14:38:13.006Z" },
-    { url = "https://files.pythonhosted.org/packages/69/b1/482b02f7561a30fdc921d28a8599a286828ca532c48a124dd2c5f54e75b2/e2m2e-5.9.7-cp310-abi3-win_amd64.whl", hash = "sha256:3dd332dcf47620ee209aab3f4f19c1ca1f0ba37d8747c0459593a19c98624de2", size = 7993243, upload-time = "2026-09-26T14:38:14.706Z" },
+    { url = "https://files.pythonhosted.org/packages/99/c9/b126140a79743fe6e08c9c2494ab025e6ae702c0f36d215d23e83564c500/e2m2e-5.9.8-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:cdda07bf65871544a86117aaabeedc1b122d6f9a64dbe34f017a763bdb99633f", size = 5847063, upload-time = "2026-10-02T09:17:09.95Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/51/38ed99a3984b8e17597fd8a8febd15a15b80e00263dbd6299e0fb995afce/e2m2e-5.9.8-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:3e4ee4785cefda0513135fe3d19fc8838319dc578cbbf418ceb9c2c4c8c55ccd", size = 6003440, upload-time = "2026-10-02T09:17:12.115Z" },
+    { url = "https://files.pythonhosted.org/packages/44/9b/f431863904733e3148160724a21fcfbd6b8eb5b2c8fe4611f3b7ba4769cf/e2m2e-5.9.8-cp310-abi3-win_amd64.whl", hash = "sha256:aa48d14e9dea699345a39c150677a26a08ece081b53efa9f438c6cec39f99c2e", size = 5722824, upload-time = "2026-10-02T09:17:14.21Z" },
 ]
 
 [package.optional-dependencies]
@@ -1305,7 +1305,7 @@ wheels = [
 
 [[package]]
 name = "transfer-orbit-design"
-version = "4.8.6"
+version = "4.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
@@ -1341,7 +1341,7 @@ dev = [
 requires-dist = [
     { name = "calcephpy", marker = "sys_platform != 'win32'", specifier = "==5.0.0" },
     { name = "calcephpy", marker = "sys_platform == 'win32'", url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" },
-    { name = "e2m2e", extras = ["mcp"], specifier = ">=5.9.7" },
+    { name = "e2m2e", extras = ["mcp"], specifier = ">=5.9.8" },
     { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=2.0" },
     { name = "numpy", specifier = ">=2.4.0" },

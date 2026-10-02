@@ -1,15 +1,16 @@
-//! ACP（Agent Client Protocol）JSON-RPC stdio 客户端：与 omp `acp` 子进程
-//! 的换行 JSON 传输层（omp 为基座的重构，取代自建 OpenAI 兼容 agent loop）。
+//! pi RPC JSONL stdio 客户端：与 `pi --mode rpc` 子进程的换行 JSON 传输层
+//!（ADR 0032；取代旧 ACP JSON-RPC 包封）。
 //!
 //! 职责（仅协议层，不含会话语义）：
 //! - 在给定读写流上跑换行 JSON 协议（子进程拉起由调用方完成；测试用内存
 //!   双工流替代真进程）；
-//! - 请求/响应按 id 多路复用（响应乱序到达各归各家）；
-//! - 服务端通知（`session/update` 等）转交回调；未知通知同样上抛，由
-//!   上层记调试日志后忽略；
-//! - 服务端请求（`elicitation/create`、`session/request_permission` 等）
-//!   转交回调并附带应答通道；本层不区分已知未知——上层对未知请求回
-//!   JSON-RPC 标准错误，保证需要回复的请求不被静默吞掉；
+//! - 命令 `{"id","type",…}` / 响应 `{"id","type":"response","command",
+//!   "success",…}` 按 id 多路复用（响应乱序到达各归各家）；
+//! - 会话事件（`message_update`/`tool_execution_*`/`agent_settled` 等，
+//!   有 type 无 id）转交回调；
+//! - 服务端子协议请求（`extension_ui_request`，有 type 有 id）转交回调并
+//!   附带应答通道；应答为 `extension_ui_response`（复用请求自带 id，无
+//!   JSON-RPC 错误码语义）；
 //! - 读循环断开时唤醒全部等待者（is_alive 转假，上层据此重连）。
 
 use std::collections::HashMap;
@@ -21,7 +22,8 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
 
-/// 服务端 → 客户端请求的应答通道：回调持有它择机应答，恰好一次。
+/// 服务端 → 客户端子协议请求（extension_ui_request）的应答通道：回调持有
+/// 它择机应答，恰好一次。
 #[derive(Clone)]
 pub struct Responder {
     tx: mpsc::UnboundedSender<Outgoing>,
@@ -29,62 +31,49 @@ pub struct Responder {
 }
 
 impl Responder {
-    /// 服务端请求的 id（审批键：卡片 callId 与挂起表都按它索引）。
-    pub fn id(&self) -> &Value {
-        &self.id
-    }
-
-    /// 应答成功结果。
-    pub fn ok(self, result: Value) {
-        let _ = self.tx.send(Outgoing::Response { id: self.id, outcome: Ok(result) });
-    }
-
-    /// 应答 JSON-RPC 错误。
-    pub fn err(self, code: i64, message: impl Into<String>) {
-        let _ = self.tx.send(Outgoing::Response {
-            id: self.id,
-            outcome: Err((code, message.into())),
-        });
+    /// 应答 select 的取值（如批准/拒绝选项文案）。
+    pub fn ok(self, value: Value) {
+        let _ = self
+            .tx
+            .send(Outgoing::UiResponse { id: self.id, value });
     }
 }
 
 /// 读循环上抛给上层的入站消息处理入口。
-pub trait AcpHandlers: Send + Sync {
-    /// 服务端通知（有 method 无 id）。
-    fn on_notification(&self, method: &str, params: Value);
+pub trait RpcHandlers: Send + Sync {
+    /// 会话事件（有 type 无 id）。
+    fn on_event(&self, record: Value);
 
-    /// 服务端请求（有 method 有 id）。实现必须恰好应答一次；未识别的
-    /// method 由实现回 -32601（本层不拦截，保证语义集中）。
+    /// 服务端子协议请求（extension_ui_request）。实现必须恰好应答一次；
+    /// fire-and-forget 方法（notify/setStatus 等）由实现忽略。
     fn on_request(&self, method: &str, params: Value, responder: Responder);
 }
 
 /// 客户端 → 子进程的出站消息（统一经同一写出通道串行写出）。
 enum Outgoing {
-    /// 请求（登记等待者）。
-    Request {
+    /// 命令（登记等待者）。
+    Command {
         id: u64,
-        method: String,
-        params: Value,
+        kind: String,
+        payload: Value,
         reply: oneshot::Sender<Result<Value>>,
     },
-    /// 通知（无 id）。
-    Notification { method: String, params: Value },
-    /// 服务端请求的应答。
-    Response { id: Value, outcome: std::result::Result<Value, (i64, String)> },
+    /// 服务端子协议请求的应答。
+    UiResponse { id: Value, value: Value },
 }
 
-/// ACP 连接句柄。克隆便宜；读循环退出后所有请求失败、`is_alive` 为假。
+/// RPC 连接句柄。克隆便宜；读循环退出后所有请求失败、`is_alive` 为假。
 #[derive(Clone)]
-pub struct AcpConn {
+pub struct RpcConn {
     tx: mpsc::UnboundedSender<Outgoing>,
     alive: Arc<AtomicBool>,
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
-impl AcpConn {
+impl RpcConn {
     /// 在已有读写流上跑协议，返回连接句柄（读写在后台任务中运行）。
-    pub fn spawn_on<R, W>(reader: R, writer: W, handlers: Arc<dyn AcpHandlers>) -> Self
+    pub fn spawn_on<R, W>(reader: R, writer: W, handlers: Arc<dyn RpcHandlers>) -> Self
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
@@ -104,30 +93,28 @@ impl AcpConn {
         Self { tx, alive }
     }
 
-    /// 发请求并等响应（响应乱序到达按 id 路由）。
-    pub async fn request(&self, method: &str, params: Value) -> Result<Value> {
+    /// 发命令并等响应（响应乱序到达按 id 路由）。信封的 success 判定与
+    /// data 提取在 classify 一处完成（失败响应已转 Err 上抛）。
+    pub async fn request(&self, kind: &str, payload: Value) -> Result<Value> {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         let (reply_tx, reply_rx) = oneshot::channel();
         self.tx
-            .send(Outgoing::Request { id, method: method.into(), params, reply: reply_tx })
-            .map_err(|_| anyhow!("ACP 连接已关闭"))?;
+            .send(Outgoing::Command {
+                id,
+                kind: kind.into(),
+                payload,
+                reply: reply_tx,
+            })
+            .map_err(|_| anyhow!("RPC 连接已关闭"))?;
         reply_rx
             .await
-            .map_err(|_| anyhow!("ACP 连接在等待响应时断开（{method}）"))?
-    }
-
-    /// 发通知（无 id，不等响应）。
-    pub fn notify(&self, method: &str, params: Value) -> Result<()> {
-        self.tx
-            .send(Outgoing::Notification { method: method.into(), params })
-            .map_err(|_| anyhow!("ACP 连接已关闭"))
+            .map_err(|_| anyhow!("RPC 连接在等待响应时断开（{kind}）"))?
     }
 
     /// 读循环是否仍在（探活）。
     pub fn is_alive(&self) -> bool {
         !self.tx.is_closed() && self.alive.load(Ordering::SeqCst)
     }
-
 }
 
 async fn io_loop<R, W>(
@@ -135,7 +122,7 @@ async fn io_loop<R, W>(
     mut writer: W,
     mut rx: mpsc::UnboundedReceiver<Outgoing>,
     responder_tx: mpsc::UnboundedSender<Outgoing>,
-    handlers: Arc<dyn AcpHandlers>,
+    handlers: Arc<dyn RpcHandlers>,
     alive: Arc<AtomicBool>,
 ) where
     R: AsyncRead + Unpin,
@@ -150,12 +137,12 @@ async fn io_loop<R, W>(
                     Some(m) => m,
                     None => break, // 全部句柄已 drop
                 };
-                // 请求按值拆出等待者（oneshot 不可克隆），先登记再写：
+                // 命令按值拆出等待者（oneshot 不可克隆），先登记再写：
                 // 写失败立刻唤醒，不留悬挂等待
                 let (registered_id, line) = match msg {
-                    Outgoing::Request { id, method, params, reply } => {
+                    Outgoing::Command { id, kind, payload, reply } => {
                         pending.insert(id, reply);
-                        (Some(id), encode_request(id, &method, &params))
+                        (Some(id), encode_command(id, &kind, &payload))
                     }
                     other => (None, encode(&other)),
                 };
@@ -163,14 +150,14 @@ async fn io_loop<R, W>(
                     if write_line(&mut writer, &line).await.is_err() {
                         if let Some(id) = registered_id {
                             if let Some(tx) = pending.remove(&id) {
-                                let _ = tx.send(Err(anyhow!("ACP 写入失败（子进程可能已退出）")));
+                                let _ = tx.send(Err(anyhow!("RPC 写入失败（子进程可能已退出）")));
                             }
                         }
                         break;
                     }
                 } else if let Some(id) = registered_id {
                     if let Some(tx) = pending.remove(&id) {
-                        let _ = tx.send(Err(anyhow!("ACP 请求序列化失败")));
+                        let _ = tx.send(Err(anyhow!("RPC 命令序列化失败")));
                     }
                 }
             }
@@ -189,10 +176,10 @@ async fn io_loop<R, W>(
                             let _ = tx.send(result);
                         }
                     }
-                    Inbound::Notification { method, params } => {
-                        handlers.on_notification(&method, params);
+                    Inbound::Event { record } => {
+                        handlers.on_event(record);
                     }
-                    Inbound::Request { method, id, params } => {
+                    Inbound::UiRequest { method, id, params } => {
                         let responder = Responder { tx: responder_tx.clone(), id };
                         handlers.on_request(&method, params, responder);
                     }
@@ -202,10 +189,9 @@ async fn io_loop<R, W>(
     }
     alive.store(false, Ordering::SeqCst);
     for (_, tx) in pending.drain() {
-        let _ = tx.send(Err(anyhow!("ACP_CONNECTION_CLOSED")));
+        let _ = tx.send(Err(anyhow!("RPC_CONNECTION_CLOSED")));
     }
 }
-
 
 async fn write_line<W: AsyncWrite + Unpin>(writer: &mut W, text: &str) -> std::io::Result<()> {
     let mut buf = String::with_capacity(text.len() + 1);
@@ -217,56 +203,69 @@ async fn write_line<W: AsyncWrite + Unpin>(writer: &mut W, text: &str) -> std::i
 
 fn encode(msg: &Outgoing) -> Option<String> {
     let v = match msg {
-        Outgoing::Request { id, method, params, .. } => {
-            json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+        // Command 经 encode_command 平铺（见 io_loop）；此分支不可达，
+        // 仅为穷尽匹配
+        Outgoing::Command { id, kind, .. } => json!({"id": id, "type": kind}),
+        Outgoing::UiResponse { id, value } => {
+            json!({"type": "extension_ui_response", "id": id, "value": value})
         }
-        Outgoing::Notification { method, params } => {
-            json!({"jsonrpc": "2.0", "method": method, "params": params})
-        }
-        Outgoing::Response { id, outcome } => match outcome {
-            Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-            Err((code, message)) => {
-                json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
-            }
-        },
     };
     serde_json::to_string(&v).ok()
 }
 
-fn encode_request(id: u64, method: &str, params: &Value) -> Option<String> {
-    serde_json::to_string(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})).ok()
+/// pi 命令载荷平铺进命令对象（`{"id","type",…payload}`，无 params 包封）。
+fn encode_command(id: u64, kind: &str, payload: &Value) -> Option<String> {
+    let mut v = json!({"id": id, "type": kind});
+    if let (Some(obj), Some(extra)) = (v.as_object_mut(), payload.as_object()) {
+        for (k, val) in extra {
+            obj.insert(k.clone(), val.clone());
+        }
+    }
+    serde_json::to_string(&v).ok()
 }
+
 
 enum Inbound {
     Response { id: u64, result: Result<Value> },
-    Notification { method: String, params: Value },
-    Request { method: String, id: Value, params: Value },
+    Event { record: Value },
+    UiRequest { method: String, id: Value, params: Value },
 }
 
 fn classify(v: &Value) -> Inbound {
-    if let Some(method) = v.get("method").and_then(Value::as_str) {
-        let params = v.get("params").cloned().unwrap_or(Value::Null);
-        if let Some(id) = v.get("id") {
-            Inbound::Request { method: method.to_string(), id: id.clone(), params }
-        } else {
-            Inbound::Notification { method: method.to_string(), params }
+    let kind = v.get("type").and_then(Value::as_str).unwrap_or("");
+    match kind {
+        "response" => {
+            let Some(id) = v.get("id").and_then(Value::as_u64) else {
+                // 解析失败的响应无 id（parse 错误）：按事件上抛记日志
+                return Inbound::Event { record: v.clone() };
+            };
+            let result = if v.get("success") == Some(&json!(false)) {
+                let message = v
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .unwrap_or("未知 pi 错误");
+                Err(anyhow!("pi 错误：{message}"))
+            } else {
+                Ok(v.get("data").cloned().unwrap_or(Value::Null))
+            };
+            Inbound::Response { id, result }
         }
-    } else if let Some(id) = v.get("id").and_then(Value::as_u64) {
-        let result = if let Some(err) = v.get("error") {
-            let message = err.get("message").and_then(Value::as_str).unwrap_or("未知 ACP 错误");
-            let detail = err.get("data").and_then(|d| d.get("details")).and_then(Value::as_str);
-            let code = err.get("code").and_then(Value::as_i64).unwrap_or(0);
-            Err(anyhow!(
-                "ACP 错误 {code}：{message}{}",
-                detail.map(|d| format!("（{d}）")).unwrap_or_default()
-            ))
-        } else {
-            Ok(v.get("result").cloned().unwrap_or(Value::Null))
-        };
-        Inbound::Response { id, result }
-    } else {
-        // 无 method 无 id：既非请求也非响应，按可忽略通知上抛（空 method）
-        Inbound::Notification { method: String::new(), params: Value::Null }
+        // 扩展 UI 子协议：有 id 有 method，需要应答（select 等对话框）
+        "extension_ui_request" => {
+            let method = v
+                .get("method")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let id = v.get("id").cloned().unwrap_or(Value::Null);
+            Inbound::UiRequest {
+                method,
+                id,
+                params: v.clone(),
+            }
+        }
+        // 其余（message_update/tool_execution_*/agent_settled/…）：事件
+        _ => Inbound::Event { record: v.clone() },
     }
 }
 
@@ -277,24 +276,24 @@ mod tests {
     use serde_json::json;
     use std::time::Duration;
 
-    /// 捕获通知与请求并立即应答的最小 handlers。
+    /// 捕获事件与请求并立即应答的最小 handlers。
     struct Recorder {
-        notifications: Mutex<Vec<(String, Value)>>,
+        events: Mutex<Vec<Value>>,
         requests: Mutex<Vec<(String, Value)>>,
     }
 
     impl Recorder {
         fn new() -> Arc<Self> {
             Arc::new(Self {
-                notifications: Mutex::new(Vec::new()),
+                events: Mutex::new(Vec::new()),
                 requests: Mutex::new(Vec::new()),
             })
         }
     }
 
-    impl AcpHandlers for Recorder {
-        fn on_notification(&self, method: &str, params: Value) {
-            self.notifications.lock().push((method.to_string(), params));
+    impl RpcHandlers for Recorder {
+        fn on_event(&self, record: Value) {
+            self.events.lock().push(record);
         }
         fn on_request(&self, method: &str, params: Value, responder: Responder) {
             self.requests.lock().push((method.to_string(), params));
@@ -324,12 +323,12 @@ mod tests {
         }
     }
 
-    fn fake_pair() -> (AcpConn, Fake) {
+    fn fake_pair() -> (RpcConn, Fake) {
         // duplex(64k) 返回单个双工流：客户端留一半，假服务端一半
         let (client, server) = tokio::io::duplex(64 * 1024);
         let (c_read, c_write) = tokio::io::split(client);
         let rec = Recorder::new();
-        let conn = AcpConn::spawn_on(c_read, c_write, rec);
+        let conn = RpcConn::spawn_on(c_read, c_write, rec);
         let (r, w) = tokio::io::split(server);
         (conn, Fake { reader: BufReader::new(r), writer: w })
     }
@@ -339,85 +338,98 @@ mod tests {
     async fn out_of_order_responses_route_by_id() {
         let (conn, mut fake) = fake_pair();
         let (ca, cb) = (conn.clone(), conn.clone());
-        let a = tokio::spawn(async move { ca.request("session/new", json!({"cwd": "/tmp"})).await });
-        let b = tokio::spawn(async move { cb.request("session/list", json!({})).await });
+        let a = tokio::spawn(async move { ca.request("get_state", json!({})).await });
+        let b = tokio::spawn(async move { cb.request("get_messages", json!({})).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         let id1 = fake.read().await["id"].as_u64().unwrap();
         let id2 = fake.read().await["id"].as_u64().unwrap();
-        // 乱序：先应答后发的请求
-        fake.write(json!({"jsonrpc": "2.0", "id": id2, "result": {"which": "b"}})).await;
-        fake.write(json!({"jsonrpc": "2.0", "id": id1, "result": {"which": "a"}})).await;
+        // 乱序：先应答后发的命令
+        fake.write(json!({"id": id2, "type": "response", "command": "get_messages", "success": true, "data": {"which": "b"}})).await;
+        fake.write(json!({"id": id1, "type": "response", "command": "get_state", "success": true, "data": {"which": "a"}})).await;
         let ra = a.await.unwrap().unwrap();
         let rb = b.await.unwrap().unwrap();
         assert_eq!(ra["which"], "a");
         assert_eq!(rb["which"], "b");
     }
 
-    /// 通知进回调且不产生任何响应（对端不会再读到东西——用请求应答对齐验证）。
+    /// 命令载荷平铺进命令对象（无 params 包封）。
     #[tokio::test]
-    async fn notifications_forwarded_without_reply() {
+    async fn command_payload_is_flattened() {
         let (conn, mut fake) = fake_pair();
-        fake.write(json!({
-            "jsonrpc": "2.0", "method": "session/update",
-            "params": {"sessionId": "s1", "update": {"sessionUpdate": "usage_update"}}
-        }))
-        .await;
-        fake.write(json!({"jsonrpc": "2.0", "method": "$/unknown", "params": {}})).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        // 发一个请求并等应答：证明通知没有被误当成响应消耗
         let c2 = conn.clone();
-        let resp = tokio::spawn(async move { c2.request("session/list", json!({})).await });
+        let task = tokio::spawn(async move { c2.request("prompt", json!({"message": "hi"})).await });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let req = fake.read().await;
+        assert_eq!(req["type"], "prompt");
+        assert_eq!(req["message"], "hi");
+        assert!(req.get("params").is_none(), "载荷不得包进 params：{req}");
+        let id = req["id"].as_u64().unwrap();
+        fake.write(json!({"id": id, "type": "response", "command": "prompt", "success": true, "data": {"disposition": "started"}})).await;
+        let data = task.await.unwrap().unwrap();
+        assert_eq!(data["disposition"], "started");
+    }
+
+    /// 会话事件进回调且不产生任何响应。
+    #[tokio::test]
+    async fn events_forwarded_without_reply() {
+        let (conn, mut fake) = fake_pair();
+        fake.write(json!({"type": "message_update", "assistantMessageEvent": {"type": "text_delta", "delta": "你好"}})).await;
+        fake.write(json!({"type": "agent_settled"})).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        // 发一个命令并等应答：证明事件没有被误当成响应消耗
+        let c2 = conn.clone();
+        let resp = tokio::spawn(async move { c2.request("get_state", json!({})).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         let req = fake.read().await;
         let id = req["id"].as_u64().unwrap();
-        assert_eq!(req["method"], "session/list");
-        fake.write(json!({"jsonrpc": "2.0", "id": id, "result": {"ok": true}})).await;
+        assert_eq!(req["type"], "get_state");
+        fake.write(json!({"id": id, "type": "response", "command": "get_state", "success": true, "data": {}})).await;
         resp.await.unwrap().unwrap();
     }
 
-    /// 服务端请求进回调并由 Responder 应答。
+    /// extension_ui_request 进回调并由 Responder 应答（id 原样回带）。
     #[tokio::test]
-    async fn server_request_roundtrip() {
+    async fn ui_request_roundtrip() {
         let (conn, mut fake) = fake_pair();
         fake.write(json!({
-            "jsonrpc": "2.0", "id": 7, "method": "elicitation/create",
-            "params": {"mode": "form", "message": "Allow tool: write"}
+            "type": "extension_ui_request", "id": "ui-7", "method": "select",
+            "title": "TOD_TOOL_APPROVAL {}", "options": ["批准", "拒绝"]
         }))
         .await;
         let resp = fake.read().await;
-        assert_eq!(resp["id"], 7);
-        assert_eq!(resp["result"]["echo"], "elicitation/create");
+        assert_eq!(resp["type"], "extension_ui_response");
+        assert_eq!(resp["id"], "ui-7");
+        assert_eq!(resp["value"]["echo"], "select");
         assert!(conn.is_alive());
     }
 
     /// 读循环断开（对端关闭）：全部等待者收到错误，is_alive 变假。
     #[tokio::test]
     async fn stream_close_fails_waiters_and_marks_dead() {
-        let (conn, fake, ) = fake_pair();
+        let (conn, fake) = fake_pair();
         let c2 = conn.clone();
-        let pending = tokio::spawn(async move { c2.request("session/prompt", json!({})).await });
+        let pending = tokio::spawn(async move { c2.request("prompt", json!({"message": "x"})).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         drop(fake); // 模拟子进程退出
         let err = pending.await.unwrap().unwrap_err();
-        assert!(err.to_string().contains("ACP_CONNECTION_CLOSED"), "got: {err}");
+        assert!(err.to_string().contains("RPC_CONNECTION_CLOSED"), "got: {err}");
         assert!(!conn.is_alive());
     }
 
-    /// 服务端错误响应透传 message 与 data.details。
+    /// 失败响应（success=false）透传 error 文本。
     #[tokio::test]
-    async fn error_response_surfaces_details() {
+    async fn error_response_surfaces_error_text() {
         let (conn, mut fake) = fake_pair();
         let c2 = conn.clone();
-        let task = tokio::spawn(async move { c2.request("session/load", json!({"sessionId": "nope"})).await });
+        let task = tokio::spawn(async move { c2.request("set_model", json!({"provider": "x", "modelId": "nope"})).await });
         tokio::time::sleep(Duration::from_millis(50)).await;
         let id = fake.read().await["id"].as_u64().unwrap();
         fake.write(json!({
-            "jsonrpc": "2.0", "id": id,
-            "error": {"code": -32603, "message": "Internal error",
-                      "data": {"details": "ACP session not found: nope"}}
+            "id": id, "type": "response", "command": "set_model",
+            "success": false, "error": "Model not found: nope"
         }))
         .await;
         let err = task.await.unwrap().unwrap_err();
-        assert!(err.to_string().contains("ACP session not found: nope"), "got: {err}");
+        assert!(err.to_string().contains("Model not found: nope"), "got: {err}");
     }
 }

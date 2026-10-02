@@ -1,6 +1,6 @@
 [package]
 name = "transfer-orbit-design"
-version = "4.8.6"
+version = "4.9.0"
 edition = "2021"
 description = "transfer-orbit-design Tauri 桌面应用（Rust 壳 + React 前端 + e2m2e sidecar）"
 
@@ -28,8 +28,8 @@ tauri-plugin-process = "2.3.1"
 # The file dialog for scenario save/open (#429): official plugin, same pattern as updater/process.
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
-# 更新器 HTTP（rustls，避开 Windows OpenSSL 现场编译）。AI 会话已由 omp
-# 基座接管（ADR 0030），keyring/key 不再由本应用保存
+# 更新器 HTTP（rustls，避开 Windows OpenSSL 现场编译）。AI 会话已由 pi
+# 基座接管（ADR 0032），keyring/key 不再由本应用保存
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 
 # sidecar 子树生命周期兜底（Job Object kill-on-close），仅 Windows 需要

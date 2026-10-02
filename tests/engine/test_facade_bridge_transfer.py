@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from e2m2e.data.templates import ConvergenceState, FailureCause
+from e2m2e.status import ConvergenceState, FailureCause
 
 from src.commons.units import DU_KM, TU_SECONDS
 from src.engine.facade_bridge import FacadeBridge, TransferDesignResultData

@@ -104,7 +104,7 @@ pub fn catalog_env_plan(
 
 /// 应用 `catalog_env_plan`：库目录取用户配置目录下的 catalog/，与
 /// scenarios/ 同级。进程级 set_var 即够——sidecar 惰性 spawn、助手链经
-/// app → omp → bridge → mcp-serve 全部继承本进程环境（`TOD_RESOURCE_DIR`
+/// app → pi → bridge → mcp-serve 全部继承本进程环境（`TOD_RESOURCE_DIR`
 /// 走同一条路径，全仓无 env_clear）。
 fn configure_catalog_env() {
     let user_dir = assistant::host_tools::config_dir();
@@ -153,21 +153,21 @@ pub fn run() {
             // 用户显式设置的环境优先。
             configure_catalog_env();
             SidecarState::configure(command, cwd);
-            // AI 助手（omp ACP 基座）：dev 用 TOD_OMP_BIN/PATH 的 omp，
-            // 分发用资源目录内打包的固定版本 omp；ACP 会话工作目录取
-            // 应用配置目录（会话索引按它过滤，不混入用户 CLI 会话）。
-            // mcp-serve 不再由本进程管理——omp 经桥接子进程拉起（ADR 更新）。
+            // AI 助手（pi RPC 基座，ADR 0032）：dev 用 TOD_PI_BIN/PATH 的
+            // pi，分发用资源目录内打包的固定版本 pi；会话目录钉到应用
+            // 配置目录下 pi-sessions/（PI_CODING_AGENT_SESSION_DIR），与
+            // 用户终端 pi 会话隔离。mcp-serve 由桥接扩展按环境变量拉起。
             if let Some(resource_dir) = resource_dir_handle.as_deref() {
                 if !cfg!(debug_assertions) {
-                    // 桥接进程按它定位打包 mcp-serve（经 omp 环境继承）
+                    // 桥接进程按它定位打包 mcp-serve（经 pi 环境继承）
                     std::env::set_var("TOD_RESOURCE_DIR", resource_dir);
                 }
             }
-            if let Some(omp_command) =
-                assistant::omp::resolve_omp_command(resource_dir_handle.as_deref())
+            if let Some(pi_command) =
+                assistant::pi::resolve_pi_command(resource_dir_handle.as_deref())
             {
-                if let Some(cwd) = assistant::host_tools::config_dir() {
-                    assistant::omp::OmpState::configure(omp_command, cwd);
+                if let Some(config_dir) = assistant::host_tools::config_dir() {
+                    assistant::pi::PiState::configure(pi_command, config_dir.join("pi-sessions"));
                 }
             }
             // 进度事件 → 前端窗口
@@ -208,7 +208,7 @@ pub fn run() {
             assistant_cmd::assistant_new_session,
             assistant_cmd::assistant_switch_session,
             assistant_cmd::assistant_set_config_option,
-            assistant_cmd::assistant_open_omp_setup
+            assistant_cmd::assistant_open_pi_setup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

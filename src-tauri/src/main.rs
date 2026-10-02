@@ -4,8 +4,9 @@
 //! 混合显卡及部分 Wayland/Mesa 环境）下会引发严重掉帧与全局卡顿（1-5 FPS）。
 //! 在初始化 GTK / WebKit 之前设置 `WEBKIT_DISABLE_DMABUF_RENDERER=1` 能彻底解决此问题。
 //!
-//! `--assistant-mcp-bridge`：本二进制作为 omp ACP 的 MCP 桥接子进程运行
-//! （见 assistant/bridge.rs），不开窗口、不进 Tauri，stdin/stdout 即协议。
+//! `--assistant-mcp-bridge`：本二进制作为 pi 桥接扩展（tod-bridge.ts）
+//! 的 MCP 桥接子进程运行（见 assistant/bridge.rs），不开窗口、不进
+//! Tauri，stdin/stdout 即协议。
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
