@@ -208,7 +208,7 @@ jobs:
       # Publish only on tag pushes; branch dispatch rehearsals stop at build+smoke.
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           body_path: release_notes.md
@@ -362,7 +362,7 @@ jobs:
              src-tauri/target/release/bundle/rpm/*.rpm.sig > /dev/null
       - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           files: |
