@@ -1,4 +1,4 @@
-//! transfer-orbit-design Tauri 应用：sidecar 状态 + 命令注册。
+//! CODE（Cislunar Orbit DesignEr，系统名 cislunar-code）Tauri 应用：sidecar 状态 + 命令注册。
 
 pub mod assistant;
 pub mod assistant_cmd;
@@ -27,9 +27,9 @@ pub fn resolve_kernel_dir(resource_dir: Option<&std::path::Path>) -> Option<std:
 
 /// 分发期 sidecar 可执行文件名（resources/binaries/ 下，Windows 带后缀）。
 #[cfg(windows)]
-pub const SIDECAR_EXE: &str = "transfer-orbit-design-sidecar.exe";
+pub const SIDECAR_EXE: &str = "cislunar-code-sidecar.exe";
 #[cfg(not(windows))]
-pub const SIDECAR_EXE: &str = "transfer-orbit-design-sidecar";
+pub const SIDECAR_EXE: &str = "cislunar-code-sidecar";
 
 /// 开发期拉起配置：仓库根下 uv 拉起 e2m2e CLI（serve-stdio）。
 pub fn dev_sidecar_command(repo_root: &std::path::Path) -> (Vec<String>, Option<String>) {
@@ -124,6 +124,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // 发布名迁移（5.0.0，ADR 0033）：旧 transfer-orbit-design 配置
+            // 目录改名 cislunar-code——须在任何 config_dir() 消费（catalog/
+            // pi-sessions/scenarios）之前执行。
+            assistant::host_tools::migrate_legacy_config_dir();
             // 开发期（cargo tauri dev，debug 构建）：仓库根下 uv 拉起；
             // 分发期（release 构建）：resources/binaries 内的打包 sidecar。
             let resource_dir_handle = app.path().resource_dir().ok();
@@ -220,11 +224,11 @@ mod tests {
 
     #[test]
     fn packaged_command_points_at_resource_binaries_with_resource_cwd() {
-        let root = std::path::Path::new("/opt/transfer-orbit-design");
+        let root = std::path::Path::new("/opt/cislunar-code");
         let (cmd, cwd) = packaged_sidecar_command(root);
         let expected = root.join("binaries").join(SIDECAR_EXE);
         assert_eq!(cmd, vec![expected.to_string_lossy().into_owned()]);
-        assert_eq!(cwd.as_deref(), Some("/opt/transfer-orbit-design"));
+        assert_eq!(cwd.as_deref(), Some("/opt/cislunar-code"));
     }
 
     #[test]

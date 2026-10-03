@@ -2,16 +2,28 @@
 
 本上下文描述 CR3BP 轨道转换到星历模型时使用的领域语言，确保单条轨道与轨道族批处理的语义一致。
 
-此外，自 ADR-0001 起定义软件界面国际化相关领域语言（ADR-0031 起界面固定简体中文）；自 ADR-0018 起定义软件自动更新机制相关的领域语言；自 ADR-0022 起定义 AI 助手（LLM+MCP）相关的领域语言，自 ADR-0032 起该功能以 pi 为会话运行时（RPC）。
+此外，自 ADR-0001 起定义软件界面国际化相关领域语言（ADR-0031 起界面固定简体中文）；自 ADR-0018 起定义软件自动更新机制相关的领域语言；自 ADR-0022 起定义 AI 助手（LLM+MCP）相关的领域语言，自 ADR-0032 起该功能以 pi 为会话运行时（RPC）；自 ADR-0033 起发布名与应用标识分层（显示名 CODE、系统名 cislunar-code）。
 
 ## Language
+
+**应用显示名 (Product Name, CODE)**:
+应用的对外名称 CODE（Cislunar Orbit DesignEr 的缩写），用于窗口标题、快捷方式与 desktop 显示名、Windows 安装包文件名（`CODE_<版本>_x64-setup.exe`）与 Linux AppImage 文件名。
+_Avoid_: transfer-orbit-design（4.9.0 及以前的发布名，historical）、全小写 code
+
+**系统名 (System Name, cislunar-code)**:
+Linux 系统层的包名与路径名：deb `Package:` / rpm `Name:`、`/usr/bin` 可执行名、用户配置目录（Windows `%APPDATA%/cislunar-code`，Linux 为 XDG 配置目录下 `cislunar-code/`）、sidecar 可执行名与 Cargo/Python 包名。显示层 CODE 与系统层 cislunar-code 的分层见 ADR 0033（裸 CODE 经 bundler kebab 化会撞 VS Code 的 code 包名）。
+_Avoid_: code（系统包名）、CODE（系统路径与包名）
+
+**transfer-orbit-design**:
+historical：4.9.0 及以前的发布名（应用 ID、安装包、配置目录 `%APPDATA%/transfer-orbit-design`、更新通道 `latest.json` 均属该时代标识）。5.0.0 起 CODE 取代；旧配置目录首启自动迁移，旧更新通道冻结在 4.9.0。
+_Avoid_: 用于当前叙述（历史 ADR、规划文档与 CHANGELOG 历史小节除外）
 
 **自动更新 (Auto Update)**:
 客户端在运行期间对新版本的检测、下载、签名校验与安装应用流程。
 _Avoid_: 自动热重载（指开发态 Vite HMR）、静默覆写（未提示用户直接重启）
 
 **更新元清单 (Update Manifest)**:
-托管于发布源的元数据描述文件（即 `latest.json`），包含最新版本号、发布日期、各操作系统平台目标安装包的下载 URL 及其 MiniSign 密码学签名。
+托管于发布源的元数据描述文件（即 `latest-code.json`，5.0.0 前为 `latest.json`），包含最新版本号、发布日期、各操作系统平台目标安装包的下载 URL 及其 MiniSign 密码学签名。
 _Avoid_: 镜像清单、版本索引文件
 
 **更新签名 (Updater Signature)**:
@@ -209,7 +221,7 @@ _Avoid_: 工具内置默认值、出厂默认值、参数模板
 _Avoid_: 轨道库（那是产物持久化，不是工具输入参考）
 
 **轨道库 (Orbit Catalog)**:
-e2m2e 管理的计算产物库，落在用户配置目录下的 `catalog/`（Windows `%APPDATA%/transfer-orbit-design/catalog`，Linux 为 XDG 配置目录下的同名路径）；目录与入库开关由 Rust 壳在 app setup 显式注入 `E2M2E_CATALOG_DIR` / `E2M2E_CATALOG_ENABLED`（ADR 0008 修订、上游 ADR 0047：库不再有隐式默认落点）。每条产物是一份**记录**，含多维分类（族、平动点、Jacobi、振幅、段存在性）、谱系指针、**标签**与**记录备注**。GUI 的项目树清单、过滤与谱系都来自轨道库，重启不丢；随包分发的基线数据集（预置族）在首次启动时按版本导入：同版本跳过、版本变化整族替换。
+e2m2e 管理的计算产物库，落在用户配置目录下的 `catalog/`（Windows `%APPDATA%/cislunar-code/catalog`，Linux 为 XDG 配置目录下的同名路径）；目录与入库开关由 Rust 壳在 app setup 显式注入 `E2M2E_CATALOG_DIR` / `E2M2E_CATALOG_ENABLED`（ADR 0008 修订、上游 ADR 0047：库不再有隐式默认落点）。每条产物是一份**记录**，含多维分类（族、平动点、Jacobi、振幅、段存在性）、谱系指针、**标签**与**记录备注**。GUI 的项目树清单、过滤与谱系都来自轨道库，重启不丢；随包分发的基线数据集（预置族）在首次启动时按版本导入：同版本跳过、版本变化整族替换。
 _Avoid_: 参考数据集（工具输入参考）、output/ 文件堆
 
 **记录 (Record)**:

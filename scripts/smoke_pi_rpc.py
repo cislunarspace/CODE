@@ -36,7 +36,7 @@ import time
 import uuid
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_APP = os.path.join(REPO_ROOT, "src-tauri", "target", "debug", "transfer-orbit-design")
+DEFAULT_APP = os.path.join(REPO_ROOT, "src-tauri", "target", "debug", "cislunar-code")
 DEFAULT_EXT = os.path.join(REPO_ROOT, "src-tauri", "resources", "assistant", "tod-bridge.ts")
 APPROVAL_PREFIX = "TOD_TOOL_APPROVAL "
 
@@ -202,7 +202,7 @@ def main() -> int:
     session_dir = os.path.join(tmp, "pi-sessions")
     os.makedirs(session_dir, exist_ok=True)
     os.makedirs(os.path.join(tmp, "catalog"), exist_ok=True)
-    scenarios = os.path.join(session_dir, "xdg", "transfer-orbit-design", "scenarios")
+    scenarios = os.path.join(session_dir, "xdg", "cislunar-code", "scenarios")
 
     try:
         # --- 1. 握手 ---

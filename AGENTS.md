@@ -102,7 +102,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - **Python 3.13 钉死**（`>=3.13,<3.14`；calcephpy 预编译轮子只有 cp313，原因见 `pyproject.toml` 注释）。包管理只用 **uv**：`uv.lock` 入库、index 钉 `https://pypi.org/simple`；重锁用 `uv lock --upgrade-package calcephpy`；Windows 的 calcephpy 走 `[tool.uv.sources]` 预编译 wheel，勿删。
 - **Node.js ≥ 20**（README），前端测试实际需要 ≥ 22.13（jsdom 30）。包管理用 **npm**（`package-lock.json` 入库），命令一律带 `--prefix frontend`。
 - **Rust 稳定版工具链**，edition 2021，Tauri 2，`Cargo.lock` 入库。
-- **打包**：PyInstaller onefile 产 sidecar（`packaging/transfer_orbit_design_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历——漏收即坏包）；release 分 slim（无 kernels，供更新通道）与全量（含 kernels，供新装）；pi 钉版本随包分发（`release.yml` env）。
+- **打包**：PyInstaller onefile 产 sidecar（`packaging/cislunar_code_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历——漏收即坏包）；release 分 slim（无 kernels，供更新通道）与全量（含 kernels，供新装）；pi 钉版本随包分发（`release.yml` env）。
 - **依赖门槛**（见下方编码准则的审慎依赖条）：先用已有依赖与标准库，新增依赖须说明原因。
 
 ## Testing & QA

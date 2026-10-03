@@ -3,6 +3,15 @@
 > 自 4.8.3 起版本小节纯中文；GitHub Release 正文由对应小节生成。历史小节保持写成时的双语不动。
 
 
+## 5.0.0 (2026-10-03)
+
+### 工程
+
+- **发布名改为 CODE（ADR 0033）**：应用显示层统一 CODE——窗口标题、快捷方式、Windows 安装包（`CODE_<版本>_x64-setup.exe` 与 `.msi`）与 Linux AppImage 文件名；Linux 系统层（deb/rpm 内部包名、`/usr/bin` 可执行名、数据目录、sidecar、Cargo/Python 包名）用 cislunar-code，避让 VS Code 的 code 包名；应用 ID 换 com.cislunarspace.code。主版本跳 5.0.0 标识断代。
+- **数据目录首启自动迁移**：旧 `%APPDATA%/transfer-orbit-design`（Linux 为 XDG 配置目录下 `transfer-orbit-design/`）在 5.0.0 首次启动时整体改名 `cislunar-code`——轨道库 catalog、情景文件、助手会话一次带走；新旧并存保新不动旧（并行安装过两版的现场），迁移失败仅告警并按空新目录继续，不阻塞启动。
+- **更新通道断代**：更新清单换名 latest-code.json，老 latest.json 冻结在 4.9.0——Windows 与 AppImage 的 4.9.0 及以前版本不再收到应用内自动更新。deb/rpm 的应用内更新直扫 Release 资产清单、不经 latest.json：旧版 deb/rpm 安装在 5.0.0 发布后仍会弹更新提示，且包名已换，提示内一键安装得到的是并行第二份应用而非升级，务必先卸载旧版。老用户升级指引：先卸载 transfer-orbit-design 再安装 CODE（应用 ID 已更换，不卸载则两份并存）；用户数据不受卸载影响，CODE 首启自动迁移。
+- **Linux 全量构建拆分**：AppImage（productName=CODE 直出文件名）与 deb/rpm（叠加 overlay 压 productName=cislunar-code，desktop 显示名经模板钉回 CODE）分两次 tauri build 产出；AppImage 无 desktopTemplate 入口，是拆分的直接原因。
+
 ## 4.9.0 (2026-10-02)
 
 ### 功能

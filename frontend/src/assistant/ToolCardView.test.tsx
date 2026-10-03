@@ -35,7 +35,7 @@ beforeAll(() => {
   );
 });
 
-const PATH = "C:\\Users\\dev\\AppData\\Roaming\\transfer-orbit-design\\scenarios\\nrho-set.json";
+const PATH = "C:\\Users\\dev\\AppData\\Roaming\\cislunar-code\\scenarios\\nrho-set.json";
 
 function card(partial: Partial<ToolCardData>): ToolCardData {
   return {

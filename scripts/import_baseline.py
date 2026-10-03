@@ -14,7 +14,7 @@ e2m2e 5.9.5 起基线 CR3BP 族移出 wheel（ADR 0047），改由 GitHub Releas
                     临时目录，再按上面的路径导入。
     --catalog-dir   轨道库目录写到哪里。缺省取环境变量 E2M2E_CATALOG_DIR
                     （Rust 壳注入的那个），再缺省用户配置目录下的 catalog/
-                    （Windows %APPDATA%/transfer-orbit-design/catalog）。
+                    （Windows %APPDATA%/cislunar-code/catalog）。
 
 幂等：同族且基线版本一致时跳过，版本变化时整族替换（上游 import_baseline
 的 re-seed 语义），重复执行第二次导入 0 条。
@@ -34,7 +34,7 @@ Arguments:
     --catalog-dir   directory of the catalog to write. Defaults to the
                     E2M2E_CATALOG_DIR env var (the one the Rust shell injects),
                     then to catalog/ under the user config directory (Windows
-                    %APPDATA%/transfer-orbit-design/catalog).
+                    %APPDATA%/cislunar-code/catalog).
 Idempotent: a family whose baseline version matches is skipped, a version
 change replaces the whole family (the re-seed semantics of upstream
 import_baseline) — a second run imports 0 records.

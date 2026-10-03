@@ -1,6 +1,6 @@
 //! 协议解析器对真实 sidecar 输出的夹具测试（#522 修复前经 exclude_unset 复刻生成）。
 
-use transfer_orbit_design_lib::sidecar::{FrameArray, ProtocolEvent, StreamParser};
+use cislunar_code_lib::sidecar::{FrameArray, ProtocolEvent, StreamParser};
 
 fn load_fixture(name: &str) -> Vec<u8> {
     let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
