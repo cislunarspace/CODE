@@ -76,7 +76,7 @@ def user_kernel_dir() -> pathlib.Path:
         base = os.environ.get("LOCALAPPDATA") or pathlib.Path.home() / "AppData" / "Local"
     else:
         base = os.environ.get("XDG_DATA_HOME") or pathlib.Path.home() / ".local" / "share"
-    return pathlib.Path(base) / "transfer-orbit-design" / "kernels"
+    return pathlib.Path(base) / "cislunar-code" / "kernels"
 
 
 def _api_headers() -> dict[str, str]:

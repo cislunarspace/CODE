@@ -1,4 +1,4 @@
-"""transfer-orbit-design sidecar 入口：透传子命令运行 e2m2e CLI。
+"""cislunar-code sidecar 入口：透传子命令运行 e2m2e CLI。
 
 打包产物默认以 serve-stdio 模式运行（无参数时；stdin/stdout 走 JSON 行 +
 二进制帧协议，e2m2e ADR 0035，由 Tauri 壳现有工具链路拉起）；带参数时

@@ -11,7 +11,7 @@ CODE（cislunar orbit designer）是 [e2m2e](https://github.com/cislunarspace/CO
 
 从 [GitHub Releases](https://github.com/cislunarspace/CODE/releases) 下载对应平台安装包：
 
-- Windows x64：`transfer-orbit-design_<版本>_x64-setup.exe`（NSIS，免管理员，装到当前用户目录）或 `.msi`；
+- Windows x64：`CODE_<版本>_x64-setup.exe`（NSIS，免管理员，装到当前用户目录）或 `.msi`；
 - Linux amd64 / aarch64：AppImage、`deb` 或 `rpm`。
 
 安装包内含 e2m2e 运行时（sidecar）、AI 助手运行时（pi）与全套 SPICE 内核（含行星历），开箱即用；下载后可对照 `checksums.txt` 校验。已安装的应用自动接收应用内更新：AppImage 与 Windows 安装包由更新插件直接替换（更新包不含内核，首次安装的内核原地复用）；deb/rpm 在应用内下载完整安装包并经系统包管理器安装。
@@ -55,7 +55,7 @@ SPICE 内核经 Git LFS 随仓库分发（克隆后位于 `kernels/`），安装
 
 参数表单 → Rust 命令 → e2m2e sidecar（JSON 行信封 + 二进制帧，e2m2e ADR 0035）→ 产物自动入轨道库 → 项目树与画布经 `catalog_query` / `get_artifact` 取用。AI 助手是并行的第二条链路：pi（RPC）→ 桥接扩展 → 应用 MCP 桥接 → `mcp-serve` 调同一套工具，与画布长计算互不阻塞。
 
-轨道库 `catalog/` 位于用户配置目录（Windows `%APPDATA%/transfer-orbit-design/catalog`，Linux 为 XDG 配置目录下同名路径），由 Rust 壳启动时显式指定，不随工作目录漂移，`E2M2E_CATALOG_DIR` 预设优先；库内是 e2m2e catalog 格式（多维分类、谱系指针），可直接被 e2m2e 或其他宿主打开。`output/` 仅保留转移遗留分区与脚本场景。
+轨道库 `catalog/` 位于用户配置目录（Windows `%APPDATA%/cislunar-code/catalog`，Linux 为 XDG 配置目录下同名路径），由 Rust 壳启动时显式指定，不随工作目录漂移，`E2M2E_CATALOG_DIR` 预设优先；库内是 e2m2e catalog 格式（多维分类、谱系指针），可直接被 e2m2e 或其他宿主打开。`output/` 仅保留转移遗留分区与脚本场景。
 
 ## 文档
 

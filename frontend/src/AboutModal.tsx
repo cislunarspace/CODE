@@ -68,7 +68,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
       title={
         <Space>
           <InfoCircleOutlined />
-          <span>关于 tod (Transfer Orbit Design)</span>
+          <span>关于 CODE</span>
         </Space>
       }
       open={open}
@@ -90,7 +90,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
     >
       <div style={{ padding: "12px 0" }}>
         <Title level={4} style={{ margin: 0 }}>
-          tod - 地月转移轨道设计系统
+          CODE - 地月转移轨道设计系统
         </Title>
         <Paragraph type="secondary" style={{ marginTop: 4 }}>
           版本号：v{displayVersion}

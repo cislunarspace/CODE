@@ -4,8 +4,8 @@
 
 v4.0.0 起，界面计算产物统一持久化到 **e2m2e 轨道库**（catalog），不再按工具
 分目录落 JSON/NPZ 文件。桌面端库目录固定在用户配置目录下的 `catalog/`：
-Windows 为 `%APPDATA%/transfer-orbit-design/catalog`，Linux 为
-`$XDG_CONFIG_HOME`（通常 `~/.config`）下的 `transfer-orbit-design/catalog`，
+Windows 为 `%APPDATA%/cislunar-code/catalog`，Linux 为
+`$XDG_CONFIG_HOME`（通常 `~/.config`）下的 `cislunar-code/catalog`，
 与情景文件、助手会话同级；启动时由 Rust 壳显式注入，不随工作目录漂移。
 用户在环境里预设 `$E2M2E_CATALOG_DIR` 时以预设为准。
 

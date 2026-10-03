@@ -5,7 +5,7 @@
 ### 桌面应用（Windows）
 
 从 [GitHub Releases](https://github.com/cislunarspace/CODE/releases)
-下载 `transfer-orbit-design_<版本>_x64-setup.exe`，双击安装（NSIS 安装器，
+下载 `CODE_<版本>_x64-setup.exe`，双击安装（NSIS 安装器，
 免管理员权限，安装到当前用户目录）。安装包自带 e2m2e 运行时与全套 SPICE
 内核（含行星历），开箱即用。另有 Linux AppImage / deb 包与桌面端自动更新。
 

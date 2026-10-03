@@ -17,7 +17,7 @@ use std::time::Duration;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
-use transfer_orbit_design_lib::assistant::{set_emitter, AssistantState};
+use cislunar_code_lib::assistant::{set_emitter, AssistantState};
 
 fn fixture() -> String {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_pi_rpc.py");
@@ -93,7 +93,7 @@ async fn pi_rpc_lifecycle_over_fake_process() {
     let session_dir = std::env::temp_dir().join(format!("tod-pi-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&session_dir);
     std::fs::create_dir_all(&session_dir).unwrap();
-    transfer_orbit_design_lib::assistant::pi::PiState::configure(
+    cislunar_code_lib::assistant::pi::PiState::configure(
         vec!["python3".into(), fixture()],
         session_dir.clone(),
     );

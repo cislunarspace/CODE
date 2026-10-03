@@ -1,4 +1,4 @@
-//! transfer-orbit-design 的 Tauri 状态：sidecar 句柄的懒初始化与共享。
+//! CODE（cislunar-code）的 Tauri 状态：sidecar 句柄的懒初始化与共享。
 //!
 //! 拉起命令（uv vs 打包产物）在 setup 时注入，本模块不猜解释器策略。
 

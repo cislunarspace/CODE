@@ -19,10 +19,10 @@ fn main() {
         }
     }
 
-    if std::env::args().any(|a| a == transfer_orbit_design_lib::assistant::bridge::BRIDGE_ARG) {
-        transfer_orbit_design_lib::assistant::bridge::run_bridge_process();
+    if std::env::args().any(|a| a == cislunar_code_lib::assistant::bridge::BRIDGE_ARG) {
+        cislunar_code_lib::assistant::bridge::run_bridge_process();
         return;
     }
 
-    transfer_orbit_design_lib::run();
+    cislunar_code_lib::run();
 }

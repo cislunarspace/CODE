@@ -6,7 +6,7 @@
 use serde_json::json;
 use tokio::sync::mpsc;
 
-use transfer_orbit_design_lib::sidecar::{FrameArray, SidecarHandle};
+use cislunar_code_lib::sidecar::{FrameArray, SidecarHandle};
 
 mod common;
 

@@ -132,17 +132,17 @@ jobs:
             throw "基线数据集下载不完整"
           }
       - name: Build sidecar (PyInstaller onefile)
-        run: uv run --no-sync pyinstaller packaging/transfer_orbit_design_sidecar.spec --noconfirm
+        run: uv run --no-sync pyinstaller packaging/cislunar_code_sidecar.spec --noconfirm
       # 打包冒烟闸：design_orbit 真调用走完整星历链（R2S2 包内 lte440 打开、
       # SPICE 内核加载、修正收敛），漏带依赖/数据的坏包在此变红，不进安装包；
       # --baseline 另断言包内基线数据集已落库
       - name: Smoke sidecar (design_orbit real call)
-        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/transfer-orbit-design-sidecar.exe --cwd . --kernels kernels --baseline packaging/baseline/baseline-cr3bp-5.9.0.zip
+        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/cislunar-code-sidecar.exe --cwd . --kernels kernels --baseline packaging/baseline/baseline-cr3bp-5.9.0.zip
       - name: Stage sidecar into tauri resources
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path src-tauri/binaries
-          Copy-Item dist/transfer-orbit-design-sidecar.exe src-tauri/binaries/transfer-orbit-design-sidecar.exe
+          Copy-Item dist/cislunar-code-sidecar.exe src-tauri/binaries/cislunar-code-sidecar.exe
       # AI 会话运行时 pi 固定版本随包分发（dev 走 TOD_PI_BIN/PATH；
       # 分发解析资源目录 binaries/pi.exe，不依赖用户预装）。zip 解包后
       # 取 zip 根目录 pi.exe（裸二进制即可跑 RPC，版本号非关键路径）；
@@ -181,7 +181,7 @@ jobs:
           }
           Get-ChildItem src-tauri/bundle-slim
       # 全量 NSIS 走应用内更新通道；MSI 仅供偏好该格式的新装用户手装
-      # （企业管理部署等），不进 latest.json
+      # （企业管理部署等），不进 latest-code.json
       - name: Build NSIS installer and MSI
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -289,15 +289,15 @@ jobs:
             echo "基线数据集下载不完整"; exit 1;
           }
       - name: Build sidecar (PyInstaller onefile)
-        run: uv run --no-sync pyinstaller packaging/transfer_orbit_design_sidecar.spec --noconfirm
+        run: uv run --no-sync pyinstaller packaging/cislunar_code_sidecar.spec --noconfirm
       # 打包冒烟闸：同 Windows 作业，design_orbit 真调用 + 基线落库断言守卫坏包
       - name: Smoke sidecar (design_orbit real call)
-        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/transfer-orbit-design-sidecar --cwd . --kernels kernels --baseline packaging/baseline/baseline-cr3bp-5.9.0.zip
+        run: uv run --no-sync python scripts/smoke_mcp_serve.py --exe dist/cislunar-code-sidecar --cwd . --kernels kernels --baseline packaging/baseline/baseline-cr3bp-5.9.0.zip
       - name: Stage sidecar into tauri resources
         run: |
           mkdir -p src-tauri/binaries
-          cp dist/transfer-orbit-design-sidecar src-tauri/binaries/transfer-orbit-design-sidecar
-          chmod +x src-tauri/binaries/transfer-orbit-design-sidecar
+          cp dist/cislunar-code-sidecar src-tauri/binaries/cislunar-code-sidecar
+          chmod +x src-tauri/binaries/cislunar-code-sidecar
       # AI 会话运行时 pi 固定版本随包分发（同 Windows 作业）；tar.gz 解包
       # 取包内 pi/pi 裸二进制（RPC 模式不依赖包内 native/assets，实测裸放
       # 可跑；--version 在无同级 package.json 时显示 0.0.0，冒烟只验可执行）。
@@ -348,12 +348,22 @@ jobs:
             mv "$f" "../../../../bundle-slim/${f%.AppImage.sig}-slim.AppImage.sig"
           done
           ls -la ../../../../bundle-slim
-      - name: Build AppImage, DEB and RPM bundles
+      # 全量构建拆两次（ADR 0033）：AppImage 用显示名 CODE（productName 直出
+      # 文件名）；deb/rpm 叠加 linux-pkg overlay 把 productName 压成
+      # cislunar-code（裸 CODE 会被 bundler kebab 化撞 VS Code 的 code 包
+      # 名），desktop 显示名经模板钉回 CODE。
+      - name: Build AppImage bundle
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: npm --prefix frontend exec -- tauri build --config packaging/tauri.release.conf.json --bundles appimage,deb,rpm
+        run: npm --prefix frontend exec -- tauri build --config packaging/tauri.release.conf.json --bundles appimage
+      - name: Build DEB and RPM bundles (system name cislunar-code)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npm --prefix frontend exec -- tauri build --config packaging/tauri.release.conf.json --config packaging/tauri.release.linux-pkg.conf.json --bundles deb,rpm
       # 签名闸：同 Windows 作业
       - name: Assert Linux updater signatures exist
         run: |
@@ -376,7 +386,9 @@ jobs:
             src-tauri/bundle-slim/*-slim.AppImage.sig
 
   # 收尾：汇总各平台直传的资产，核对产物齐全，生成 checksums.txt 与更新元
-  # 清单 latest.json（增量更新通道 → 各平台瘦身包）并回传 Release。
+  # 通道文件名随 5.0.0 改名断代：老 latest.json 冻结在 4.9.0，旧客户端的
+  # updater 插件通道（Windows/AppImage）不再收到自动更新；deb/rpm 手动
+  # 通道直扫 latest release 资产、不受此断代影响（ADR 0033 已知边界）。
   # 仅 tag 触发；分支 dispatch 演练无发布产物可汇总
   # Tag-triggered only: branch dispatch rehearsals have no published assets to collect.
   release:
@@ -431,15 +443,15 @@ jobs:
           cd ..
           cat checksums.txt
 
-      - name: 合并各平台 Updater 签名并生成 latest.json
+      - name: 合并各平台 Updater 签名并生成 latest-code.json
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          bash packaging/scripts/merge-updater-json.sh release-assets release-assets/latest.json "${VERSION}" release_notes.md
+          bash packaging/scripts/merge-updater-json.sh release-assets release-assets/latest-code.json "${VERSION}" release_notes.md
 
-      - name: Upload latest.json and checksums
+      - name: Upload latest-code.json and checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}
-        run: gh release upload "$TAG_NAME" release-assets/latest.json checksums.txt --clobber --repo "${{ github.repository }}"
+        run: gh release upload "$TAG_NAME" release-assets/latest-code.json checksums.txt --clobber --repo "${{ github.repository }}"
