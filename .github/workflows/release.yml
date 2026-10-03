@@ -145,13 +145,14 @@ jobs:
           Copy-Item dist/transfer-orbit-design-sidecar.exe src-tauri/binaries/transfer-orbit-design-sidecar.exe
       # AI 会话运行时 pi 固定版本随包分发（dev 走 TOD_PI_BIN/PATH；
       # 分发解析资源目录 binaries/pi.exe，不依赖用户预装）。zip 解包后
-      # 取包内 pi/pi.exe（裸二进制即可跑 RPC，版本号非关键路径）。
+      # 取 zip 根目录 pi.exe（裸二进制即可跑 RPC，版本号非关键路径）；
+      # Linux tar.gz 布局才有顶层 pi/ 目录，两处路径不同。
       - name: Stage pinned pi into tauri resources
         shell: pwsh
         run: |
           curl -fsSL "https://github.com/earendil-works/pi/releases/download/${{ env.PI_VERSION }}/pi-windows-x64.zip" -o $env:TEMP\pi.zip
           Expand-Archive -Path $env:TEMP\pi.zip -DestinationPath $env:TEMP\pi-unpack -Force
-          Copy-Item $env:TEMP\pi-unpack\pi\pi.exe src-tauri/binaries/pi.exe
+          Copy-Item $env:TEMP\pi-unpack\pi.exe src-tauri/binaries/pi.exe
           if ((Get-Item src-tauri/binaries/pi.exe).Length -lt 10MB) { throw "pi 下载不完整" }
           src-tauri/binaries/pi.exe --version
       # 增量更新第一步：瘦身包（不含 kernels/ 星历，约省 170MB）——应用内更新
