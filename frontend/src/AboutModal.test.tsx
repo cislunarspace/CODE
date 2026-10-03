@@ -34,7 +34,7 @@ describe("AboutModal component", () => {
     );
     expect(screen.getByText(/v4\.1\.2/)).toBeDefined();
     expect(getVersion).not.toHaveBeenCalled();
-    expect(screen.getByText(/tod - 地月转移轨道设计系统/)).toBeDefined();
+    expect(screen.getByText(/CODE - 地月转移轨道设计系统/)).toBeDefined();
   });
 
   it("checks for updates when user clicks check button", async () => {

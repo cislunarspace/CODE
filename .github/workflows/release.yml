@@ -386,9 +386,9 @@ jobs:
             src-tauri/bundle-slim/*-slim.AppImage.sig
 
   # 收尾：汇总各平台直传的资产，核对产物齐全，生成 checksums.txt 与更新元
-  # 清单 latest-code.json（增量更新通道 → 各平台瘦身包）并回传 Release。
-  # 通道文件名随 5.0.0 改名断代：老 latest.json 冻结在 4.9.0，旧客户端
-  # 不再收到自动更新（ADR 0033）。
+  # 通道文件名随 5.0.0 改名断代：老 latest.json 冻结在 4.9.0，旧客户端的
+  # updater 插件通道（Windows/AppImage）不再收到自动更新；deb/rpm 手动
+  # 通道直扫 latest release 资产、不受此断代影响（ADR 0033 已知边界）。
   # 仅 tag 触发；分支 dispatch 演练无发布产物可汇总
   # Tag-triggered only: branch dispatch rehearsals have no published assets to collect.
   release:
