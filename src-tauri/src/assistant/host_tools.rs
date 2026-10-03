@@ -5,7 +5,7 @@
 //! 居两仓。两个工具，均以 MCP 信封形状返回（`{status, data}` /
 //! `{status: "error", error}`），对 LLM 与工具卡片与 MCP 工具无差别：
 //! - `scenario_write`（走确认链）：结构化参数按 v1 规则序列化（缺省字段
-//!   补默认值）写固定目录 `%APPDATA%/transfer-orbit-design/scenarios/`，
+//!   补默认值）写固定目录 `%APPDATA%/cislunar-code/scenarios/`，
 //!   同名直接覆盖；文件名做路径逃逸校验。
 //! - `scenario_list`（只读白名单）：列固定目录情景文件并返回原文
 //!   （情景文件是 KB 级整块 JSON，全文直接进上下文）。
@@ -13,17 +13,52 @@
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-/// 用户配置目录（原 store.rs 的 config_dir；store 删除后由宿主工具自持，
-/// 与 Python 侧 user_config_dir() 同路径）。取不到 HOME/APPDATA 时返回
-/// None——调用方按"无持久化"降级。
-pub fn config_dir() -> Option<PathBuf> {
+/// 配置目录的父基目录（Windows ``%APPDATA%``，其余平台 XDG 配置目录）。
+fn config_base() -> Option<PathBuf> {
     #[cfg(windows)]
     let base = std::env::var_os("APPDATA").map(PathBuf::from);
     #[cfg(not(windows))]
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")));
-    base.map(|b| b.join("transfer-orbit-design"))
+    base
+}
+
+/// 用户配置目录（原 store.rs 的 config_dir；store 删除后由宿主工具自持，
+/// 与 Python 侧 user_config_dir() 同路径）。取不到 HOME/APPDATA 时返回
+/// None——调用方按"无持久化"降级。
+pub fn config_dir() -> Option<PathBuf> {
+    config_base().map(|b| b.join("cislunar-code"))
+}
+
+/// 发布名迁移（5.0.0 改名 CODE，ADR 0033）：旧目录 `transfer-orbit-design`
+/// 存在且新目录 `cislunar-code` 不存在时整体 `rename` 搬移——catalog/
+/// scenarios/sessions 同根，一次带走。两者并存（用户并行装过两版）保新
+/// 不动旧；搬移失败只告警并按空新目录继续，不阻塞启动。须在任何
+/// `config_dir()` 消费前调用（lib.rs setup 开头）。
+pub fn migrate_legacy_config_dir() {
+    let Some(base) = config_base() else { return };
+    let old = base.join("transfer-orbit-design");
+    let new = base.join("cislunar-code");
+    if !old.is_dir() {
+        return;
+    }
+    if new.exists() {
+        eprintln!(
+            "[migrate] 新旧配置目录并存，保留 {} 不动旧 {}",
+            new.display(),
+            old.display()
+        );
+        return;
+    }
+    match std::fs::rename(&old, &new) {
+        Ok(()) => eprintln!("[migrate] 配置目录已迁移 {} -> {}", old.display(), new.display()),
+        Err(e) => eprintln!(
+            "[migrate] 配置目录迁移失败（{} -> {}）：{e}，按空目录继续",
+            old.display(),
+            new.display()
+        ),
+    }
 }
 
 /// 情景固定目录：与配置目录同级下的 scenarios/。
@@ -364,5 +399,55 @@ mod tests {
         assert!(is_host_tool("scenario_write"));
         let out = parse_envelope(&execute("scenario_other", &json!({})));
         assert_eq!(out["status"], "error");
+    }
+
+    #[test]
+    fn migrate_moves_old_dir_when_new_absent() {
+        let _g = TempDirGuard::new("migrate-old-only");
+        let base = config_base().unwrap();
+        let marker = base.join("transfer-orbit-design").join("catalog").join("marker.txt");
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        std::fs::write(&marker, "data").unwrap();
+
+        migrate_legacy_config_dir();
+
+        assert!(!base.join("transfer-orbit-design").exists());
+        let moved = base.join("cislunar-code").join("catalog").join("marker.txt");
+        assert_eq!(std::fs::read_to_string(moved).unwrap(), "data");
+    }
+
+    #[test]
+    fn migrate_keeps_old_when_both_exist() {
+        let _g = TempDirGuard::new("migrate-both");
+        let base = config_base().unwrap();
+        for dir in ["transfer-orbit-design", "cislunar-code"] {
+            let p = base.join(dir).join("catalog");
+            std::fs::create_dir_all(&p).unwrap();
+            std::fs::write(p.join("marker.txt"), dir).unwrap();
+        }
+
+        migrate_legacy_config_dir();
+
+        // 双存保新不动旧：两边原样
+        assert_eq!(
+            std::fs::read_to_string(base.join("transfer-orbit-design/catalog/marker.txt")).unwrap(),
+            "transfer-orbit-design"
+        );
+        assert_eq!(
+            std::fs::read_to_string(base.join("cislunar-code/catalog/marker.txt")).unwrap(),
+            "cislunar-code"
+        );
+    }
+
+    #[test]
+    fn migrate_noop_when_old_absent() {
+        let _g = TempDirGuard::new("migrate-none");
+        let base = config_base().unwrap();
+
+        migrate_legacy_config_dir();
+
+        // 全无：不创建任何目录
+        assert!(!base.join("transfer-orbit-design").exists());
+        assert!(!base.join("cislunar-code").exists());
     }
 }

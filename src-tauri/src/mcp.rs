@@ -139,7 +139,7 @@ impl McpHandle {
                 json!({
                     "protocolVersion": PROTOCOL_VERSION,
                     "capabilities": {},
-                    "clientInfo": {"name": "transfer-orbit-design", "version": env!("CARGO_PKG_VERSION")},
+                    "clientInfo": {"name": "cislunar-code", "version": env!("CARGO_PKG_VERSION")},
                 }),
             )
             .await?;

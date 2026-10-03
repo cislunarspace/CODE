@@ -1,6 +1,6 @@
 # CODE 架构设计
 
-> 本文描述 CODE（原 transfer-orbit-design，以下简称 tod）的**最终形态**架构。逐项架构决策见 `docs/adr/`。
+> 本文描述 CODE（Cislunar Orbit DesignEr，系统名 cislunar-code；4.9.0 及以前发布名 transfer-orbit-design）的**最终形态**架构。逐项架构决策见 `docs/adr/`。
 
 ## 总体定位
 
@@ -23,7 +23,7 @@ sidecar 子进程驱动（协议 = e2m2e ADR 0035：信封 JSON 行 + 二进制�
 React 前端（frontend/） ←Tauri IPC→ Rust 壳（src-tauri/）
                                         ↕ stdio 协议（两条独立链路）
                                    e2m2e serve-stdio（开发期 uv 拉起；分发期为打包进安装器的
-                                   transfer-orbit-design-sidecar，见分发节）
+                                   cislunar-code-sidecar，见分发节）
                                    e2m2e mcp-serve（标准 MCP，仅 AI 助手链路使用）
 ```
 
@@ -62,7 +62,7 @@ switch_session + get_messages 折成回放事件流重建 UI。
 ## 顶层结构（最终形态）
 
 ```
-transfer-orbit-design/
+CODE/
 ├── frontend/              # React 前端（Vite + TS + Three.js）
 │   └── src/               # 组件、schema 驱动表单、i18n、画布、助手边栏、录制导出
 ├── src-tauri/             # Rust 壳（Tauri 2）
@@ -268,8 +268,8 @@ WebGLRenderer + OrbitControls（旋转/缩放/平移）
 
 发行版为 Windows NSIS 安装器（currentUser 免管理员）与 MSI，以及 Linux
 （amd64/aarch64）AppImage/deb/rpm：
-Tauri 主程序 + `transfer-orbit-design-sidecar`（PyInstaller onefile 打包的
-e2m2e serve-stdio，`packaging/transfer_orbit_design_sidecar.spec`）+ SPICE
+Tauri 主程序 + `cislunar-code-sidecar`（PyInstaller onefile 打包的
+e2m2e serve-stdio，`packaging/cislunar_code_sidecar.spec`）+ SPICE
 内核（含行星历，随 Git LFS 入库），三者经 resources 映射进安装目录。分发期
 Rust 壳从 resource 目录拉起 sidecar（`packaged_sidecar_command`），cwd 指向
 resource 根，e2m2e Config 的 `kernels/` 按 cwd 相对解析（可用

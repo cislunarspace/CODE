@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# 由各平台瘦身安装包及其 updater 签名（.sig）合成更新元清单 latest.json。
-# 背景：tauri build 只产出安装包与 .sig，不生成 latest.json（那是 tauri-action 的职责），
+# 由各平台瘦身安装包及其 updater 签名（.sig）合成更新元清单 latest-code.json。
+# 背景：tauri build 只产出安装包与 .sig，不生成更新清单（那是 tauri-action 的职责），
 # 本脚本在 release 流程中承担这一职责。
 # 输入参数：
 #   $1 - 搜索目录（如 release-assets）
-#   $2 - 输出文件路径（如 release-assets/latest.json）
+#   $2 - 输出文件路径（如 release-assets/latest-code.json）
 #   $3 - 版本号（如 4.8.0）
 #   $4 - 发布说明文件路径（可选，如 release_notes.md）
 # 环境变量：GITHUB_REPOSITORY（形如 owner/repo），用于拼产物下载 URL。

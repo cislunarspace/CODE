@@ -11,12 +11,12 @@ class TestUserKernelDir:
     def test_xdg_data_home(self, monkeypatch, tmp_path):
         monkeypatch.setattr(kernels, "_IS_WINDOWS", False)
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-        assert kernels.user_kernel_dir() == tmp_path / "transfer-orbit-design" / "kernels"
+        assert kernels.user_kernel_dir() == tmp_path / "cislunar-code" / "kernels"
 
     def test_windows_localappdata(self, monkeypatch, tmp_path):
         monkeypatch.setattr(kernels, "_IS_WINDOWS", True)
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-        assert kernels.user_kernel_dir() == tmp_path / "transfer-orbit-design" / "kernels"
+        assert kernels.user_kernel_dir() == tmp_path / "cislunar-code" / "kernels"
 
 
 class TestKernelDirUsable:

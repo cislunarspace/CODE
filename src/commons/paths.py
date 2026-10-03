@@ -114,7 +114,7 @@ def user_config_dir() -> Path:
         base = os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming"
     else:
         base = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
-    return Path(base) / "transfer-orbit-design"
+    return Path(base) / "cislunar-code"
 
 
 def detect_kernel_dir() -> str:

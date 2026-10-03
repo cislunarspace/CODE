@@ -8,8 +8,8 @@
 //! 依赖：本仓库 uv 环境（`uv run e2m2e serve-stdio` 可用）。
 
 use serde_json::json;
-use transfer_orbit_design_lib::cmd::artifact_from_catalog_get;
-use transfer_orbit_design_lib::sidecar::SidecarHandle;
+use cislunar_code_lib::cmd::artifact_from_catalog_get;
+use cislunar_code_lib::sidecar::SidecarHandle;
 
 mod common;
 

@@ -1,0 +1,20 @@
+{{!-- deb/rpm 专用 desktop 模板（ADR 0033）：Linux 系统包名压成
+     cislunar-code（避让 VS Code 的 code 包），bundler 默认模板会把
+     productName 填进 Name=，这里静态钉显示名 CODE。字段与 bundler 内置
+     main.desktop 同构，仅 Name 不再取 productName；AppImage 不走本模板
+     （AppImageConfig 无 desktopTemplate 入口），其 desktop 由 bundler 内置
+     模板生成，Name=CODE（productName 本身就是 CODE）。 --}}
+[Desktop Entry]
+Categories={{categories}}
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+StartupWMClass={{exec}}
+Icon={{icon}}
+Name=CODE
+Terminal=false
+Type=Application
+{{#if mime_type}}
+MimeType={{mime_type}}
+{{/if}}

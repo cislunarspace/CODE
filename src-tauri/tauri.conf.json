@@ -1,8 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "transfer-orbit-design",
-  "version": "4.9.0",
-  "identifier": "com.cislunarspace.transfer-orbit-design",
+  "productName": "CODE",
+  "version": "5.0.0",
+  "identifier": "com.cislunarspace.code",
+  "mainBinaryName": "cislunar-code",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1430",
@@ -12,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "transfer-orbit-design",
+        "title": "CODE",
         "label": "main",
         "width": 1280,
         "height": 800,
@@ -44,7 +45,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk1RDE4QzJCQUQxOTVGNDEKUldSQlh4bXRLNHpSbFkrNFNJL0JXR0FmWkwrOEQ5SkRhcUc2c1oyY0piNldNMjdLeU1ZZisyVDAK",
       "endpoints": [
-        "https://github.com/cislunarspace/CODE/releases/latest/download/latest.json"
+        "https://github.com/cislunarspace/CODE/releases/latest/download/latest-code.json"
       ]
     }
   }

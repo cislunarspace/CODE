@@ -34,7 +34,7 @@ fn latest_release_api_url() -> String {
 
 fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .user_agent(concat!("transfer-orbit-design/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("cislunar-code/", env!("CARGO_PKG_VERSION")))
         // 连接/读超时：防流挂死时更新弹窗永久锁死（总超时会掐断大文件下载，不用）
         .connect_timeout(std::time::Duration::from_secs(15))
         .read_timeout(std::time::Duration::from_secs(60))
@@ -270,18 +270,18 @@ mod tests {
 
     #[test]
     fn asset_matches_deb_by_deb_arch_tag() {
-        assert!(asset_matches("transfer-orbit-design_4.8.2_amd64.deb", true, "x86_64"));
-        assert!(asset_matches("transfer-orbit-design_4.8.2_aarch64.deb", true, "aarch64"));
-        assert!(!asset_matches("transfer-orbit-design_4.8.2_aarch64.deb", true, "x86_64"));
-        assert!(!asset_matches("transfer-orbit-design_4.8.2_amd64.AppImage", true, "x86_64"));
+        assert!(asset_matches("cislunar-code_5.0.0_amd64.deb", true, "x86_64"));
+        assert!(asset_matches("cislunar-code_5.0.0_aarch64.deb", true, "aarch64"));
+        assert!(!asset_matches("cislunar-code_5.0.0_aarch64.deb", true, "x86_64"));
+        assert!(!asset_matches("CODE_5.0.0_amd64.AppImage", true, "x86_64"));
     }
 
     #[test]
     fn asset_matches_rpm_by_native_arch() {
-        assert!(asset_matches("transfer-orbit-design-4.8.2.x86_64.rpm", false, "x86_64"));
-        assert!(asset_matches("transfer-orbit-design-4.8.2.aarch64.rpm", false, "aarch64"));
-        assert!(!asset_matches("transfer-orbit-design-4.8.2.aarch64.rpm", false, "x86_64"));
-        assert!(!asset_matches("transfer-orbit-design-4.8.2_amd64.deb", false, "x86_64"));
+        assert!(asset_matches("cislunar-code-5.0.0-1.x86_64.rpm", false, "x86_64"));
+        assert!(asset_matches("cislunar-code-5.0.0-1.aarch64.rpm", false, "aarch64"));
+        assert!(!asset_matches("cislunar-code-5.0.0-1.aarch64.rpm", false, "x86_64"));
+        assert!(!asset_matches("cislunar-code_5.0.0_amd64.deb", false, "x86_64"));
     }
 
     #[test]
