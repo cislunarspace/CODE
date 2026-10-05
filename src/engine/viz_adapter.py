@@ -89,10 +89,10 @@ def synodic_to_gcrs_km(pos, theta, mu: float) -> Any:
     arr = np.asarray(pos)[:, :3]
     th = np.asarray(theta)
     c, s = np.cos(th), np.sin(th)
-    x = arr[:, 0] * c - arr[:, 1] * s
-    y = arr[:, 0] * s + arr[:, 1] * c
+    x = (arr[:, 0] + mu) * c - arr[:, 1] * s
+    y = (arr[:, 0] + mu) * s + arr[:, 1] * c
     z = arr[:, 2]
-    return np.column_stack([(x + mu) * DU, y * DU, z * DU])
+    return np.column_stack([x * DU, y * DU, z * DU])
 
 
 def approx_moon_gcrs_km(theta) -> Any:
