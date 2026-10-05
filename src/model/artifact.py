@@ -1,3 +1,23 @@
+"""领域资产：单条计算产物（Artifact）数据类。
+
+Artifact 收拢一次工具运行的最小产物描述：类型与标签、轨道类型、来源
+工具、轨道库记录 id（record_id）与两个可懒填充的大数组（state_data、
+times）。catalog 记录的数组在入清单时不落内存，由
+``engine.catalog_service.load_arrays`` 按需回填，需要快照的调用方先
+``copy.deepcopy``。本模块属 Python 领域层，只服务脚本与测试，GUI
+运行时链路经 sidecar 协议与 catalog API 取数，不经过这里的对象。
+
+English: domain asset — the Artifact dataclass describing one computed
+product: type and label, orbit type, source tool, the orbit-library
+record id, and two lazily filled arrays (state_data, times). Arrays
+behind catalog records are not materialized at listing time; they are
+filled on demand by ``engine.catalog_service.load_arrays``, and callers
+needing a snapshot should ``copy.deepcopy`` first. This module belongs
+to the Python domain layer serving scripts and tests only; the GUI
+runtime fetches data through the sidecar protocol and catalog APIs and
+never touches these objects.
+"""
+
 from __future__ import annotations
 
 import uuid

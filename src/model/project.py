@@ -1,3 +1,21 @@
+"""领域资产：单项目产物容器（Project）。
+
+Project 按清单持有 Artifact，提供按 id、artifact_type、orbit_type 的
+查找与谱系判定：find_upstream 沿 extra 的 source_record_id 找上游产
+物，has_broken_lineage 判定上游记录是否已不存在。判定依据是全库记
+录 id 集合（known_record_ids）而非当前过滤视图，过滤把上游筛出清单
+时下游不应被误标为断链。
+
+English: domain asset — Project, the per-project container of
+artifacts. It holds an Artifact listing with lookups by id,
+artifact_type and orbit_type, plus lineage checks: find_upstream
+follows extra["source_record_id"], and has_broken_lineage decides
+whether the referenced upstream record is gone. The judgement uses the
+whole-library record id set (known_record_ids) rather than the current
+filtered view, so a filter dropping the upstream from the listing must
+not misflag downstream products as broken.
+"""
+
 from __future__ import annotations
 
 from src.model.artifact import Artifact
