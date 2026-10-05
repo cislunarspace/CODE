@@ -37,7 +37,7 @@ ParamsPanel（frontend/src/schema.ts:TOOL_REGISTRY 的 JSON Schema 生成表单�
 | 目录 | 用途 |
 |---|---|
 | `src/model/` `src/engine/` `src/commons/` | Python 领域资产：数据类（`Artifact`/`Project`）、e2m2e 接缝（`facade_bridge`/`catalog_service`/`exceptions`）、单位/常量/路径/内核 |
-| `src-tauri/src/` | Rust 壳：`cmd.rs`（22 个 Tauri command）、`sidecar/`（帧协议客户端）、`assistant/`（pi RPC 适配）、`state.rs`、`update.rs` |
+| `src-tauri/src/` | Rust 壳：23 个 Tauri command（`cmd.rs` 11 个、`assistant_cmd.rs` 9 个、`update.rs` 3 个）、`sidecar/`（帧协议客户端）、`assistant/`（pi RPC 适配）、`state.rs`、`update.rs` |
 | `frontend/src/` | React 界面；组件 `PascalCase.tsx`，逻辑模块 `camelCase.ts` |
 | `tests/` `src-tauri/tests/` `frontend/src/*.test.tsx` | 三套测试，与实现同树 |
 | `packaging/` | PyInstaller sidecar spec、release 配置、`scripts/validate-release.sh` |
@@ -84,9 +84,9 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 - **依赖注入 / 状态**：Tauri managed state（`SidecarState` / `ProjectState` / `AssistantState`）+ `State<'_>`；Python 构造器注入（`FacadeBridge(kernel_dir, catalog_dir)`、`CatalogService(bridge)`）；前端无 store 库，`App.tsx` 单组件 `useState` 集中 + `localStorage`（`tod-*` 键）。
 - **硬契约**（违反即坏，改动必守）：
   1. **`import e2m2e` 之前**把内核目录写入 `SPICE_KERNEL_DIR`（见 `src-tauri/src/lib.rs` setup、`tests/conftest.py`）；
-  2. 单位换算唯一来源 `src/commons/units.py`（`DU_KM=384400`、`TU_SECONDS≈375676.97`），禁止另立换算常量；前端 TU 有两种口径，见 `frontend/src/paramOverlay/index.ts` 注释；
+  2. 单位换算唯一来源 `src/commons/units.py`（`DU_KM=384400`、`TU_SECONDS≈375190.26`，由 e2m2e 模板常量导出），禁止另立换算常量；前端 TU 有两种口径，见 `frontend/src/paramOverlay/index.ts` 注释；
   3. 时间唯一绝对基准是 et 秒（J2000 TDB），`frontend/src/timeBasis.ts` 是换算唯一出口（ADR 0021）；
-  4. 质心归一（画布）与地心归一（算法层）的换算点是 `centroid_normalized_states`（减 μ）；理想化会合系到惯性系旋转在 `viz_adapter` / `trajectoryParsing` / `cr3bp` 三处必须同口径（#477）；
+  4. 质心归一（画布）与地心归一（算法层）的换算点是 `centroid_normalized_states`（减 μ）；理想化会合系到惯性系旋转在 `viz_adapter` / `trajectoryParsing` 两处必须同口径（#477、#521，`cr3bp` 已不含旋转实现）；
   5. `serde_json` 的 `preserve_order` 不能关（帧序契约，见 `src-tauri/Cargo.toml` 注释）。
 - **领域术语以 `CONTEXT.md` 为正典**（单条轨道、轨道族、参考历元、工具注册……），写代码与文档前先对齐术语表；注释内联 issue/ADR 编号（`#452`、`ADR 0013`）是全仓惯例。
 

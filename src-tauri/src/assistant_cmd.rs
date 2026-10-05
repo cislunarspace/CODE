@@ -1,10 +1,11 @@
 //! AI 助手命令：前端经 IPC 调用（pi RPC 适配层，ADR 0032）。
 //!
 //! 命令面：保留 get_state / send / confirm_tool / cancel / new_session /
-//! switch_session / clear_history / set_config_option（model/thinking 两项，
-//! 值域由 pi 原生配置决定）；模型服务、API key、provider 配置由 pi 原生
-//! 配置管理——设置分区只展示入口状态并提供打开 pi 原生命令的按钮
-//!（assistant_open_pi_setup：终端跑交互式 pi，首跑完成 provider 登录）。
+//! switch_session / clear_history / set_config_option / open_pi_setup
+//! （model/thinking 两项，值域由 pi 原生配置决定）；模型服务、API key、
+//! provider 配置由 pi 原生配置管理——设置分区只展示入口状态并提供打开
+//! pi 原生命令的按钮（assistant_open_pi_setup：终端跑交互式 pi，首跑
+//! 完成 provider 登录）。
 
 use serde::Serialize;
 use serde_json::Value;
