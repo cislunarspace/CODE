@@ -323,6 +323,8 @@ mod tests {
         let et = written["referenceEpoch"]["et"].as_f64().expect("et 应为数值");
         assert!((et - 1.2e9).abs() < 1e-6);
         let playback = &written["playback"];
+        // 整体比较改逐字段容差后，保留键集合恰为三键的结构检查
+        assert_eq!(playback.as_object().expect("playback 应为对象").len(), 3);
         assert_eq!(playback["loop"], json!(true));
         let rate = playback["rate"].as_f64().expect("rate 应为数值");
         assert!((rate - 86400.0).abs() < 1e-6);
@@ -357,6 +359,8 @@ mod tests {
         assert_eq!(written["referenceEpoch"], json!({"utc": "2026-09-01T00:00:00"}));
         // 只给部分 playback 字段：给定的用给定值，缺的补默认（浮点按容差断言）
         let playback = &written["playback"];
+        // 整体比较改逐字段容差后，保留键集合恰为三键的结构检查
+        assert_eq!(playback.as_object().expect("playback 应为对象").len(), 3);
         assert_eq!(playback["loop"], json!(false));
         let rate = playback["rate"].as_f64().expect("rate 应为数值");
         assert!((rate - 3600.0).abs() < 1e-6);
