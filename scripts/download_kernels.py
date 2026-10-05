@@ -42,7 +42,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="从 kernels-v1 release 下载 SPICE 内核到 kernels/（幂等）"
     )
-    parser.add_argument("--kernel-dir", type=pathlib.Path, default=ROOT / "kernels")
+    parser.add_argument(
+        "--kernel-dir",
+        type=pathlib.Path,
+        default=ROOT / "kernels",
+        help="内核下载目录（默认仓库根 kernels/）",
+    )
     args = parser.parse_args()
 
     fetched, skipped = download_kernels(args.kernel_dir)

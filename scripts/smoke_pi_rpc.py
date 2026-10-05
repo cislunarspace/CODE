@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -34,6 +35,9 @@ import tempfile
 import threading
 import time
 import uuid
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_APP = os.path.join(REPO_ROOT, "src-tauri", "target", "debug", "cislunar-code")
@@ -185,17 +189,22 @@ def last_assistant_text(client: PiClient) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="pi RPC 真实链路冒烟（需本机 pi 已配置 provider）")
-    parser.add_argument("--app", default=DEFAULT_APP, help="应用二进制路径（先 cargo build）")
+    parser.add_argument(
+        "--app",
+        default=DEFAULT_APP,
+        help=f"应用二进制路径（默认 {DEFAULT_APP}，先 cargo build）",
+    )
     parser.add_argument("--keep", action="store_true", help="保留临时会话目录（排查用）")
     args = parser.parse_args()
 
     if not os.path.isfile(args.app):
-        print(
-            f"应用二进制不存在：{args.app}（先 cargo build --manifest-path src-tauri/Cargo.toml）"
+        logger.error(
+            "应用二进制不存在：%s（先 cargo build --manifest-path src-tauri/Cargo.toml）",
+            args.app,
         )
         return 1
     if not os.path.isfile(DEFAULT_EXT):
-        print(f"桥接扩展不存在：{DEFAULT_EXT}")
+        logger.error("桥接扩展不存在：%s", DEFAULT_EXT)
         return 1
 
     tmp = tempfile.mkdtemp(prefix="tod-pi-smoke-")
@@ -208,12 +217,12 @@ def main() -> int:
         # --- 1. 握手 ---
         pi = PiClient(args.app, session_dir, "a")
         state = pi.request("get_state")
-        print(f"[1] get_state ok：sessionId={state.get('sessionId')}")
+        logger.info("[1] get_state ok：sessionId=%s", state.get("sessionId"))
         pi.request("new_session")
         state = pi.request("get_state")
         session_file = state.get("sessionFile")
         assert session_file, "get_state 缺少 sessionFile（会话文件首条消息后落盘）"
-        print(f"[1] new_session ok：{session_file}")
+        logger.info("[1] new_session ok：%s", session_file)
 
         # --- 2. 只读工具免确认 ---
         pi.request(
@@ -240,7 +249,7 @@ def main() -> int:
         ]
         assert ends and all(not e.get("isError") for e in ends), f"catalog_query 失败：{ends}"
         assert os.path.isfile(session_file), f"首轮后会话文件应落盘：{session_file}"
-        print(f"[2] 只读免确认 ok（{len(ends)} 次执行，无审批卡，会话文件已落盘）")
+        logger.info("[2] 只读免确认 ok（%d 次执行，无审批卡，会话文件已落盘）", len(ends))
 
         # --- 3. 写工具审批 ---
         marker = f"smoke-{uuid.uuid4().hex[:8]}"
@@ -270,7 +279,7 @@ def main() -> int:
             ) from None
         envelope = json.loads(req["title"][len(APPROVAL_PREFIX) :])
         assert envelope.get("tool") == "mcp__tod__scenario_write", f"审批工具异常：{envelope}"
-        print(f"[3] 审批卡到达：toolCallId={envelope.get('toolCallId')}")
+        logger.info("[3] 审批卡到达：toolCallId=%s", envelope.get("toolCallId"))
         pi.send({"type": "extension_ui_response", "id": req["id"], "value": "批准"})
         wait_settled(pi)
         ends = [
@@ -288,7 +297,7 @@ def main() -> int:
 
         matches = glob.glob(os.path.join(scenarios, f"*{marker}*"))
         assert matches, f"情景文件未落盘（{scenarios} 下无 *{marker}*）"
-        print(f"[3] 批准执行 ok：{matches[0]}")
+        logger.info("[3] 批准执行 ok：%s", matches[0])
 
         # --- 4. steer 引导（上下文保留）---
         pi.request(
@@ -316,7 +325,7 @@ def main() -> int:
         wait_settled(pi)
         text = last_assistant_text(pi)
         assert marker in text, f"steer 后回应应包含情景文件名 {marker}：{text[:200]}"
-        print("[4] steer ok（上下文保留，回应含前文要点）")
+        logger.info("[4] steer ok（上下文保留，回应含前文要点）")
 
         # --- 5. abort 中断 ---
         pi.request("prompt", {"message": "从 1 数到 50，每行一个数字。"})
@@ -328,7 +337,7 @@ def main() -> int:
         )
         pi.request("abort", timeout=60.0)
         assert pi.events("agent_settled"), "abort 后应有 agent_settled"
-        print("[5] abort ok")
+        logger.info("[5] abort ok")
 
         pi.close()
 
@@ -343,14 +352,14 @@ def main() -> int:
             and any(b.get("type") == "text" and b.get("text") for b in m.get("content") or [])
             for m in msgs
         ), "应有非空 assistant 文本"
-        print(f"[6] 会话恢复 ok（{len(msgs)} 条消息）")
+        logger.info("[6] 会话恢复 ok（%d 条消息）", len(msgs))
         pi2.close()
 
-        print("SMOKE OK：pi RPC 全链路（握手/白名单/审批/steer/abort/会话恢复）通过")
+        logger.info("SMOKE OK：pi RPC 全链路（握手/白名单/审批/steer/abort/会话恢复）通过")
         return 0
     finally:
         if args.keep:
-            print(f"保留现场：{tmp}")
+            logger.info("保留现场：%s", tmp)
         else:
             subprocess.run(["rm", "-rf", tmp], check=False)
 
