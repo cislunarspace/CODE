@@ -17,12 +17,15 @@ kernel_dir 经 Config 注入（request 模型不接受该字段）。
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 from e2m2e.api.models import FamilyGenerationRequest
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # DTO
@@ -453,7 +456,8 @@ def _build_tool_registry() -> dict[str, ToolSpec]:
         for info in inventory.values():
             if info.request_model is not None:
                 models[info.request_model.__name__] = info.request_model
-    except Exception:  # noqa: BLE001 -- facade 异常时退回本地最小清单
+    except Exception as exc:  # noqa: BLE001 -- facade 异常时退回本地最小清单
+        logger.warning("工具清单自省失败，退回本地最小清单：%s", exc)
         inventory = {
             name: None for name in ("design_orbit", "control_orbit", "orbit_family_generation")
         }

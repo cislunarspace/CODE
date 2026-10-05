@@ -24,10 +24,13 @@ e2m2e load.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def build_cr3bp_system(mu: float) -> Any:
@@ -274,7 +277,8 @@ def moon_position_gcrs(
         moon_pos = np.array(
             [mgr.get_body_position("MOON", float(et), "J2000", "EARTH") for et in times_et]
         )
-    except Exception:  # noqa: BLE001 -- SPICE 查询失败时降级，不阻塞轨道线渲染
+    except Exception as exc:  # noqa: BLE001 -- SPICE 查询失败时降级，不阻塞轨道线渲染
+        logger.warning("月球 SPICE 查询失败，惯性视图跳过月球轨迹：%s", exc)
         return None
     return moon_pos
 
@@ -360,9 +364,8 @@ def et_to_utc_label(et: float) -> str:
 
         iso = SPICEManager().et_to_utc(float(et))
         return f"{iso} UTC"
-    except Exception:  # noqa: BLE001 -- SPICE 不可用时降级为近似
-        # noqa: BLE001 -- degrade to approximation when SPICE is unavailable
-        pass
+    except Exception as exc:  # noqa: BLE001 -- SPICE 不可用时降级为近似
+        logger.debug("SPICE et2utc 不可用，回退 J2000 固定偏移近似：%s", exc)
     # J2000 历元（ET=0）的 UTC 近似时刻
     # Approximate UTC instant of the J2000 epoch (ET=0).
     epoch = datetime(2000, 1, 1, 11, 58, 56, tzinfo=UTC)
