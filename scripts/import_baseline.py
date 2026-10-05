@@ -104,14 +104,26 @@ def main() -> int:
 
     catalog_dir = args.catalog_dir or _default_catalog_dir()
 
+    # 内核目录注入（硬契约 1，AGENTS.md）：e2m2e 在 import 期读
+    # SPICE_KERNEL_DIR 搜闰秒内核，必须在任何 import e2m2e 之前设置
+    # （比照 tests/conftest.py）。
+    # Kernel-dir injection (hard contract 1 in AGENTS.md): e2m2e reads
+    # SPICE_KERNEL_DIR at import time to locate the leap-second kernel;
+    # set it before any `import e2m2e` (mirrors tests/conftest.py).
+    from src.commons.paths import detect_kernel_dir
+
+    kernel_dir = detect_kernel_dir()
+    if kernel_dir:
+        os.environ.setdefault("SPICE_KERNEL_DIR", kernel_dir)
+
     # 库目录直接传给 CatalogStore，不经 Config：e2m2e 的这两个环境变量只在
     # Config 字段的 default_factory 处被读，数据层（data/catalog/*）不读环境，
-    # 故本脚本不需要写环境变量。E2M2E_CATALOG_DIR 的读取发生在
+    # 故 catalog 环境变量本脚本不需要写。E2M2E_CATALOG_DIR 的读取发生在
     # _default_catalog_dir 里（作为缺省值来源）。
     # The catalog directory goes straight to CatalogStore, bypassing Config: e2m2e
     # reads those two env vars only in Config's field default_factory, and the data
-    # layer (data/catalog/*) reads no environment at all, so this script writes
-    # none. E2M2E_CATALOG_DIR is read in _default_catalog_dir, as the default.
+    # layer (data/catalog/*) reads no environment at all, so this script writes no
+    # catalog env vars. E2M2E_CATALOG_DIR is read in _default_catalog_dir, as the default.
     from e2m2e.data.catalog import CatalogStore
     from e2m2e.data.catalog.baseline import import_baseline
 
