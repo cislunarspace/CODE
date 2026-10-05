@@ -15,7 +15,7 @@ function toolCard(item: ChatItem): ToolCardData {
   return item.card;
 }
 
-describe("reset / user_message", () => {
+describe("reset / user_message 事件折叠（#492）", () => {
   it("reset 清空序列（回放开头）", () => {
     const seeded = foldEvent([], { kind: "user_message", text: "旧问题" });
     const out = foldEvent(seeded, { kind: "reset" });
@@ -35,7 +35,7 @@ describe("reset / user_message", () => {
   });
 });
 
-describe("foldEvent 流式折叠", () => {
+describe("foldEvent 流式折叠（#492）", () => {
   it("delta 增量归并进同一助手气泡", () => {
     let items = foldEvent([], { kind: "delta", text: "你" });
     items = foldEvent(items, { kind: "delta", text: "好" });
@@ -104,7 +104,7 @@ describe("foldEvent 流式折叠", () => {
   });
 });
 
-describe("回放序列（reset + 逐条重建）", () => {
+describe("回放序列（reset + 逐条重建，#492）", () => {
   it("foldAll 重建完整时间线：用户/正文/思考/工具卡片", () => {
     const replay: AssistantEventPayload[] = [
       { kind: "reset" },

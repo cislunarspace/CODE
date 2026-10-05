@@ -24,7 +24,7 @@ function setup(overrides: Partial<typeof baseProps> = {}) {
   return props;
 }
 
-describe("CanvasToolbar component", () => {
+describe("CanvasToolbar 组件（#410）", () => {
   it("渲染全部投影与中心选项及操作按钮", () => {
     setup();
     for (const name of ["3D", "XY", "XZ", "YZ"]) {
@@ -122,7 +122,7 @@ describe("CanvasToolbar 绘制内容切换", () => {
 // —— 视图系切换（#428）——
 // The view-frame switch (#428).
 
-describe("CanvasToolbar 视图系切换", () => {
+describe("CanvasToolbar 视图系切换（#428）", () => {
   it("默认渲染会合系/惯性选项，缺省选中会合系", () => {
     setup();
     expect(screen.getByRole("radio", { name: "会合系" })).toBeDefined();

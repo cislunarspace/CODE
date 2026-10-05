@@ -91,7 +91,7 @@ describe("RecordDetailPanel hooks 规则（#437）", () => {
   });
 });
 
-describe("RecordDetailPanel 族维度（e2m2e 5.9.3 一轨一记录）", () => {
+describe("RecordDetailPanel 族维度（e2m2e 5.9.3 一轨一记录，#486）", () => {
   it("族成员记录展示族内序号与所属族批次，不再渲染提升区", () => {
     render(<RecordDetailPanel record={RECORD_B} />);
     expect(screen.getByText("#2")).toBeDefined();

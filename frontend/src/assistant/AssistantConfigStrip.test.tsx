@@ -43,7 +43,7 @@ const configOptions = [
   },
 ];
 
-describe("AssistantConfigStrip", () => {
+describe("AssistantConfigStrip 配置面（#493）", () => {
   it("渲染模型/思考两个控件，未知配置项不渲染（pi 切换后无模式项）", () => {
     render(
       <AssistantConfigStrip configOptions={configOptions} disabled={false} onChange={vi.fn()} />,

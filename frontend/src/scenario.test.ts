@@ -21,7 +21,7 @@ const SAMPLE: ScenarioContent = {
   playback: { rate: 86400, loop: false, startOffsetEt: 0 },
 };
 
-describe("serializeScenario / parseScenario 往返", () => {
+describe("serializeScenario / parseScenario 往返（#429）", () => {
   it("保存→打开逐字段复原（固定层记录集、参考历元、播放配置）", () => {
     const text = serializeScenario(SAMPLE);
     const parsed = parseScenario(text);
@@ -56,7 +56,7 @@ describe("serializeScenario / parseScenario 往返", () => {
   });
 });
 
-describe("parseScenario 拒绝路径", () => {
+describe("parseScenario 拒绝路径（#429）", () => {
   it("未知版本号拒绝加载并给出升级提示", () => {
     const text = serializeScenario(SAMPLE).replace('"version": 1', '"version": 99');
     const parsed = parseScenario(text);
@@ -101,7 +101,7 @@ describe("parseScenario 拒绝路径", () => {
   });
 });
 
-describe("resolveScenarioRecords 软失败", () => {
+describe("resolveScenarioRecords 软失败（#429）", () => {
   const mk = (id: string) => ({ recordId: id, label: id, data: { trajectories: [], times: [] } });
 
   it("全部可解析：顺序保留", async () => {

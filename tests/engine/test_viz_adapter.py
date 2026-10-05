@@ -13,6 +13,7 @@ the lazy e2m2e import that keeps the view layer from leaking.
 from __future__ import annotations
 
 import matplotlib
+import numpy as np
 import pytest
 from e2m2e.data.templates.seed import EARTH_MOON_MU
 
@@ -200,3 +201,56 @@ class TestNoImportE2m2eAtModuleImport:
         assert result.stdout.strip() == "CLEAN", (
             f"viz_adapter 模块级 import 触发了 e2m2e 加载: {result.stdout.strip()}"
         )
+
+
+class TestSynodicToGcrs:
+    def test_synodic_to_gcrs_km_matches_frontend_idealized_geometry(self):
+        """换算与前端 idealizedInertialGeometry 同口径：先平移后旋转（#521）。
+
+        frontend/src/trajectoryParsing.ts 的 idealizedInertialGeometry 按
+        Rz(θ)·(p + (μ,0,0)) 实现；本测试按同一公式复现期望值逐点对照，
+        守住 AGENTS.md 硬契约 4（#477）的多实现同口径。
+        """
+        from src.commons.units import DU_KM
+
+        from src.engine.viz_adapter import synodic_to_gcrs_km
+
+        pos = np.array([[0.1, -0.2, 0.3], [-1.5, 0.8, -0.1], [0.0, 0.0, 0.0]])
+        theta = np.array([0.0, 0.7, 2.4])
+        got = synodic_to_gcrs_km(pos, theta, _MU)
+        c, s = np.cos(theta), np.sin(theta)
+        x = pos[:, 0] + _MU
+        y = pos[:, 1]
+        expected = np.column_stack(
+            [(c * x - s * y) * DU_KM, (s * x + c * y) * DU_KM, pos[:, 2] * DU_KM]
+        )
+        np.testing.assert_allclose(got, expected, atol=1e-6)
+
+    def test_synodic_to_gcrs_km_moon_point_falls_on_approx_moon_orbit(self):
+        """会合系月球点 (1-μ,0,0) 换算后落在 approx_moon_gcrs_km 正圆轨道上（#521）。
+
+        月球特例的一致性同时锁定两个函数的口径：先平移口径下
+        R(θ)·((1-μ)+μ,0,0) 化为 R(θ)·(1,0,0)，与 approx_moon_gcrs_km 重合。
+        """
+        from src.engine.viz_adapter import approx_moon_gcrs_km, synodic_to_gcrs_km
+
+        theta = np.array([0.0, 1.3, 4.1])
+        moon_synodic = np.tile([1.0 - _MU, 0.0, 0.0], (3, 1))
+        got = synodic_to_gcrs_km(moon_synodic, theta, _MU)
+        np.testing.assert_allclose(got, approx_moon_gcrs_km(theta), atol=1e-6)
+
+    def test_synodic_to_gcrs_km_accepts_scalar_theta(self):
+        """theta 为标量时按同口径广播到全部点（#521）。"""
+        from src.commons.units import DU_KM
+
+        from src.engine.viz_adapter import synodic_to_gcrs_km
+
+        pos = np.array([[0.5, 0.25, -0.75], [1.0, -1.0, 0.0]])
+        got = synodic_to_gcrs_km(pos, 1.1, _MU)
+        c, s = np.cos(1.1), np.sin(1.1)
+        x = pos[:, 0] + _MU
+        y = pos[:, 1]
+        expected = np.column_stack(
+            [(c * x - s * y) * DU_KM, (s * x + c * y) * DU_KM, pos[:, 2] * DU_KM]
+        )
+        np.testing.assert_allclose(got, expected, atol=1e-6)

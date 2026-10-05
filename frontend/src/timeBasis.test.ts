@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { etFromEpoch, etFromJdTdb, etToJd, etToUtcLabel, JD_J2000 } from "./timeBasis";
 
-describe("timeBasis 时间基准换算", () => {
+describe("timeBasis 时间基准换算（#421）", () => {
   it("J2000（JD_TDB 2451545.0）→ et 0", () => {
     expect(etFromEpoch(2451545.0)).toBe(0);
     expect(etFromJdTdb(JD_J2000)).toBe(0);

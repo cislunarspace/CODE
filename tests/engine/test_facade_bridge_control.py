@@ -205,7 +205,8 @@ class TestControlOrbit:
                 for (y, mo, d, h, mi, s) in times_meta
             ]
         )
-        np.testing.assert_allclose(data.times_et, expected_et)
+        # 显式阈值：同串 str2et 应逐位一致；assert_allclose 默认 atol 为 0（纯相对比较），此处显式给 rtol 1e-7、atol 1e-8，防近零元素误报，仍严于标准的 atol 1e-6
+        np.testing.assert_allclose(data.times_et, expected_et, rtol=1e-7, atol=1e-8)
         # controlled_times 现在就是真物理时间（不再是 np.arange）
         # controlled_times now holds true physical time (no longer np.arange)
         np.testing.assert_array_equal(data.controlled_times, data.times_et)

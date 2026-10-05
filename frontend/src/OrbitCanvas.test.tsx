@@ -162,7 +162,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("OrbitCanvas 轨迹渲染", () => {
+describe("OrbitCanvas 轨迹渲染（#405）", () => {
   it("渲染后场景中存在与 trajectories 等量的轨迹线", () => {
     renderCanvas();
     flushFrames();
@@ -253,7 +253,7 @@ describe("OrbitCanvas 轨迹渲染", () => {
   });
 });
 
-describe("时刻标记（每条轨迹一个）", () => {
+describe("时刻标记（每条轨迹一个，#419）", () => {
   // 两条不同时刻区间的轨迹：marker 各自沿自己的 times 插值，区间外隐藏
   // Two trajectories with disjoint time spans: each marker interpolates over its own times, hidden outside.
   const MULTI_TRAJ: number[][][] = [
@@ -381,7 +381,7 @@ describe("时刻标记（每条轨迹一个）", () => {
   });
 });
 
-describe("中心点居中几何", () => {
+describe("中心点居中几何（#405）", () => {
   // 选定中心后，该天体/平动点的世界坐标应为原点（相机 target 默认 0,0,0）
   // After a center is selected, that body/libration point's world coordinate should be the origin (camera target defaults to 0,0,0).
   const CASES: { name: string; center: CenterMode; bodyLocalX: number }[] = [
@@ -419,7 +419,7 @@ describe("中心点居中几何", () => {
   });
 });
 
-describe("中心切换的相机注视点", () => {
+describe("中心切换的相机注视点（#405）", () => {
   // 用户场景：L2 轨道族 + 适配（注视点在轨道盒中心）→ 手动切“质心居中”，
  // 期望质心（世界原点）成为画面中心，而不是重新适配又盯回轨道盒。
   // User scenario: an L2 orbit family + fit (gaze at the orbit-box center), then manually switching to
@@ -485,7 +485,7 @@ describe("中心切换的相机注视点", () => {
   });
 });
 
-describe("坐标轴图层", () => {
+describe("坐标轴图层（#405）", () => {
   it("默认显示：三轴箭头 + X/Y/Z 标注 + 轨道面网格", () => {
     render(
       <OrbitCanvas
@@ -600,7 +600,7 @@ const REGIONS: RegionElement[] = [
   { kind: "point", label: "L3", centerDU: [-1.198, 0, 0] },
 ];
 
-describe("OrbitCanvas regions layer", () => {
+describe("OrbitCanvas 分区图层（#432）", () => {
   it("传入 regions 时渲染 regions 组：圆族折线 + 点标记 + 标注 sprite", () => {
     render(
       <OrbitCanvas

@@ -22,11 +22,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -61,7 +65,7 @@ MIN_BASELINE_FAMILIES = 13
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", help="打包 sidecar 可执行文件路径（缺省走 dev uv 拉起）")
-    parser.add_argument("--cwd", default=REPO_ROOT, help="子进程工作目录")
+    parser.add_argument("--cwd", default=REPO_ROOT, help="子进程工作目录（默认仓库根）")
     parser.add_argument(
         "--kernels",
         help="SPICE 内核目录，写入子进程 SPICE_KERNEL_DIR（打包冒烟必传）",
@@ -87,7 +91,7 @@ def main() -> int:
     baseline_tmp = None
     if args.baseline:
         if not os.path.isfile(args.baseline):
-            print(f"FAIL: 基线 zip 不存在：{args.baseline}（release 流水线应在构建前下载）")
+            logger.error("FAIL: 基线 zip 不存在：%s（release 流水线应在构建前下载）", args.baseline)
             return 1
         baseline_tmp = tempfile.mkdtemp(prefix="smoke-catalog-")
         env["E2M2E_CATALOG_DIR"] = baseline_tmp
@@ -135,16 +139,16 @@ def main() -> int:
     )
     init_resp = read_until(1)
     server = init_resp.get("result", {}).get("serverInfo", {})
-    print(f"initialize → serverInfo={json.dumps(server, ensure_ascii=False)}")
+    logger.info("initialize → serverInfo=%s", json.dumps(server, ensure_ascii=False))
 
     send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
 
     send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     tools_resp = read_until(2)
     tools = tools_resp.get("result", {}).get("tools", [])
-    print(f"tools/list → {len(tools)} 个工具")
+    logger.info("tools/list → %d 个工具", len(tools))
     if not tools:
-        print("FAIL: tools/list 为空")
+        logger.error("FAIL: tools/list 为空")
         proc.kill()
         return 1
 
@@ -161,7 +165,7 @@ def main() -> int:
     is_error = result.get("isError", False)
     content = result.get("content", [])
     text = content[0].get("text", "") if content else ""
-    print(f"tools/call design_orbit → isError={is_error}, text={text[:400]}")
+    logger.info("tools/call design_orbit → isError=%s, text=%s", is_error, text[:400])
 
     # 基线断言：条数由子进程自己的首用导入写进库，故这里查到多少条即包内
     # 基线数据真实落库多少条（漏带 → 0 条 → 红）
@@ -188,10 +192,14 @@ def main() -> int:
             baseline_count = len(records)
             baseline_families = len({r.get("family_id") for r in records if r.get("family_id")})
         except (json.JSONDecodeError, AttributeError):
-            print(f"FAIL: catalog_query 返回无法解析：{qtext[:400]}")
+            logger.error("FAIL: catalog_query 返回无法解析：%s", qtext[:400])
             proc.kill()
             return 1
-        print(f"tools/call catalog_query(tag=baseline) → {baseline_count} 条记录 / {baseline_families} 族")
+        logger.info(
+            "tools/call catalog_query(tag=baseline) → %d 条记录 / %d 族",
+            baseline_count,
+            baseline_families,
+        )
 
     proc.terminate()
     try:
@@ -203,18 +211,21 @@ def main() -> int:
         shutil.rmtree(baseline_tmp, ignore_errors=True)
 
     if is_error or "converged" not in text:
-        print("FAIL: design_orbit 未收敛或返回错误")
+        logger.error("FAIL: design_orbit 未收敛或返回错误")
         return 1
     if baseline_count is not None and (
         baseline_count < MIN_BASELINE_RECORDS or baseline_families < MIN_BASELINE_FAMILIES
     ):
-        print(
-            f"FAIL: 库内基线 {baseline_count} 条 / {baseline_families} 族，少于 "
-            f"{MIN_BASELINE_RECORDS} 条 / {MIN_BASELINE_FAMILIES} 族——包内基线数据集缺失、"
-            "缺族或导入残缺（检查构建前的下载步骤与 spec 的 datas）"
+        logger.error(
+            "FAIL: 库内基线 %d 条 / %d 族，少于 %d 条 / %d 族——包内基线数据集缺失、"
+            "缺族或导入残缺（检查构建前的下载步骤与 spec 的 datas）",
+            baseline_count,
+            baseline_families,
+            MIN_BASELINE_RECORDS,
+            MIN_BASELINE_FAMILIES,
         )
         return 1
-    print("OK")
+    logger.info("OK")
     return 0
 
 

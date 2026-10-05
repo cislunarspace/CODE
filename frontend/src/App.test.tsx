@@ -125,7 +125,7 @@ describe("App 布局收缩契约（#462 折叠回归）", () => {
   });
 });
 
-describe("transferTimelineEvents 转移时间轴事件（5.9.7 maneuver_events）", () => {
+describe("transferTimelineEvents 转移时间轴事件（5.9.7 maneuver_events，#504）", () => {
   // t 直通词典：被测的是 kind → 词典键的映射，不是文案本身
   // t passes keys through: the kind → dictionary-key mapping is under test, not the wording.
   const t = (key: string) => key;

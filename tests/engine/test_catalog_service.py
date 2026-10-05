@@ -175,7 +175,7 @@ class TestLoadArrays:
         artifact = record_to_artifact(_summary())
         assert CatalogService(bridge).load_arrays(artifact) is True
         assert artifact.state_data.shape == (5, 6)
-        assert artifact.extra["mu"] == 0.01215
+        assert artifact.extra["mu"] == pytest.approx(0.01215)
 
     @pytest.mark.spice
     def test_design_record_ephemeris_rebuilds_times_et(self):

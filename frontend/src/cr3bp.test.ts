@@ -14,7 +14,7 @@ const SEED = {
   ] as [number, number, number, number, number, number],
 };
 
-describe("deriv", () => {
+describe("deriv（#397）", () => {
   it("在初值处与 e2m2e equations_of_motion 一致（含科里奥利项）", () => {
     // e2m2e CR3BP_Dynamics.equations_of_motion(0, SEED) 的参考输出
     // Reference output of e2m2e CR3BP_Dynamics.equations_of_motion(0, SEED).
@@ -27,7 +27,7 @@ describe("deriv", () => {
   });
 });
 
-describe("propagate", () => {
+describe("propagate（#397）", () => {
   it("传播一个周期后回到起点（闭合误差 < 1e-8）", () => {
     const pts = propagate(MU, SEED, 4000);
     const s = pts[pts.length - 1];
@@ -36,7 +36,7 @@ describe("propagate", () => {
   });
 });
 
-describe("librationPoint", () => {
+describe("librationPoint（#397）", () => {
   it("地月 L1/L2 与已知值一致", () => {
     expect(librationPoint(MU, 1)).toBeCloseTo(0.836915, 5);
     expect(librationPoint(MU, 2)).toBeCloseTo(1.155682, 5);

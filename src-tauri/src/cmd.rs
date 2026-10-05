@@ -557,6 +557,15 @@ mod get_artifact_tests {
         FrameArray::F32 { shape: shape.to_vec(), data: data.to_vec() }
     }
 
+    /// 浮点按标准容差比较（AGENTS.md Testing & QA：f32 容差 1e-6；按量值
+    /// 放缩以覆盖 km 级大数，其 f32 ULP 大于绝对 1e-6）。
+    fn assert_close_f32(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() <= 1e-6 * expected.abs().max(1.0),
+            "{actual} != {expected}"
+        );
+    }
+
     /// 族记录响应：两成员（states 帧 + members 元数据），成员 1 带 jacobi、
     /// 成员 2 不带；顶层 jacobi 包络 [2.9, 3.1]。
     fn family_record_result() -> JobResult {
@@ -590,7 +599,7 @@ mod get_artifact_tests {
     fn family_member_jacobi_passed_through_per_member() {
         let artifact = artifact_from_catalog_get("fam-1".into(), family_record_result());
         assert_eq!(artifact.family_members.len(), 2);
-        assert_eq!(artifact.family_members[0].jacobi, Some(3.1));
+        assert!(matches!(artifact.family_members[0].jacobi, Some(v) if (v - 3.1).abs() < 1e-6));
         assert_eq!(artifact.family_members[1].jacobi, None);
     }
 
@@ -598,7 +607,7 @@ mod get_artifact_tests {
     fn family_record_carries_envelope_floor_as_record_jacobi() {
         let artifact = artifact_from_catalog_get("fam-1".into(), family_record_result());
         // 顶层包络下限原样透传；族记录逐成员值优先，成员缺值时回退本值
-        assert_eq!(artifact.jacobi, Some(2.9));
+        assert!(matches!(artifact.jacobi, Some(v) if (v - 2.9).abs() < 1e-6));
     }
 
     /// 成员记录响应（5.9.3 一轨一记录）：顶层 cr3bp/states（周期成员单点
@@ -629,10 +638,10 @@ mod get_artifact_tests {
         let artifact = artifact_from_catalog_get("mem-1".into(), member_record_result());
         // 单成员携带 period：前端传播器才能重建整条轨迹（缺则成员被跳过）
         assert_eq!(artifact.family_members.len(), 1);
-        assert_eq!(artifact.family_members[0].period, Some(2.16));
+        assert!(matches!(artifact.family_members[0].period, Some(v) if (v - 2.16).abs() < 1e-6));
         // 成员级 jacobi 无 v2 通道（回退记录级单点值，#435 口径）
         assert_eq!(artifact.family_members[0].jacobi, None);
-        assert_eq!(artifact.jacobi, Some(3.1));
+        assert!(matches!(artifact.jacobi, Some(v) if (v - 3.1).abs() < 1e-6));
     }
 
     /// 设计轨道记录响应：members 空（非族），顶层 jacobi 包络单轨道两端同值。
@@ -662,7 +671,7 @@ mod get_artifact_tests {
     #[test]
     fn design_orbit_record_jacobi_at_record_level() {
         let artifact = artifact_from_catalog_get("design-1".into(), design_record_result());
-        assert_eq!(artifact.jacobi, Some(3.006));
+        assert!(matches!(artifact.jacobi, Some(v) if (v - 3.006).abs() < 1e-6));
         // 单条记录没有成员元数据表：成员级 jacobi 为 None，由记录级兜底
         assert_eq!(artifact.family_members.len(), 1);
         assert_eq!(artifact.family_members[0].jacobi, None);
@@ -721,15 +730,27 @@ mod get_artifact_tests {
         assert!(artifact.members.is_empty());
         let seg = artifact.transfer.as_ref().expect("转移段应存在");
         assert_eq!(seg.states.len(), 2);
-        assert_eq!(seg.states[0], vec![-4670.9, 6578.0, 0.0, 0.0, 7.8, 0.0]);
-        assert_eq!(seg.states[1][0], 380000.0);
-        assert_eq!(seg.times, vec![0.0, 200.0]);
-        assert_eq!(
-            seg.gcrs_states.as_ref().expect("gcrs 段应存在")[1],
-            vec![-384400.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        );
+        let want_row0 = [-4670.9, 6578.0, 0.0, 0.0, 7.8, 0.0];
+        for (g, w) in seg.states[0].iter().zip(want_row0) {
+            assert_close_f32(*g, w);
+        }
+        assert_close_f32(seg.states[1][0], 380000.0);
+        let want_times = [0.0, 200.0];
+        for (g, w) in seg.times.iter().zip(want_times) {
+            assert_close_f32(*g, w);
+        }
+        let want_gcrs1 = [-384400.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+        for (g, w) in seg
+            .gcrs_states
+            .as_ref()
+            .expect("gcrs 段应存在")[1]
+            .iter()
+            .zip(want_gcrs1)
+        {
+            assert_close_f32(*g, w);
+        }
         assert_eq!(seg.transfer_type.as_deref(), Some("HMN"));
-        assert_eq!(seg.delta_v_km_s, Some(3.95));
+        assert!(matches!(seg.delta_v_km_s, Some(v) if (v - 3.95).abs() < 1e-6));
         assert_eq!(
             seg.tli_epoch.as_ref().and_then(|v| v.as_str()),
             Some("2026-09-01T00:00:00")

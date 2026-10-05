@@ -81,7 +81,7 @@ beforeEach(() => {
   vi.mocked(invoke).mockResolvedValue({ status: "ok" });
 });
 
-describe("ephemerisSpanDays（纯函数）", () => {
+describe("ephemerisSpanDays（纯函数，#416）", () => {
   it("优先用 eph/times_jd_tdb 帧取极差（天）", () => {
     expect(ephemerisSpanDays(resultWithJdSpan(30))).toBeCloseTo(30, 9);
   });

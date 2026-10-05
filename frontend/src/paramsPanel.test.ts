@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { getFieldApplicability } from "./paramOverlay";
 
-describe("ParamsPanel 与 Schema 适用性", () => {
+describe("ParamsPanel 与 Schema 适用性（#401）", () => {
   it("design_orbit 在 HALO 下适用字段包含 10 个公共参数 + 4 个 HALO 特有参数", () => {
     const fields = getFieldApplicability("design_orbit", "HALO");
     expect(fields).toContain("orbit_type");

@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { I18nProvider, useTranslation, translations } from "./i18n";
 
-describe("i18n 词典（固定中文）", () => {
+describe("i18n 词典（固定中文，#447）", () => {
   it("每个词条非空字符串且键非空", () => {
     for (const [key, value] of Object.entries(translations)) {
       expect(typeof value).toBe("string");
@@ -29,7 +29,7 @@ beforeEach(() => {
   document.documentElement.lang = "";
 });
 
-describe("i18n 中文共享状态", () => {
+describe("i18n 中文共享状态（#447）", () => {
   it("同一 Provider 下两个组件渲染同一中文文案", () => {
     render(
       <I18nProvider>

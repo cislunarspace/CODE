@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.mocked(getVersion).mockClear();
 });
 
-describe("AboutModal component", () => {
+describe("AboutModal 组件（#403）", () => {
   it("缺省显示 Tauri 运行时真实版本（不再硬编码）", async () => {
     render(
       <AboutModal open={true} onClose={vi.fn()} onUpdateAvailable={vi.fn()} />
@@ -37,7 +37,7 @@ describe("AboutModal component", () => {
     expect(screen.getByText(/CODE - 地月转移轨道设计系统/)).toBeDefined();
   });
 
-  it("checks for updates when user clicks check button", async () => {
+  it("点击检查按钮时检查更新，上抛更新信息并关闭弹窗", async () => {
     const mockUpdateInfo: updaterModule.UpdateInfo = {
       version: "4.2.0",
       currentVersion: "4.1.2",

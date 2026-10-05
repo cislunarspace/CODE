@@ -4,7 +4,7 @@ import { UpdateModal } from "./UpdateModal";
 import * as updaterModule from "./updater";
 import type { UpdateInfo } from "./updater";
 
-describe("UpdateModal component", () => {
+describe("UpdateModal 组件（#403）", () => {
   const mockUpdateInfo: UpdateInfo = {
     version: "4.2.0",
     currentVersion: "4.1.2",
@@ -16,7 +16,7 @@ describe("UpdateModal component", () => {
     } as any,
   };
 
-  it("renders modal when open is true", () => {
+  it("open 为 true 时渲染弹窗，版本号与更新说明可见", () => {
     render(
       <UpdateModal
         open={true}
@@ -28,7 +28,7 @@ describe("UpdateModal component", () => {
     expect(screen.getByText("New features added")).toBeDefined();
   });
 
-  it("triggers download when clicking download button", async () => {
+  it("点击下载按钮后调用下载安装，完成后显示立即重启", async () => {
     const downloadAndInstall = vi.fn().mockImplementation(async (cb) => {
       cb({ event: "Started", data: { contentLength: 100 } });
       cb({ event: "Progress", data: { chunkLength: 100 } });
@@ -60,7 +60,7 @@ describe("UpdateModal component", () => {
     });
   });
 
-  it("shows downloaded size and percent during download", async () => {
+  it("下载过程中显示已下载大小与总量进度", async () => {
     const downloadAndInstall = vi.fn().mockImplementation(async (cb) => {
       cb({ event: "Started", data: { contentLength: 100 } });
       cb({ event: "Progress", data: { chunkLength: 40 } });
@@ -91,7 +91,7 @@ describe("UpdateModal component", () => {
     });
   });
 
-  it("falls back to received-only stats when contentLength is missing", async () => {
+  it("缺少总量时只显示已下载大小，不出现 x / y 形式", async () => {
     const downloadAndInstall = vi.fn().mockImplementation(async (cb) => {
       cb({ event: "Started", data: {} });
       cb({ event: "Progress", data: { chunkLength: 40 } });

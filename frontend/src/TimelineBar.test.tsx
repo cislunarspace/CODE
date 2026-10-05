@@ -101,7 +101,7 @@ describe("TimelineBar 播放（#429 播放配置）", () => {
   });
 });
 
-describe("TimelineBar 基础交互回归", () => {
+describe("TimelineBar 基础交互回归（#429）", () => {
   it("事件芯片点击跳转到事件时刻", () => {
     const props = setup({
       events: [{ et: 42, label: "出发脉冲", dv: "3.10 km/s" }],
