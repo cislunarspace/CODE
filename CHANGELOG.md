@@ -1,7 +1,8 @@
 # 更新日志
 
-> 自 4.8.3 起版本小节纯中文；GitHub Release 正文由对应小节生成。历史小节保持写成时的双语不动。
+本项目的显著变更都记录在这里。
 
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## 5.0.0 (2026-10-03)
 
