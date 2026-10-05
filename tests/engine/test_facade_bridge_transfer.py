@@ -101,8 +101,12 @@ class TestTransferDesign:
         )
         eph = captured["kwargs"]["target_ephemeris"]
         assert eph.shape == (1, 6)
+        # 显式阈值：乘 DU_KM/TU 的量级换算用既有默认（rtol 1e-7 / atol 1e-8），严于标准的 atol 1e-6，保持原严格度
         np.testing.assert_allclose(
-            eph[0], np.r_[states[-1][:3] * DU_KM, states[-1][3:] * (DU_KM / TU_SECONDS)]
+            eph[0],
+            np.r_[states[-1][:3] * DU_KM, states[-1][3:] * (DU_KM / TU_SECONDS)],
+            rtol=1e-7,
+            atol=1e-8,
         )
 
     def test_tli_epoch_list_to_iso(self, monkeypatch, bridge):

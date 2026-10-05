@@ -244,7 +244,9 @@ mod tests {
         assert_eq!(used, frame.len());
         match arr {
             FrameArray::F64 { data, .. } => {
-                assert_eq!(data, vec![1.5, -2.5, 3.25]);
+                for (g, w) in data.iter().zip([1.5, -2.5, 3.25]) {
+                    assert!((g - w).abs() < 1e-6);
+                }
             }
             _ => panic!("应为 f64"),
         }

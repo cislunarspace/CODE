@@ -32,7 +32,7 @@ class TestFamilyGenerationRequest:
     def test_halo_defaults(self):
         req = FamilyGenerationRequest(orbit_type="HALO")
         assert req.libration_point == 2
-        assert req.max_amplitude_km == 30000.0
+        assert req.max_amplitude_km == pytest.approx(30000.0)
         assert req.n_orbits == 50
 
     def test_constraints(self):
@@ -68,21 +68,21 @@ class TestFamilyGenerationRequest:
         """5.8.2 起 DRO（月心族）为合法 orbit_type：不绑定平动点，振幅区间默认 2000-60000 km。"""
         req = FamilyGenerationRequest(orbit_type="DRO")
         assert req.libration_point is None
-        assert req.min_amplitude_km == 2000.0
-        assert req.max_amplitude_km == 60000.0
+        assert req.min_amplitude_km == pytest.approx(2000.0)
+        assert req.max_amplitude_km == pytest.approx(60000.0)
         with pytest.raises(ValidationError):
             FamilyGenerationRequest(orbit_type="DRO", libration_point=2)
 
     def test_per_family_defaults(self):
         nrho = FamilyGenerationRequest(orbit_type="NRHO")
         assert nrho.north_south == 2
-        assert nrho.perilune_height_max_km == 20000.0
+        assert nrho.perilune_height_max_km == pytest.approx(20000.0)
         assert nrho.continuation_direction == "toward-moon"
         spo = FamilyGenerationRequest(orbit_type="SPO")
         assert spo.libration_point == 4
-        assert spo.min_amplitude_km == 2000.0
-        assert spo.max_amplitude_km == 60000.0
-        assert spo.match_tolerance_km == 20.0
+        assert spo.min_amplitude_km == pytest.approx(2000.0)
+        assert spo.max_amplitude_km == pytest.approx(60000.0)
+        assert spo.match_tolerance_km == pytest.approx(20.0)
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +265,11 @@ class TestGenerateFamily:
         assert data.orbit_type == "DRO"
         assert data.family_type == "dro"
         assert data.libration_point is None
-        assert data.member_parameters == [{"amplitude_km": 20000.0}] * 2
+        assert data.member_parameters is not None
+        assert len(data.member_parameters) == 2
+        for params in data.member_parameters:
+            assert set(params) == {"amplitude_km"}
+            assert params["amplitude_km"] == pytest.approx(20000.0)
 
     def test_invalid_params_translated(self):
         """非法参数经真 Catalog 的 FamilyGenerationRequest 校验 → OrbitError(INVALID_PARAMS)。"""
