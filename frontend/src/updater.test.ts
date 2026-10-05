@@ -19,7 +19,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(),
 }));
 
-describe("updater module", () => {
+describe("updater 模块（#403）", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -95,13 +95,13 @@ describe("updater module", () => {
     expect(invoke).toHaveBeenCalledWith("update_install", { path: "/tmp/app.deb" });
   });
 
-  it("returns null when no update is available", async () => {
+  it("无可用更新时返回 null", async () => {
     const mockCheck = vi.fn().mockResolvedValue(null);
     const result = await checkForAppUpdates(mockCheck);
     expect(result).toBeNull();
   });
 
-  it("extracts version and body correctly when update is found", async () => {
+  it("有更新时正确提取版本号与更新说明，并保留原始更新对象", async () => {
     const mockUpdate = {
       version: "4.2.0",
       currentVersion: "4.1.2",
@@ -119,12 +119,12 @@ describe("updater module", () => {
     });
   });
 
-  it("handles errors gracefully and throws formatted updater error", async () => {
+  it("更新检查失败时原样抛出错误", async () => {
     const mockCheck = vi.fn().mockRejectedValue(new Error("Network offline"));
     await expect(checkForAppUpdates(mockCheck)).rejects.toThrow("Network offline");
   });
 
-  it("downloads and installs update with progress tracking", async () => {
+  it("下载并安装更新，进度事件逐个转发", async () => {
     const mockRawUpdate: any = {
       version: "4.2.0",
       currentVersion: "4.1.2",
@@ -155,13 +155,13 @@ describe("updater module", () => {
   });
 
   describe("formatBytes", () => {
-    it("formats bytes below 1024 as integer B", () => {
+    it("小于 1024 字节按整数 B 输出", () => {
       expect(formatBytes(0)).toBe("0 B");
       expect(formatBytes(512)).toBe("512 B");
       expect(formatBytes(1023)).toBe("1023 B");
     });
 
-    it("formats larger units with one decimal", () => {
+    it("换算为 KB/MB/GB 并保留一位小数，超出单位表不再进位", () => {
       expect(formatBytes(1024)).toBe("1.0 KB");
       expect(formatBytes(1536)).toBe("1.5 KB");
       expect(formatBytes(1024 * 1024)).toBe("1.0 MB");
@@ -170,7 +170,7 @@ describe("updater module", () => {
       expect(formatBytes(1024 * 1024 * 1024 * 1024)).toBe("1024.0 GB");
     });
 
-    it("treats invalid input as 0 B", () => {
+    it("负数、NaN、Infinity 按 0 B 处理", () => {
       expect(formatBytes(-1)).toBe("0 B");
       expect(formatBytes(Number.NaN)).toBe("0 B");
       expect(formatBytes(Number.POSITIVE_INFINITY)).toBe("0 B");
@@ -178,12 +178,12 @@ describe("updater module", () => {
   });
 
   describe("createSpeedTracker", () => {
-    it("returns 0 for the first chunk (no time delta yet)", () => {
+    it("首个数据块返回 0（尚无时间差）", () => {
       const track = createSpeedTracker();
       expect(track(1000, 5000)).toBe(0);
     });
 
-    it("computes smoothed speed from chunk deltas", () => {
+    it("按相邻数据块差值计算速度并做指数平滑", () => {
       const track = createSpeedTracker();
       track(1000, 5000); // 首块只记时间
       expect(track(2000, 1000)).toBe(1000); // 1000 B / 1s
@@ -191,7 +191,7 @@ describe("updater module", () => {
       expect(track(2100, 1000)).toBe(3700);
     });
 
-    it("ignores zero/negative time deltas", () => {
+    it("时间差为零或负时不计算速度，返回 0", () => {
       const track = createSpeedTracker();
       track(1000, 5000);
       expect(track(1000, 1000)).toBe(0); // 同时刻：无速度，不崩

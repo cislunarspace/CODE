@@ -65,7 +65,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("ProjectTree 勾选多选", () => {
+describe("ProjectTree 勾选多选（#419）", () => {
   it("勾选 ≥2 叶子出现“绘制所选”，点击回传勾选集合", async () => {
     const { props } = setup();
     // 只勾 1 条不出现入口
@@ -91,7 +91,7 @@ describe("ProjectTree 勾选多选", () => {
   });
 });
 
-describe("ProjectTree 星标切换", () => {
+describe("ProjectTree 星标切换（#419）", () => {
   it("行缺 tags 时先查详情再追加 ★（catalog_tag 整体替换，note 不动）", async () => {
     const { props } = setup();
     fireEvent.click(screen.getAllByRole("button", { name: "星标" })[1]); // NRHO B
@@ -112,7 +112,7 @@ describe("ProjectTree 星标切换", () => {
   });
 });
 
-describe("ProjectTree 备注", () => {
+describe("ProjectTree 备注（#419）", () => {
   it("悬停显示备注摘要（超长截断到 80 字符）", async () => {
     setup();
     fireEvent.mouseEnter(screen.getByText("Halo A"));

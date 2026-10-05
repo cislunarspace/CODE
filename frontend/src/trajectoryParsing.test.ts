@@ -31,7 +31,7 @@ const SEED = {
   ] as [number, number, number, number, number, number],
 };
 
-describe("framesToTrajectoryData 轨迹解析", () => {
+describe("framesToTrajectoryData 轨迹解析（#412）", () => {
   it("(n,3) 纯位置帧按 shape 解析，不误判为状态序列", () => {
     // 6 个 xyz 点 = 18 个数，18 % 6 === 0，旧逻辑会当成 3 个状态点
     // Six xyz points = 18 numbers; 18 % 6 === 0, so the old logic would have treated it as 3 state points.
@@ -114,7 +114,7 @@ describe("framesToTrajectoryData 轨迹解析", () => {
   });
 });
 
-describe("familyMembersToTrajectoryData 轨迹解析", () => {
+describe("familyMembersToTrajectoryData 轨迹解析（#412）", () => {
   it("完整状态序列取 xyz，成员 times 提供时刻", () => {
     const states: number[] = [];
     const times: number[] = [];
@@ -250,7 +250,7 @@ describe("Jacobi 常数透传（#435）", () => {
   });
 });
 
-describe("trajectoryTimeRange", () => {
+describe("trajectoryTimeRange（#412）", () => {
   it("多条时刻取全局端点", () => {
     expect(trajectoryTimeRange([[0, 1, 2], [5, 10]])).toEqual([0, 10]);
   });
@@ -279,7 +279,7 @@ describe("trajectoryTimeRange", () => {
   });
 });
 
-describe("transferTrajectoryToCanvasData 转移轨迹解析", () => {
+describe("transferTrajectoryToCanvasData 转移轨迹解析（#420）", () => {
   // 会合系物理 km（e2m2e ADR 0040）：地月质心原点
   // Rotating-frame physical km (e2m2e ADR 0040): barycenter origin.
   const TRAJ = [
@@ -431,7 +431,7 @@ describe("propagationToCanvasData 轨道预报解析（#421）", () => {
   });
 });
 
-describe("designEphemerisToCanvasData 星历段解析", () => {
+describe("designEphemerisToCanvasData 星历段解析（#434）", () => {
   // EphemerisTable 形状的星历段：会合无量纲位置 + UTC 分量
   const EPH = {
     synodic_position: [[1.1, 0.2, -0.3], [1.2, 0.3, -0.4]],
@@ -569,7 +569,7 @@ describe("filterByRole 绘制内容过滤（eph-fig）", () => {
   });
 });
 
-describe("timelineMode / timesForMode 两级时刻基准（ADR 0021 修订）", () => {
+describe("timelineMode / timesForMode 两级时刻基准（ADR 0021 修订，#421）", () => {
   const etData = {
     trajectories: [[[0, 0, 0]], [[1, 1, 1]]],
     times: [[100, 200], [0, 1]],

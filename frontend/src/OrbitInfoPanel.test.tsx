@@ -31,7 +31,7 @@ beforeAll(() => {
 
 const t = (key: string) => translations[key] ?? key;
 
-describe("buildOrbitInfo", () => {
+describe("buildOrbitInfo（#476）", () => {
   it("族成员段：类型/数据系/Jacobi/点数/跨度/来源齐全", () => {
     const info = buildOrbitInfo({
       item: { label: "DRO 成员", frame: "会合系无量纲" },
@@ -83,7 +83,7 @@ describe("buildOrbitInfo", () => {
   });
 });
 
-describe("OrbitInfoPanel", () => {
+describe("OrbitInfoPanel（#476）", () => {
   it("空态显示操作指引", () => {
     render(<OrbitInfoPanel info={null} />);
     expect(screen.getByTestId("orbit-info-panel").textContent).toContain(

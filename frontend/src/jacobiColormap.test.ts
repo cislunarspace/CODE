@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { COOLWARM_STOPS, jacobiColor, jacobiNorm } from "./jacobiColormap";
 
-describe("jacobiNorm 归一化范围（matplotlib _get_jacobi_norm 口径）", () => {
+describe("jacobiNorm 归一化范围（matplotlib _get_jacobi_norm 口径，#435）", () => {
   it("空列表 → (0, 1, 1)", () => {
     expect(jacobiNorm([])).toEqual([0, 1, 1]);
   });
@@ -36,7 +36,7 @@ describe("jacobiNorm 归一化范围（matplotlib _get_jacobi_norm 口径）", (
   });
 });
 
-describe("jacobiColor coolwarm 采样插值", () => {
+describe("jacobiColor coolwarm 采样插值（#435）", () => {
   it("采样表是 coolwarm 蓝端到红端的 9 档", () => {
     expect(COOLWARM_STOPS).toHaveLength(9);
     expect(COOLWARM_STOPS[0]).toBe("#3b4cc0");

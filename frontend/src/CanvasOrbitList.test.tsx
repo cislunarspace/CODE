@@ -13,7 +13,7 @@ import { buildOrbitListItems } from "./orbitListItems";
 
 const CYCLE = ["#4c72b0", "#dd8452", "#55a868", "#c44e52", "#8172b3"];
 
-describe("buildOrbitListItems", () => {
+describe("buildOrbitListItems（#469）", () => {
   it("无标签项不进清单；色样按色环循环取色", () => {
     const items = buildOrbitListItems({
       count: 3,
@@ -80,7 +80,7 @@ describe("buildOrbitListItems", () => {
   });
 });
 
-describe("CanvasOrbitList", () => {
+describe("CanvasOrbitList（#469）", () => {
   const items = buildOrbitListItems({
     count: 2,
     labels: ["甲轨道", "乙轨道"],

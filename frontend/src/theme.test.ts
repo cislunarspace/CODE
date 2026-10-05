@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { themeBehavior, themeCssVars, themeTokens } from "./theme";
 
-describe("themeBehavior", () => {
+describe("themeBehavior（#409）", () => {
   it("motion 关闭——全部过渡动画停用（去卡通感）", () => {
     expect(themeBehavior.motion).toBe(false);
   });
@@ -11,7 +11,7 @@ describe("themeBehavior", () => {
   });
 });
 
-describe("themeTokens", () => {
+describe("themeTokens（#409）", () => {
   it("圆角全系列统一为 2px（严肃直角风格，偏离 antd 默认 6-8px）", () => {
     expect(themeTokens.borderRadius).toBe(2);
     expect(themeTokens.borderRadiusLG).toBe(2);
@@ -48,7 +48,7 @@ describe("themeTokens", () => {
   });
 });
 
-describe("themeCssVars（--tod-* 主题变量，修复助手边栏深色缺失）", () => {
+describe("themeCssVars（--tod-* 主题变量，修复助手边栏深色缺失，#450）", () => {
   it("浅色值 = 各消费端 var(--tod-*, fallback) 的既有 fallback，浅色零回归", () => {
     expect(themeCssVars("light")).toEqual({
       "--tod-border": "#e8e8e8",

@@ -8,7 +8,7 @@ import { DU_KM } from "./cr3bp";
 const MU = 0.01215058560962404;
 const MOON_X_KM = (1 - 0.012150585350562453) * 383397.7725; // 后端 Primer 口径月心
 
-describe("boundariesResponseToRegionLayer", () => {
+describe("boundariesResponseToRegionLayer（#432）", () => {
   it("圆元素：km→DU 归一并把月心圆吸附到画布月球位置", () => {
     const radiusKm = 61364.0;
     const region = boundariesResponseToRegionLayer(

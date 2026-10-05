@@ -18,7 +18,7 @@ import {
 import { DU_KM, TU_SECONDS } from "./cr3bp";
 import { JD_J2000, SECONDS_PER_DAY } from "./timeBasis";
 
-describe("moonSampleCount", () => {
+describe("moonSampleCount（#428）", () => {
   it("每 0.02 TU 一点，含端点", () => {
     // 2 TU 跨度 → 101 点
     expect(moonSampleCount([0, 2 * TU_SECONDS])).toBe(101);
@@ -30,7 +30,7 @@ describe("moonSampleCount", () => {
   });
 });
 
-describe("moonTrackRequest", () => {
+describe("moonTrackRequest（#428）", () => {
   it("states 是月球会合系固定点（质心归一，速度恒零）", () => {
     const req = moonTrackRequest([0, TU_SECONDS]);
     expect(req.states.length).toBeGreaterThan(0);
@@ -64,7 +64,7 @@ describe("moonTrackRequest", () => {
   });
 });
 
-describe("moonTrackFromResponse", () => {
+describe("moonTrackFromResponse（#428）", () => {
   it("J2000 地心 km 状态序列 → DU 点列（只取位置）", () => {
     const data = {
       states: [
@@ -91,7 +91,7 @@ describe("moonTrackFromResponse", () => {
   });
 });
 
-describe("moonPositionAt", () => {
+describe("moonPositionAt（#428）", () => {
   const track = {
     points: [
       [0, 0, 0],

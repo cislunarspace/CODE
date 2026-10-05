@@ -46,7 +46,7 @@ function setup(overrides: Partial<Parameters<typeof SessionSwitcher>[0]> = {}) {
   return props;
 }
 
-describe("SessionSwitcher", () => {
+describe("SessionSwitcher 会话切换（#493）", () => {
   it("下拉行显示标题与「消息数 · 相对时间」，无标题显示未命名会话", () => {
     setup();
     fireEvent.mouseDown(screen.getByRole("combobox"));
