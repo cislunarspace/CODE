@@ -95,7 +95,7 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
     {transferCandidates && transferCandidates.length > 0 && (
       <CandidateComparisonCard candidates={transferCandidates} />
     )}
-    <Card size="small" title={detailTitle} style={{ marginTop: 8 }} bodyStyle={{ padding: "8px 12px" }}>
+    <Card size="small" title={detailTitle} style={{ marginTop: 8 }} styles={{ body: { padding: "8px 12px" } }}>
       <Descriptions size="small" column={1} bordered={false}>
         <Descriptions.Item label="ID">
           <Text copyable style={{ fontSize: 11 }}>{record.record_id}</Text>
@@ -181,7 +181,7 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
 function CandidateComparisonCard({ candidates }: { candidates: TransferCandidateView[] }) {
   const { t } = useTranslation();
   return (
-    <Card size="small" title={t("panel.candidates_title")} bodyStyle={{ padding: "4px 12px" }}>
+    <Card size="small" title={t("panel.candidates_title")} styles={{ body: { padding: "4px 12px" } }}>
       {candidates.map((c) => (
         <div
           key={c.key}
