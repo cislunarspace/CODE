@@ -78,6 +78,8 @@ vi.mock("./sidecarApi", () => ({
       usable: true,
     }),
   formatToolError: (e: unknown) => String(e),
+  // sidecar 进度订阅：测试无事件通道，返回空退订函数
+  onSidecarProgress: () => Promise.resolve(() => {}),
 }));
 vi.mock("./catalogApi", () => ({
   catalogQuery: () => Promise.resolve({ records: [] }),
@@ -110,18 +112,21 @@ vi.mock("three", async (importOriginal) => {
 });
 
 describe("App 布局收缩契约（#462 折叠回归）", () => {
-  it("画布所在的右栏必须 minWidth: 0，画布 px 宽不得钉住整行布局", () => {
+  it("画布所在列必须 minWidth: 0，画布 px 宽不得钉住整行布局", () => {
     const { container } = render(<App />);
 
-    // FakeRenderer 的画布挂在 OrbitCanvas 的 mount 里，向上三级即右栏：
-    // canvas → mount(width:100%) → 画布盒(flex:1) → 右栏(flex:1 列容器)
+    // FakeRenderer 的画布挂在 OrbitCanvas 的 mount 里：
+    // canvas → mount(width:100%) → 画布盒(flex:1) → 三维视图标签(flex 列)
+    // → 标签内容列(flex:1, minWidth:0)
     const canvas = container.querySelector("canvas");
     expect(canvas).not.toBeNull();
-    const column = canvas!.parentElement?.parentElement?.parentElement;
-    expect(column).not.toBeNull();
-    expect(column!.style.flexDirection).toBe("column");
-    // 契约本体：没有它，折叠再展开就会把助手边栏推出窗口
-    expect(column!.style.minWidth).toBe("0px");
+    const viewTab = canvas!.parentElement?.parentElement?.parentElement;
+    expect(viewTab?.getAttribute("data-testid")).toBe("doc-view3d");
+    const contentColumn = viewTab!.parentElement;
+    expect(contentColumn).not.toBeNull();
+    expect(contentColumn!.style.flexDirection).toBe("column");
+    // 契约本体：没有它，折叠参数停靠再展开就会把助手边栏推出窗口
+    expect(contentColumn!.style.minWidth).toBe("0px");
   });
 });
 

@@ -265,6 +265,12 @@ export function OrbitCanvas({
 
     const resize = () => {
       if (!mount) return;
+      // 页签隐藏（display:none）时容器测得 0×0：跳过重设，保留上一尺寸，
+      // 切回页签时 ResizeObserver 会带着真实尺寸再触发一次。
+      // A hidden tab (display:none) measures 0×0: skip the resize, keep the
+      // last size — the observer fires again with real dimensions once the
+      // tab is shown.
+      if (mount.clientWidth === 0 || mount.clientHeight === 0) return;
       camera.aspect = mount.clientWidth / mount.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(mount.clientWidth, mount.clientHeight);

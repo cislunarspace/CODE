@@ -1,11 +1,11 @@
-// 轨道信息页签（#476）集成回归：点画布轨道清单项 = 聚焦 + 中栏自动切到
-// 「轨道信息」页签并展示该轨道详情（来源来自结果层 = 本次运行产物）；
-// 取消聚焦页签不弹回。mock 脚手架与 App.contentMode.test 同源。
-// Orbit-info tab (#476) integration: clicking a canvas-orbit-list row is one
-// action — focus + the mid pane auto-switches to the "orbit info" tab showing
-// that orbit's details (source = result layer, "latest run product");
-// unfocusing never snaps the tab back. Mock scaffolding mirrors
-// App.contentMode.test.
+// 轨道信息标签（ADR 0034）集成回归：在侧边栏的项目树选中记录，点画布轨道
+// 清单项即聚焦并切到「轨道信息」标签展示该轨道详情（来源是结果层，即本次
+// 运行产物）。取消聚焦时标签不弹回。mock 脚手架与 App.contentMode.test 同源。
+// Orbit-info tab (ADR 0034) integration: after picking a record in the sidebar
+// project tree, clicking a canvas-orbit-list row is one action — focus plus the
+// main page switching to the "orbit info" tab, which then shows that orbit's
+// details (source = result layer, "latest run product"). Unfocusing never snaps
+// the tab back. Mock scaffolding mirrors App.contentMode.test.
 
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -91,6 +91,8 @@ vi.mock("./sidecarApi", () => ({
       usable: true,
     }),
   formatToolError: (e: unknown) => String(e),
+  // sidecar 进度订阅：测试无事件通道，返回空退订函数
+  onSidecarProgress: () => Promise.resolve(() => {}),
 }));
 
 // 与 App.contentMode.test 同一双段记录：CR3BP 基段（2 点）+ 星历段（3 点）。
@@ -154,15 +156,16 @@ const orbitRow = (label: string): HTMLElement => {
   return row as HTMLElement;
 };
 
-describe("轨道信息页签（#476）", () => {
-  it("点清单项：中栏切到轨道信息页并展示该轨道详情；取消聚焦页签不弹回", async () => {
+describe("轨道信息标签（#476）", () => {
+  it("点清单项：切到轨道信息标签并展示该轨道详情，取消聚焦时标签不弹回", async () => {
     render(<App />);
+    // 项目树常驻侧边栏（ADR 0034）：直接点记录；画布在默认激活的三维视图标签
     await waitFor(() => expect(screen.getByText("DRO (1 成员)")).toBeTruthy());
     fireEvent.click(screen.getByText("DRO (1 成员)"));
-    // 双段记录 → 清单两行（CR3BP 参考轨道 + 星历段）；初始中栏是设计工具
-    // （工具 Select 在场），轨道信息页签未选中
+    // 双段记录 → 清单两行（CR3BP 参考轨道 + 星历段）；未聚焦时轨道信息标签
+    // 没有内容可显示，面板不在场（标签内容常驻挂载，仅在激活时可见）
     await waitFor(() => orbitRow("CR3BP 参考轨道"));
-    expect(screen.queryByTestId("orbit-info-panel")).toBeNull();
+    expect(screen.getByTestId("doc-orbit-info").style.display).toBe("none");
 
     fireEvent.click(orbitRow("CR3BP 参考轨道"));
     await waitFor(() => {
@@ -189,12 +192,14 @@ describe("轨道信息页签（#476）", () => {
     );
   });
 
-  it("清单无内容时手动切页签：轨道信息页显示空态指引", async () => {
+  it("清单无内容时手动切标签：轨道信息标签显示空态指引", async () => {
     render(<App />);
-    fireEvent.click(screen.getByTestId("mid-tab-orbitInfo"));
+    fireEvent.click(screen.getByTestId("doc-tab-orbitInfo"));
     await waitFor(() => expect(screen.getByTestId("orbit-info-panel")).toBeTruthy());
-    // 切回设计工具：工具 Select 回归
-    fireEvent.click(screen.getByTestId("mid-tab-tool"));
-    await waitFor(() => expect(screen.queryByTestId("orbit-info-panel")).toBeNull());
+    expect(screen.getByTestId("doc-orbit-info").style.display).toBe("block");
+    // 切回三维视图：轨道信息内容仍挂载（不重建），只是隐藏
+    fireEvent.click(screen.getByTestId("doc-tab-view3d"));
+    await waitFor(() => expect(screen.getByTestId("doc-orbit-info").style.display).toBe("none"));
+    expect(screen.getByTestId("orbit-info-panel")).toBeTruthy();
   });
 });

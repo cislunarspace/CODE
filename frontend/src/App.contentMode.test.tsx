@@ -112,6 +112,8 @@ vi.mock("./sidecarApi", () => ({
       usable: true,
     }),
   formatToolError: (e: unknown) => String(e),
+  // sidecar 进度订阅：测试无事件通道，返回空退订函数
+  onSidecarProgress: () => Promise.resolve(() => {}),
 }));
 
 // 双段记录：CR3BP 基段（(2,6) 状态行，免 period 传播）+ 星历段（3 行 UTC 分量
@@ -202,6 +204,16 @@ const clickToolbarMode = (value: "all" | "ephemeris") => {
   fireEvent.click(input!.closest("label") ?? input!);
 };
 
+// 布局外壳（ADR 0034）：项目树常驻左侧边栏，工具条与画布轨道清单在三维视图标签，
+// 该标签默认激活——去轨道库不再需要导航动作，回三维视图就是激活该标签
+// Shell (ADR 0034): the project tree is always in the sidebar and the toolbar plus
+// the canvas orbit list live in the 3D view tab, active by default — reaching the
+// catalog needs no navigation and returning is activating the tab.
+const gotoCatalog = () => {
+  expect(screen.getByTestId("app-sider")).toBeTruthy();
+};
+const gotoWorkspace = () => fireEvent.click(screen.getByTestId("doc-tab-view3d"));
+
 describe("绘制内容切换（eph-fig）按入库记录路径", () => {
   it("单击选中：切星历只留星历段图例项", async () => {
     render(<App />);
@@ -209,9 +221,11 @@ describe("绘制内容切换（eph-fig）按入库记录路径", () => {
     // 到达即处于展开态，无需手动展开
     // Group-header format (#468): text + count badge; controlled expansion
     // starts fully expanded, so async treeData arrives expanded — no manual expand.
+    gotoCatalog();
     await waitFor(() => expect(screen.getByText("轨道")).toBeTruthy());
     await waitFor(() => expect(screen.getByText("DRO (1 成员)")).toBeTruthy());
     fireEvent.click(screen.getByText("DRO (1 成员)"));
+    gotoWorkspace();
     // 双段记录：CR3BP 参考轨道 ×1 + 星历段 ×1（(2,6) 状态平铺是一个成员
     // 一条曲线的 2 个点，不是 2 条轨迹）
     await waitFor(() => expect(legendItemTexts().length).toBe(2));
@@ -225,11 +239,13 @@ describe("绘制内容切换（eph-fig）按入库记录路径", () => {
 
   it("绘制所选：切星历只留各记录星历段图例项（roles 装配不丢）", async () => {
     render(<App />);
+    gotoCatalog();
     await waitFor(() => expect(screen.getByText("轨道")).toBeTruthy());
     await waitFor(() => expect(screen.getByText("DRO (1 成员)")).toBeTruthy());
     checkTreeLeaf("DRO (1 成员)");
     checkTreeLeaf("HALO (1 成员)");
     fireEvent.click(screen.getByText(/绘制所选/));
+    gotoWorkspace();
     // 每记录 2 条（CR3BP + 星历段）×2 记录 = 4
     await waitFor(() => expect(legendItemTexts().length).toBe(4));
     clickToolbarMode("ephemeris");

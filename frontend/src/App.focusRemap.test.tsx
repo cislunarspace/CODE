@@ -112,6 +112,8 @@ vi.mock("./sidecarApi", () => ({
       usable: true,
     }),
   formatToolError: (e: unknown) => String(e),
+  // sidecar 进度订阅：测试无事件通道，返回空退订函数
+  onSidecarProgress: () => Promise.resolve(() => {}),
 }));
 
 // 双段产物（同 App.orbitInfo.test）：CR3BP 基段（2 点）+ 星历段（3 点）
@@ -216,11 +218,23 @@ const clickToolbarMode = (value: "all" | "cr3bp" | "ephemeris") => {
   fireEvent.click(input!.closest("label") ?? input!);
 };
 
+// 布局外壳（ADR 0034）：项目树常驻左侧边栏，工具条与画布轨道清单在三维视图标签，
+// 该标签默认激活——去轨道库不再需要导航动作，回三维视图就是激活该标签
+// Shell (ADR 0034): the project tree is always in the sidebar and the toolbar plus
+// the canvas orbit list live in the 3D view tab, active by default — reaching the
+// catalog needs no navigation and returning is activating the tab.
+const gotoCatalog = () => {
+  expect(screen.getByTestId("app-sider")).toBeTruthy();
+};
+const gotoWorkspace = () => fireEvent.click(screen.getByTestId("doc-tab-view3d"));
+
 describe("内容切换聚焦迁移（#479）", () => {
   it("故事 1/4：聚焦段被内容过滤裁掉 → 明确清除，中栏停在轨道信息页签", async () => {
     render(<App />);
+    gotoCatalog();
     await waitFor(() => expect(screen.getByText("DRO (1 成员)")).toBeTruthy());
     fireEvent.click(screen.getByText("DRO (1 成员)"));
+    gotoWorkspace();
     await waitFor(() => orbitRow("CR3BP 参考轨道"));
     fireEvent.click(orbitRow("CR3BP 参考轨道"));
     await waitFor(() =>
@@ -241,8 +255,10 @@ describe("内容切换聚焦迁移（#479）", () => {
 
   it("故事 2：聚焦段在新模式下仍存活 → 聚焦迁移到新行号，详情连续", async () => {
     render(<App />);
+    gotoCatalog();
     await waitFor(() => expect(screen.getByText("DRO (1 成员)")).toBeTruthy());
     fireEvent.click(screen.getByText("DRO (1 成员)"));
+    gotoWorkspace();
     await waitFor(() => orbitRow("星历段"));
     fireEvent.click(orbitRow("星历段"));
     await waitFor(() =>
@@ -260,10 +276,12 @@ describe("内容切换聚焦迁移（#479）", () => {
 
   it("故事 3：无段语义轨迹（转移弧）任何模式都保留 → 聚焦随行号偏移迁移", async () => {
     render(<App />);
+    gotoCatalog();
     await waitFor(() => expect(screen.getByText("DRO (1 成员)")).toBeTruthy());
     checkTreeLeaf("DRO (1 成员)");
     checkTreeLeaf("LGA 转移");
     fireEvent.click(screen.getByText(/绘制所选/));
+    gotoWorkspace();
     // 结果层单层拼接：[DRO·CR3BP, DRO·星历段, LGA·转移弧]
     await waitFor(() => orbitRow("转移弧"));
     fireEvent.click(orbitRow("转移弧"));
@@ -281,8 +299,10 @@ describe("内容切换聚焦迁移（#479）", () => {
 
   it("故事 6：取消聚焦后切换内容 → 不产生聚焦复活", async () => {
     render(<App />);
+    gotoCatalog();
     await waitFor(() => expect(screen.getByText("DRO (1 成员)")).toBeTruthy());
     fireEvent.click(screen.getByText("DRO (1 成员)"));
+    gotoWorkspace();
     await waitFor(() => orbitRow("星历段"));
     fireEvent.click(orbitRow("星历段"));
     await waitFor(() =>

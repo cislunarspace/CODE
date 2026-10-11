@@ -144,7 +144,13 @@ export function TimelineBar({
     <div
       style={{
         padding: "4px 12px",
-        background: "rgba(20, 24, 30, 0.85)",
+        // 配色随主题（ADR 0034）：过去写死深色底，浅色界面里是一条跳出来的暗带。
+        // 用 --tod-* 变量，浅色取透明继承上方条带、深色取面板暗面。
+        // Theme-aware (ADR 0034): the background used to be a hardcoded dark
+        // fill that jumped out of a light UI. The --tod-* variables resolve to
+        // transparent (inheriting the strip above) in light and the dark panel
+        // surface in dark mode.
+        background: "var(--tod-panel-bg, transparent)",
         borderRadius: 2,
         display: "flex",
         alignItems: "center",
@@ -176,14 +182,20 @@ export function TimelineBar({
         disabled={disabled}
         icon={
           <RetweetOutlined
-            style={{ fontSize: 14, color: doLoop ? undefined : "#595959" }}
+            style={{ fontSize: 14, color: doLoop ? undefined : "var(--tod-text-secondary, #595959)" }}
           />
         }
         onClick={() => setConfig({ loop: !doLoop })}
         title={doLoop ? t("timeline.loop_on_title") : t("timeline.loop_off_title")}
       />
       <Space orientation="horizontal" style={{ flex: 1 }} size={8}>
-        <FieldTimeOutlined style={{ color: disabled ? "#595959" : "#0958d9" }} />
+        <FieldTimeOutlined
+          style={{
+            color: disabled
+              ? "var(--tod-text-secondary, #595959)"
+              : "var(--tod-accent, #0958d9)",
+          }}
+        />
         <Slider
           style={{ flex: 1, margin: "6px 0" }}
           min={minEt}
@@ -211,7 +223,16 @@ export function TimelineBar({
           ))}
         </Space>
       )}
-      <Text style={{ fontSize: 11, minWidth: 140, textAlign: "right", color: disabled ? "#595959" : "#bfbfbf" }}>
+      <Text
+        style={{
+          fontSize: 11,
+          minWidth: 140,
+          textAlign: "right",
+          color: disabled
+            ? "var(--tod-text-secondary, #595959)"
+            : "var(--tod-text-secondary, #8c8c8c)",
+        }}
+      >
         {formatEt(val)}
       </Text>
     </div>

@@ -254,7 +254,9 @@ export function ProjectTree({
                     count={node.count}
                     showZero
                     overflowCount={99999}
-                    style={{ backgroundColor: empty ? "#8c8c8c" : "#0958d9" }}
+                    // 计数徽标去胶囊（ADR 0020/0034）：圆角 2px 与其他控件一致
+                    // Square the count badge (ADR 0020/0034): 2px matches the rest.
+                    style={{ backgroundColor: empty ? "#8c8c8c" : "#0958d9", borderRadius: 2 }}
                   />
                 </span>
               );

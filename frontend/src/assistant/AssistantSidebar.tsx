@@ -53,6 +53,7 @@ export function AssistantSidebar({
   onOpenRecord,
   onApplyScenario,
   onOpenSettings,
+  embedded = false,
 }: {
   selection: SelectionContext | null;
   /** A1 语义：AI 产物自动入项目树（tool_done 携带 record_id 时触发，App 内去重登记） */
@@ -63,6 +64,8 @@ export function AssistantSidebar({
   onApplyScenario?: (path: string) => void;
   /** 打开设置弹窗（空态"去设置"按钮的落点） */
   onOpenSettings: () => void;
+  /** 整页嵌入模式（助手页签）：铺满父容器，不要折叠机构与拖宽手柄 */
+  embedded?: boolean;
 }) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState<boolean>(
@@ -239,7 +242,7 @@ export function AssistantSidebar({
   };
 
   // 折叠态：右边缘一条常显入口按钮（pi 不可用小圆点提示）
-  if (collapsed) {
+  if (collapsed && !embedded) {
     return (
       <div
         style={{
@@ -267,7 +270,9 @@ export function AssistantSidebar({
                   right: 4,
                   width: 6,
                   height: 6,
-                  borderRadius: "50%",
+                  // 状态点去圆（ADR 0020/0034）：方形 2px，与线框语言一致
+                  // Square the status dot (ADR 0020/0034) to match the wireframe look.
+                  borderRadius: 2,
                   background: "#faad14",
                 }}
               />
@@ -280,25 +285,37 @@ export function AssistantSidebar({
 
   return (
     <div
-      style={{
-        width,
-        borderLeft: "1px solid var(--tod-border, #e8e8e8)",
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--tod-panel-bg, transparent)",
-        position: "relative",
-        flexShrink: 0,
-      }}
+      style={
+        embedded
+          ? {
+              flex: 1,
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--tod-panel-bg, transparent)",
+            }
+          : {
+              width,
+              borderLeft: "1px solid var(--tod-border, #e8e8e8)",
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--tod-panel-bg, transparent)",
+              position: "relative",
+              flexShrink: 0,
+            }
+      }
     >
-      {/* 左缘拖拽调宽手柄（共享组件，#454） */}
-      <ResizeHandle
-        edge="left"
-        width={width}
-        min={MIN_WIDTH}
-        max={MAX_WIDTH}
-        onResize={setWidth}
-        onResizeEnd={(w) => localStorage.setItem(WIDTH_KEY, String(w))}
-      />
+      {/* 左缘拖拽调宽手柄（共享组件，#454）；整页嵌入模式下宽度归父容器 */}
+      {!embedded && (
+        <ResizeHandle
+          edge="left"
+          width={width}
+          min={MIN_WIDTH}
+          max={MAX_WIDTH}
+          onResize={setWidth}
+          onResizeEnd={(w) => localStorage.setItem(WIDTH_KEY, String(w))}
+        />
+      )}
 
       {/* 头部：标题 + 会话切换器 + 清空 + 折叠 */}
       <div
@@ -339,14 +356,16 @@ export function AssistantSidebar({
             />
           </Tooltip>
         </Popconfirm>
-        <Tooltip title={t("assistant.collapse")}>
-          <Button
-            type="text"
-            size="small"
-            icon={<DoubleRightOutlined />}
-            onClick={() => toggleCollapsed(true)}
-          />
-        </Tooltip>
+        {!embedded && (
+          <Tooltip title={t("assistant.collapse")}>
+            <Button
+              type="text"
+              size="small"
+              icon={<DoubleRightOutlined />}
+              onClick={() => toggleCollapsed(true)}
+            />
+          </Tooltip>
+        )}
       </div>
 
       {available === null ? (

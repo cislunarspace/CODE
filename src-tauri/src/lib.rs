@@ -8,6 +8,7 @@ pub mod mcp;
 pub mod project;
 pub mod sidecar;
 pub mod state;
+pub mod stats;
 pub mod update;
 
 use project::ProjectState;
@@ -204,6 +205,7 @@ pub fn run() {
             cmd::save_scenario,
             cmd::scenarios_dir,
             cmd::open_scenario,
+            stats::system_stats,
             assistant_cmd::assistant_get_state,
             assistant_cmd::assistant_send,
             assistant_cmd::assistant_confirm_tool,
