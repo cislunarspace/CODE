@@ -1,6 +1,6 @@
 // 文档标签条：主页面顶部的可开关标签（三维视图 / 轨道信息 / 轨道库）。
 // 关闭标签只是把它从标签条收起，内容仍常驻挂载。三维视图里的 WebGL 画布
-// 是全局唯一实例，卸载即丢相机与场景。「+」把已收起的标签放回来。至少保留
+// 是全局唯一实例，卸载即丢相机与场景。“+”把已收起的标签放回来。至少保留
 // 一个标签，最后一个不给关闭按钮。
 // Document tab strip: the closable tabs at the top of the main area (3D view /
 // orbit info / catalog). Closing hides the tab only — its content stays mounted,
@@ -26,7 +26,7 @@ export interface DocTabSpec {
 export interface DocTabsProps {
   /** 已打开的标签，按打开顺序（先开在左） */
   tabs: DocTabSpec[];
-  /** 全部可选标签，「+」菜单列出其中未打开的部分 */
+  /** 全部可选标签，“+”菜单列出其中未打开的部分 */
   available: DocTabSpec[];
   activeKey: string;
   mode: "dark" | "light";
@@ -125,7 +125,7 @@ export function DocTabs({
 
       {closed.length === 0 && (
         <Text type="secondary" style={{ fontSize: 11, alignSelf: "center", marginLeft: 6 }}>
-          {/* 全部标签已打开：占位说明，避免「+」看起来是坏的 */}
+          {/* 全部标签已打开：占位说明，避免“+”看起来是坏的 */}
           {/* Every tab is open: a hint so the "+" does not look broken. */}
           {t("doc.tabs.all_open")}
         </Text>

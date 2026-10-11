@@ -47,13 +47,10 @@ export const themeTokens = {
   colorError: "#ff4d4f",
 } as const;
 
-/** 界面外壳配色：顶边栏、侧边栏、停靠面板、标签条共用一份取值。
- *  此前各处内联「明暗三元判断」，外壳重构后同一条边框色会出现七八处，
- *  集中一处便于整体调整对比度。
- * Shell palette: one source for the top bar, sidebar, docked panel and tab
- * strip. The per-site inline dark/light ternaries would otherwise repeat the
- * same border color across the shell; keeping them here makes contrast
- * adjustments a single edit. */
+/** 界面外壳配色：顶边栏、侧边栏、停靠面板、标签条共用一份取值，集中一处便于
+ *  整体调整对比度。
+ * Shell palette: one source for the top bar, sidebar, docked panel and tab strip,
+ * so contrast adjustments stay a single edit. */
 export interface ShellColors {
   /** 面板分隔线 */
   border: string;
@@ -78,7 +75,7 @@ export function shellColors(mode: "dark" | "light"): ShellColors {
   };
 }
 
-/** 组件级 token（ADR 0020/0034）：主按钮自带的蓝色投影是 antd「立体感」的
+/** 组件级 token（ADR 0020/0034）：主按钮自带的蓝色投影是 antd“立体感”的
  *  主要来源，控制台要平面化，直接去掉。开关胶囊与彩色元数据标签 antd 不给
  *  token，只能逐实例给语义化 styles，见 flatSwitchStyles / neutralTagStyle。
  * Component-level tokens (ADR 0020/0034): the primary button's blue drop shadow is

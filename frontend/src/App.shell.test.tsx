@@ -1,6 +1,6 @@
 // 界面外壳（侧边栏 / 顶边栏 / 文档标签 / 参数停靠 / 助手边栏 / 状态栏）回归：
 // 标签可切换可关闭且内容保活（画布不重建）、标签集合与激活标签跨刷新恢复（非法
-// 值回落默认）、「+」菜单把收起的标签放回来、侧边栏与参数停靠可折叠、助手边栏
+// 值回落默认）、“+”菜单把收起的标签放回来、侧边栏与参数停靠可折叠、助手边栏
 // 可收起、顶栏菜单接到同一批动作、状态栏显示时间口径与性能与版本。
 // Shell regression (sidebar / top bar / document tabs / parameter dock / assistant
 // drawer / status bar): tabs switch and close while their content stays mounted (the
@@ -144,7 +144,7 @@ describe("界面外壳（侧边栏 / 顶边栏 / 文档标签 / 停靠 / 状态�
     ]);
   });
 
-  it("「+」菜单把收起的标签按正典顺序放回来", async () => {
+  it("“+”菜单把收起的标签按正典顺序放回来", async () => {
     render(<App />);
     fireEvent.click(screen.getByTestId("doc-tab-close-orbitInfo"));
     expect(screen.queryByTestId("doc-tab-orbitInfo")).toBeNull();
@@ -246,12 +246,12 @@ describe("界面外壳（侧边栏 / 顶边栏 / 文档标签 / 停靠 / 状态�
     await waitFor(() => expect(bar.textContent).toContain("v5.0.0"));
   });
 
-  it("顶栏历元：未选时刻给占位，时间轴选时刻后显示 UTC 时刻", async () => {
+  it("顶栏历元：未选时刻显示占位文案", async () => {
     render(<App />);
     expect(screen.getByTestId("header-epoch").textContent).toBe("无历元");
   });
 
-  it("SOP 硬校验：需要参考历元的工具禁用运行，「去补」展开参数停靠", async () => {
+  it("SOP 硬校验：需要参考历元的工具禁用运行，“去补”展开参数停靠", async () => {
     render(<App />);
 
     // 开局：参数面板挂载时回填分支默认值，默认工具本身无历元依赖 → 无阻断
@@ -267,7 +267,7 @@ describe("界面外壳（侧边栏 / 顶边栏 / 文档标签 / 停靠 / 状态�
       (screen.getByRole("button", { name: /执行/ }) as HTMLButtonElement).disabled,
     ).toBe(true);
 
-    // 历元字段在参数面板里：「去选历元」把折叠的参数停靠展开
+    // 历元字段在参数面板里：“去选历元”把折叠的参数停靠展开
     fireEvent.click(screen.getByTestId("params-collapse"));
     expect(screen.getByTestId("params-expand")).toBeTruthy();
     fireEvent.click(screen.getByTestId("sop-fix-epoch"));

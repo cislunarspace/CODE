@@ -3,7 +3,7 @@
 // 开始下一轮（复用）。
 //
 // 本模块只做纯计算，步骤带与运行按钮共用同一份依据：两处结论必须一致，否则会
-// 出现「按钮可点但被拒」或「按钮禁用却说不出原因」。阻断项不吞信息，每条都带
+// 出现“按钮可点但被拒”或“按钮禁用却说不出原因”。阻断项不吞信息，每条都带
 // 可执行的补救动作（去选历元 / 去补参数 / 去选上游记录）。
 //
 // SOP (standard operating procedure) derivation and the pre-run hard gate (ADR
@@ -35,7 +35,7 @@ export const SOP_STAGES: SopStageKey[] = [
   "scenario",
 ];
 
-/** 阻断项的补救动作：界面据它决定「去补」按钮做什么 */
+/** 阻断项的补救动作：界面据它决定“去补”按钮做什么 */
 /** A blocker's remedy: the UI turns it into a concrete "go fix it" action. */
 export type SopFix = "pick-epoch" | "fill-params" | "pick-record";
 
@@ -60,8 +60,6 @@ export interface SopInputs {
   values: Record<string, unknown>;
   /** 参数校验问题（validateToolParams 的结果，由调用方算好传入） */
   paramIssues: { field: string; label: string; reason: string }[];
-  /** 时间轴当前时刻，null = 尚未选时刻 */
-  currentEt: number | null;
   /** LGA/WSB 转移缺少上游目标轨道（需要先在轨道库选中一条记录） */
   needsUpstreamRecord: boolean;
   /** 结果层是否已有轨迹 */
@@ -95,15 +93,22 @@ function isFilled(value: unknown): boolean {
   return value !== null && value !== undefined && value !== "";
 }
 
-/** 该工具是否带历元概念（决定「定基准」阶段是否参与判定） */
-/** Whether the tool has an epoch notion at all (gates the basis stage). */
-export function needsEpoch(schemaFields: string[]): boolean {
-  return schemaFields.some(isEpochField);
-}
-
-/** 参数里已给出历元（任一历元类字段有值） */
-function hasEpochValue(input: SopInputs): boolean {
-  return input.schemaFields.filter(isEpochField).some((field) => isFilled(input.values[field]));
+/** 未填的必填历元字段。“定基准”阶段与历元阻断项共用这一判定。
+ *
+ *  时间轴上的时刻是看图时刻（ADR 0021），它不替代工具的历元参数，也不参与
+ *  这里的判定：否则会出现阻断项为空、按钮可点，而提交仍被参数校验拒绝的
+ *  情况。
+ *
+ * Required epoch fields that are still empty. One predicate feeds both the basis
+ * stage and the epoch blocker. The timeline moment is the viewing time (ADR 0021);
+ * it does not stand in for the tool's epoch parameter and takes no part here,
+ * otherwise the gate would clear while the submit is still rejected by the same
+ * parameter validation. */
+export function missingEpochFields(
+  values: Record<string, unknown>,
+  requiredFields: string[],
+): string[] {
+  return requiredFields.filter((field) => isEpochField(field) && !isFilled(values[field]));
 }
 
 /** 运行前硬校验：逐条列出阻断项，顺序固定（历元、参数、上游记录） */
@@ -111,14 +116,14 @@ function hasEpochValue(input: SopInputs): boolean {
 export function runBlockers(input: SopInputs): SopBlocker[] {
   const blockers: SopBlocker[] = [];
 
-  // 历元：必填的历元字段没填，且时间轴上也没选时刻（两者取其一即可）
-  const requiredEpoch = input.requiredFields.filter(isEpochField);
-  if (requiredEpoch.length > 0 && input.currentEt === null && !hasEpochValue(input)) {
+  // 历元：必填的历元字段为空即阻断
+  const missingEpoch = missingEpochFields(input.values, input.requiredFields);
+  if (missingEpoch.length > 0) {
     blockers.push({
       key: "epoch",
       labelKey: "sop.block.epoch",
       fix: "pick-epoch",
-      detail: requiredEpoch.join("、"),
+      detail: missingEpoch.join("、"),
     });
   }
 
@@ -149,10 +154,10 @@ export function runBlockers(input: SopInputs): SopBlocker[] {
 /** 流程状态：阶段完成情况、当前阶段与阻断项 */
 /** The SOP state: per-stage completion, the current stage and the blockers. */
 export function deriveSop(input: SopInputs): SopState {
-  const epochDependency = needsEpoch(input.schemaFields);
-  const basisDone = !epochDependency || input.currentEt !== null || hasEpochValue(input);
-  // 参数阶段：无阻断即完成（历元问题算在基准阶段，不重复计）
-  const paramsDone = input.paramIssues.length === 0;
+  // 基准阶段：必填历元字段都填了才算定下基准，无必填历元的工具自动完成
+  const basisDone = missingEpochFields(input.values, input.requiredFields).length === 0;
+  // 参数阶段：非历元的问题都清了即完成（历元问题算在基准阶段，不重复计）
+  const paramsDone = input.paramIssues.every((issue) => isEpochField(issue.field));
   const upstreamDone = !input.needsUpstreamRecord;
 
   const done: Record<SopStageKey, boolean> = {

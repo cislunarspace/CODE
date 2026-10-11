@@ -156,7 +156,7 @@ export const translations: Record<string, string> = {
   "status.cpu": "CPU",
   "status.memory": "内存",
   "status.version": "版本",
-  "orbit_info.empty": "在「画布轨道」清单点击一条轨道，或直接在画布上拾取，即可在此查看详情",
+  "orbit_info.empty": "在“画布轨道”清单点击一条轨道，或直接在画布上拾取，即可在此查看详情",
   "orbit_info.kind": "类型",
   "orbit_info.frame": "数据系",
   "orbit_info.jacobi": "Jacobi 常数",

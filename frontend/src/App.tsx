@@ -121,11 +121,11 @@ const WS_PANEL_MAX_WIDTH = 560;
 const WS_PANEL_DEFAULT_WIDTH = 340;
 const WS_PANEL_WIDTH_KEY = "tod-ws-panel-width";
 const WS_PANEL_COLLAPSED_KEY = "tod-ws-panel-collapsed";
-/** 侧边栏折叠（ADR 0034）：与参数面板一样按栏记忆开合 */
+/** 侧边栏折叠（ADR 0034）：与参数停靠一样按栏记忆开合 */
 /** Sidebar collapse (ADR 0034): remembered per rail, like the parameter panel. */
 const SIDER_COLLAPSED_KEY = "tod-sider-collapsed";
 /** 助手边栏开合与宽度（ADR 0034）：默认展开。助手是常驻协作面，不是需要
- *  主动唤起的对话框。宽度走与参数面板同一套钳制与持久化 */
+ *  主动唤起的对话框。宽度走与参数停靠同一套钳制与持久化 */
 /** Assistant sidebar state (ADR 0034): open by default — the assistant is a
  *  persistent collaboration surface, not a dialog you summon; its width uses the
  *  same clamping and persistence as the parameter panel. */
@@ -343,7 +343,7 @@ export default function App() {
     localStorage.setItem(DOC_TABS_KEY, JSON.stringify(tabs));
     localStorage.setItem(DOC_ACTIVE_KEY, next);
   };
-  // 参数面板宽度（#454）：拖宽手柄实时跟手、松手持久化，越界回落默认宽
+  // 参数停靠宽度（#454）：拖宽手柄实时跟手、松手持久化，越界回落默认宽
   // Panel width (#454): the handle tracks live, persists on release, and
   // out-of-range values fall back to the default.
   const [panelWidth, setPanelWidth] = useState(() =>
@@ -374,13 +374,13 @@ export default function App() {
     setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, !panelCollapsed, setPanelCollapsed);
   const [selectedTool, setSelectedTool] = useState<string>(TOOL_REGISTRY[0].name);
   const [toolParams, setToolParams] = useState<Record<string, unknown>>({});
-  // 提交校验问题（字段名 → 原因），传给参数面板内联标红；改动参数即清
+  // 提交校验问题（字段名 → 原因），传给参数停靠内联标红；改动参数即清
   // Submission validation problems (field name → reason), passed to the params panel for inline red flags; cleared on any change.
   const [paramIssues, setParamIssues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<boolean>(false);
 
-  // 提交前防呆校验（#454/#476）：参数面板内联红标、SOP 步骤带与运行按钮共用
-  // 同一份结论。三处必须同源，否则会出现「按钮可点却被拒」
+  // 提交前防呆校验（#454/#476）：参数停靠内联红标、SOP 步骤带与运行按钮共用
+  // 同一份结论。三处必须同源，否则会出现“按钮可点却被拒”
   // Preflight validation (#454/#476): the inline field errors, the SOP step bar and
   // the run button share one derivation — three consumers must not disagree, or the
   // UI offers a click it then rejects.
@@ -459,20 +459,16 @@ export default function App() {
   // focus changes out of the effect's dependencies.
   const canvasFocusIdxRef = useRef<number | null>(null);
   canvasFocusIdxRef.current = canvasFocusIdx;
-  // 轨道聚焦入口（#476）：清单点击与画布拾取共用。聚焦非空 = 「聚焦 +
-  // 打开详情」一个动作——切中栏到轨道信息页签（中栏折叠时顺手展开）；
-  // 取消聚焦（点空白/再点聚焦项/轨迹替换重置）只清聚焦，页签不弹回。
+  // 轨道聚焦入口（#476）：清单点击与画布拾取共用。聚焦非空即“聚焦并打开
+  // 详情”一个动作，落点是轨道信息标签（未打开则先放回标签条）。取消聚焦
+  // （点空白、再点聚焦项、轨迹替换重置）只清聚焦，标签不弹回。
   // The orbit-focus entry (#476): shared by list clicks and canvas picking. A
-  // non-null focus is one action, "focus + open details" — switch the mid
-  // pane to the orbit-info tab (expanding it when collapsed); unfocusing
-  // (empty-space click / re-click / trajectory-replacement reset) only
-  // clears the focus and never snaps the tab back.
+  // non-null focus is one action, "focus and open the details", landing on the
+  // orbit-info tab (restored to the strip when hidden). Unfocusing (empty-space
+  // click, re-click, trajectory-replacement reset) only clears the focus and
+  // never snaps the tab back.
   const handleOrbitFocus = (i: number | null) => {
     setCanvasFocusIdx(i);
-    // 轨道信息从参数停靠里的页签改成主页面文档标签（ADR 0034）：聚焦仍与
-    // 打开详情是同一个动作，只是目标换成了标签
-    // Orbit info moved from the panel's mid-pane tab to a main-area document tab
-    // (ADR 0034): focusing still opens the details — only the target changed.
     if (i !== null) switchTab("orbitInfo");
   };
   const [chart, setChart] = useChartSettings();
@@ -640,7 +636,7 @@ export default function App() {
       ...candidateLayer.map((c) => filterByRole(c.data, contentMode)),
       filterByRole(resultData, contentMode),
     ];
-    // 来源标注 + 行身份逐层装配（#476/#479）：来源供轨道信息页签「来源」
+    // 来源标注 + 行身份逐层装配（#476/#479）：来源供轨道信息标签「来源」
     // 字段；行身份 = 层对象引用 + 层内原行号，供内容切换时聚焦迁移。两者
     // 与 filterByRole 共用 roleKeepMask 过滤，保持与 combined 严格对齐。
     // Source tags + row identities assembled per layer (#476/#479): sources
@@ -708,7 +704,7 @@ export default function App() {
       inertialIdealized: layers.flatMap(
         (l) => l.inertialIdealized ?? l.trajectories.map(() => false),
       ),
-      // 段角色逐层拼接（#476）：轨道信息页签的「类型」字段（cr3bp 参考段/
+      // 段角色逐层拼接（#476）：轨道信息标签的「类型」字段（cr3bp 参考段/
       // 星历段）取自这里——丢了它，详情永远分不出双段产物的两段。
       // Segment roles concatenated per layer (#476): the orbit-info tab's
       // "type" field (cr3bp reference / ephemeris segment) reads from here —
@@ -730,7 +726,7 @@ export default function App() {
 
   // 内容切换聚焦迁移（#479）：canvasData 行集合变化时，聚焦行按身份（层
   // 对象 + 层内行号）在新行集合中找回落位——仍在画布上则迁移（详情连续
-  // 显示同一条轨迹，含行号偏移），被内容过滤裁掉则明确清除（页签不弹回，
+  // 显示同一条轨迹，含行号偏移），被内容过滤裁掉则明确清除（标签不弹回，
   // #476 决议）。预览态是瞬态交互，不做迁移（规格 out-of-scope）。子组件
   // OrbitCanvas 的整体替换重置 effect 先于本 effect 运行（React 子先父
   // 后），本 effect 的写入在同批状态更新中最终生效。
@@ -793,7 +789,7 @@ export default function App() {
     [canvasData, canvasFrameLabels, chart.colorCycle, frame],
   );
 
-  // 轨道信息页签的详情装配（#476）：聚焦索引即 canvasData 行号
+  // 轨道信息标签的详情装配（#476）：聚焦索引即 canvasData 行号
   // （trajIndex），清单过滤无标签行后仍对齐；聚焦行无标签（不在清单）时
   // 同样可查——画布拾取允许聚焦无标签轨迹。
   // Orbit-info tab assembly (#476): the focus index IS the canvasData row
@@ -1356,6 +1352,12 @@ export default function App() {
   // Run the generic tool (preflight checks before submit: missing required fields or out-of-range values block submission).
   const handleRunTool = async () => {
     const entry = toolEntry(selectedTool);
+    // 硬校验（ADR 0034）：阻断项非空即不允许运行。参数停靠的运行按钮已禁用，
+    // 步骤带的“求解”也走这里，两个入口共用同一份阻断结论。
+    // Hard gate (ADR 0034): any blocker stops the run. The run button in the
+    // parameter dock is already disabled and the step bar's solve step goes
+    // through here too, so both entries share one conclusion.
+    if (sop.blockers.length > 0) return;
     const issues = preflightIssues;
     if (issues.length > 0) {
       setParamIssues(Object.fromEntries(issues.map((i) => [i.field, i.reason])));
@@ -1831,7 +1833,6 @@ export default function App() {
     requiredFields: toolEntry(selectedTool).schema.required ?? [],
     values: toolParams,
     paramIssues: preflightIssues,
-    currentEt,
     needsUpstreamRecord,
     hasResult: canvasData.trajectories.length > 0,
     inCatalog: artifacts.length > 0,
@@ -2020,7 +2021,7 @@ export default function App() {
           onFix={handleSopFix}
         />
 
-        {/* 主体：侧边栏导航 + 主页面页签 */}
+        {/* 主体：侧边栏导航 + 主页面标签 */}
         {/* Body: the sidebar navigation plus the main tabbed area. */}
         <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
           {/* 侧边栏（ADR 0034）：项目树常驻 + 动力学工具列表 */}

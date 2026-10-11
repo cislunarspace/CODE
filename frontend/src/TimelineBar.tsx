@@ -228,9 +228,11 @@ export function TimelineBar({
           fontSize: 11,
           minWidth: 140,
           textAlign: "right",
-          color: disabled
-            ? "var(--tod-text-secondary, #595959)"
-            : "var(--tod-text-secondary, #8c8c8c)",
+          // 禁用态靠透明度压低，读数仍走同一条主题变量
+          // The disabled state dims by opacity; the readout keeps the same
+          // theme variable.
+          opacity: disabled ? 0.55 : 1,
+          color: "var(--tod-text-secondary, #8c8c8c)",
         }}
       >
         {formatEt(val)}

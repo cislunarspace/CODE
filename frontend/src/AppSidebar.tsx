@@ -1,10 +1,9 @@
 // 侧边栏：项目树宿主（场景与库记录）+ 动力学工具列表 + 折叠开关。
-// 工具列表点选即切换要运行的工具（原参数面板顶部的下拉搬到此处，供用户按
-// 「工具、参数、运行」的顺序操作）。项目树经 children 注入，侧边栏只管外壳。
+// 工具列表点选即切换要运行的工具，供用户按工具、参数、运行的顺序操作。
+// 项目树经 children 注入，侧边栏只管外壳。
 // Sidebar: hosts the project tree (scene and catalog records), lists the dynamics
-// tools and carries the collapse toggle. Picking a tool switches the tool to run
-// (the select that used to sit at the top of the parameter panel moved here, so
-// the flow reads tool -> parameters -> run). The tree arrives as children — this
+// tools and carries the collapse toggle. Picking a tool switches the tool to run,
+// so the flow reads tool, parameters, run. The tree arrives as children and this
 // component owns the chrome only.
 
 import type { ReactNode } from "react";
@@ -156,7 +155,7 @@ export function AppSidebar({
                   fontWeight: active ? 500 : 400,
                 }}
               >
-                {/* 长工具名（如「参数空间扫描 (Sweep)」）在 240px 侧栏里必须
+                {/* 长工具名（如“参数空间扫描 (Sweep)”）在 240px 侧栏里必须
                     省略号收尾，否则文字会越过面板边界压到画布上 */}
                 {/* Long tool names must ellipsize inside the 240px sidebar —
                     otherwise the text spills over the panel edge onto the canvas. */}

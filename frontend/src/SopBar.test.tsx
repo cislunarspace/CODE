@@ -1,5 +1,5 @@
 // SOP 步骤带回归（ADR 0034）：阶段渲染与当前阶段标记、阶段取值文案、点阶段执行
-// 该阶段动作、阻断项列出原因并提供「去补」，无阻断项时不渲染阻断区。
+// 该阶段动作、阻断项列出原因并提供“去补”，无阻断项时不渲染阻断区。
 // SOP step strip regression (ADR 0034): stages render with the current one marked,
 // per-stage values show, clicking a stage performs that stage's action, blockers
 // list their cause with a remedy, and no blocker row appears when nothing blocks.
@@ -50,7 +50,7 @@ describe("SOP 步骤带", () => {
     expect(screen.queryByTestId("sop-blockers")).toBeNull();
   });
 
-  it("阻断项列出原因与明细，点「去补」回传补救类型", () => {
+  it("阻断项列出原因与明细，点“去补”回传补救类型", () => {
     const blockers: SopBlocker[] = [
       { key: "epoch", labelKey: "sop.block.epoch", fix: "pick-epoch", detail: "tli_epoch" },
     ];

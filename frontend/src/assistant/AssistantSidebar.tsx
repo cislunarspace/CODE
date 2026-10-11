@@ -64,7 +64,7 @@ export function AssistantSidebar({
   onApplyScenario?: (path: string) => void;
   /** 打开设置弹窗（空态"去设置"按钮的落点） */
   onOpenSettings: () => void;
-  /** 整页嵌入模式（助手页签）：铺满父容器，不要折叠机构与拖宽手柄 */
+  /** 宿主托管外框模式：助手边栏在主界面右侧的宿主里铺满父容器，不要折叠机构与拖宽手柄 */
   embedded?: boolean;
 }) {
   const { t } = useTranslation();

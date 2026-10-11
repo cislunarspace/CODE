@@ -1,5 +1,5 @@
 // SOP 步骤带（ADR 0034）：定基准、定任务、填参数、求解、校核、入库、情景。
-// 当前阶段高亮，已完成阶段给勾，未满足的前置条件在带内逐条列出并给出「去补」按钮。
+// 当前阶段高亮，已完成阶段给勾，未满足的前置条件在带内逐条列出并给出“去补”按钮。
 // 点任一阶段直接跳到该阶段的动作（不是向导弹窗，随时可跳任意步）。
 // The SOP step strip (ADR 0034): basis, task, parameters, solve, review, catalog,
 // scenario. The current stage is highlighted, finished stages get a check, unmet
