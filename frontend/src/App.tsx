@@ -27,7 +27,7 @@ import { AppSidebar } from "./AppSidebar";
 import { AppTopBar, type TopMenuSpec } from "./AppTopBar";
 import { DocTabs } from "./DocTabs";
 import { SopBar } from "./SopBar";
-import { deriveSop, type SopFix, type SopStageKey } from "./sop";
+import { deriveSop, isEpochField, missingEpochFields, type SopFix, type SopStageKey } from "./sop";
 import { themeBehavior, themeTokens, themeCssVars, shellColors, themeComponents, flatSwitchStyles } from "./theme";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { OrbitCanvas, type CanvasApi, type ProjectionMode, type CenterMode, type FrameMode } from "./OrbitCanvas";
@@ -242,7 +242,7 @@ interface FocusRowId {
 /** Main-area document tab keys (ADR 0034): 3D view / orbit info / catalog. */
 export type DocTabKey = "view3d" | "orbitInfo" | "catalog";
 
-/** 标签正典顺序：默认全开，「+」菜单按此顺序列出已收起项 */
+/** 标签正典顺序：默认全开，“+”菜单按此顺序列出已收起项 */
 /** Canonical tab order: all open by default; the "+" menu lists hidden ones in it. */
 export const DOC_TAB_KEYS: DocTabKey[] = ["view3d", "orbitInfo", "catalog"];
 
@@ -510,7 +510,7 @@ export default function App() {
     localStorage.setItem("tod-font-size", String(size));
   };
 
-  /** 更新检查：启动后静默跑一次，顶栏菜单「检查更新」手动跑（无新版给提示） */
+  /** 更新检查：启动后静默跑一次，顶栏菜单“检查更新”手动跑（无新版给提示） */
   /** Update check: silent once at startup, manual from the top-bar menu (a
    *  manual run reports "already latest"). */
   const runUpdateCheck = async (silent: boolean) => {
@@ -1352,15 +1352,20 @@ export default function App() {
   // Run the generic tool (preflight checks before submit: missing required fields or out-of-range values block submission).
   const handleRunTool = async () => {
     const entry = toolEntry(selectedTool);
+    const issues = preflightIssues;
+    // 缺项回填给参数停靠的内联标红，与步骤带清单同一份结论，使用者不必两边对照
+    // Offending fields go back into the dock's inline errors, drawn from the same
+    // derivation as the step-bar list.
+    if (issues.length > 0) {
+      setParamIssues(Object.fromEntries(issues.map((i) => [i.field, i.reason])));
+    }
     // 硬校验（ADR 0034）：阻断项非空即不允许运行。参数停靠的运行按钮已禁用，
     // 步骤带的“求解”也走这里，两个入口共用同一份阻断结论。
     // Hard gate (ADR 0034): any blocker stops the run. The run button in the
     // parameter dock is already disabled and the step bar's solve step goes
     // through here too, so both entries share one conclusion.
     if (sop.blockers.length > 0) return;
-    const issues = preflightIssues;
     if (issues.length > 0) {
-      setParamIssues(Object.fromEntries(issues.map((i) => [i.field, i.reason])));
       message.error(issues.map((i) => `${i.label}(${i.field}): ${i.reason}`).join("；"));
       return;
     }
@@ -1839,10 +1844,20 @@ export default function App() {
     pinnedCount: pinned.length,
   });
 
-  /** 步骤带每格右侧的现状摘要（工具名、待补项数、结果条数、库与情景计数） */
-  /** Per-stage summary on the step bar: tool name, missing fields, result count, catalog/scenario counts. */
+  /** 步骤带每格右侧的现状摘要（工具名、待补项数、结果条数、库与情景计数）。
+   *  基准格报必填历元字段的填报状态，时间轴的看图时刻不在此处冒充基准值。
+   * Per-stage summary on the step bar: tool name, missing fields, result count,
+   * catalog and scenario counts. The basis cell reports the required epoch
+   * fields, not the timeline's viewing moment. */
+  const epochFields = toolEntry(selectedTool).schema.required ?? [];
+  const missingEpoch = missingEpochFields(toolParams, epochFields);
+  const hasEpochConcept = epochFields.some(isEpochField);
   const sopValues: Partial<Record<SopStageKey, string>> = {
-    basis: currentEt === null ? "—" : `ET ${Math.round(currentEt)} s`,
+    basis: hasEpochConcept
+      ? missingEpoch.length > 0
+        ? `待补 ${missingEpoch.length} 项`
+        : "已定"
+      : "—",
     task: toolEntry(selectedTool).title,
     params: preflightIssues.length > 0 ? `${preflightIssues.length} 项待补` : "已填齐",
     run: busy

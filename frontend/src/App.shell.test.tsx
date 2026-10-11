@@ -257,7 +257,7 @@ describe("界面外壳（侧边栏 / 顶边栏 / 文档标签 / 停靠 / 状态�
     // 开局：参数面板挂载时回填分支默认值，默认工具本身无历元依赖 → 无阻断
     expect(screen.queryByTestId("sop-blockers")).toBeNull();
 
-    // 换到需要 TLI 历元的转移设计：时间轴未选时刻 → 报历元阻断
+    // 换到需要 TLI 历元的转移设计：必填历元字段为空，报历元阻断
     fireEvent.click(screen.getByTestId("sider-tool-transfer_design"));
     await waitFor(() =>
       expect(screen.getByTestId("sop-blockers").textContent).toContain("未确定参考历元"),
