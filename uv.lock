@@ -161,7 +161,7 @@ wheels = [
 
 [[package]]
 name = "cislunar-code"
-version = "5.0.0"
+version = "5.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
