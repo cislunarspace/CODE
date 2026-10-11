@@ -5,14 +5,13 @@ import { Form, Select, InputNumber, Button, Space, message, Modal, Input, Switch
 import { SearchOutlined, DownloadOutlined, RedoOutlined } from "@ant-design/icons";
 import { catalogQuery, catalogExport, STAR_TAG } from "./catalogApi";
 import type { CatalogRecord } from "./catalogApi";
+import { flatSwitchStyles, neutralTagStyle } from "./theme";
 import { useTranslation } from "./i18n";
 import type { ArtifactSummary } from "./projectApi";
 
 const { Text } = Typography;
 
 // 状态行条件 Tag 的统一小号样式（#468）
-const STATUS_TAG_STYLE = { marginInlineEnd: 0, fontSize: 11, lineHeight: "16px" } as const;
-
 export interface CatalogFilterBarProps {
   onResults: (artifacts: ArtifactSummary[], count: number, message: string) => void;
 }
@@ -160,11 +159,7 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
         </Form.Item>
 
         <Form.Item label={t("catalog.star_only")} style={{ marginBottom: 6 }}>
-          <Switch
-            size="small"
-            checked={starOnly}
-            onChange={setStarOnly}
-          />
+          <Switch size="small" styles={flatSwitchStyles} checked={starOnly} onChange={setStarOnly} />
         </Form.Item>
 
         <Space orientation="horizontal" style={{ width: "100%", marginBottom: 8 }} size={6}>
@@ -221,12 +216,12 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
           >
             <Text type="secondary" style={{ fontSize: 11 }}>共 {resultCount} 条</Text>
             {starOnly && (
-              <Tag style={STATUS_TAG_STYLE}>{t("catalog.star_only")}</Tag>
+              <Tag style={neutralTagStyle}>{t("catalog.star_only")}</Tag>
             )}
-            {family && <Tag style={STATUS_TAG_STYLE}>{family}</Tag>}
-            {libration && <Tag style={STATUS_TAG_STYLE}>L{libration}</Tag>}
+            {family && <Tag style={neutralTagStyle}>{family}</Tag>}
+            {libration && <Tag style={neutralTagStyle}>L{libration}</Tag>}
             {(jacobiMin !== undefined || jacobiMax !== undefined) && (
-              <Tag style={STATUS_TAG_STYLE}>
+              <Tag style={neutralTagStyle}>
                 {`C ∈ [${jacobiMin !== undefined ? String(jacobiMin) : "-∞"}, ${
                   jacobiMax !== undefined ? String(jacobiMax) : "+∞"
                 }]`}

@@ -47,6 +47,69 @@ export const themeTokens = {
   colorError: "#ff4d4f",
 } as const;
 
+/** 界面外壳配色：顶边栏、侧边栏、停靠面板、标签条共用一份取值，集中一处便于
+ *  整体调整对比度。
+ * Shell palette: one source for the top bar, sidebar, docked panel and tab strip,
+ * so contrast adjustments stay a single edit. */
+export interface ShellColors {
+  /** 面板分隔线 */
+  border: string;
+  /** 顶边栏与标签条底色（比面板亮/深一档，拉出层次） */
+  barBg: string;
+  /** 侧边栏与停靠面板底色 */
+  panelBg: string;
+  /** 标签激活底色 */
+  activeBg: string;
+  /** 标签激活文字 */
+  activeText: string;
+}
+
+export function shellColors(mode: "dark" | "light"): ShellColors {
+  const dark = mode === "dark";
+  return {
+    border: dark ? "#303030" : "#e8e8e8",
+    barBg: dark ? "#1f1f1f" : "#ffffff",
+    panelBg: dark ? "#1a1a1a" : "#fafafa",
+    activeBg: dark ? "rgba(64, 150, 255, 0.16)" : "rgba(9, 88, 217, 0.08)",
+    activeText: dark ? "#ffffff" : "#0958d9",
+  };
+}
+
+/** 组件级 token（ADR 0020/0034）：主按钮自带的蓝色投影是 antd“立体感”的
+ *  主要来源，控制台要平面化，直接去掉。开关胶囊与彩色元数据标签 antd 不给
+ *  token，只能逐实例给语义化 styles，见 flatSwitchStyles / neutralTagStyle。
+ * Component-level tokens (ADR 0020/0034): the primary button's blue drop shadow is
+ * the main source of antd's dimensionality and the console goes flat, so it is
+ * removed. The switch pill and coloured metadata tags have no token — they are
+ * overridden per instance via the semantic styles below. */
+export const themeComponents = {
+  Button: { primaryShadow: "none" },
+};
+
+/** 开关去胶囊化：antd 的 Switch 根与滑块都是 100px 圆角，与控制台其余直角
+ *  控件不一致，收到 2px。 */
+/** De-pill the switch: antd's Switch root and handle carry a 100px radius, out of
+ *  step with the console's square controls; tightened to 2px. */
+export const flatSwitchStyles = {
+  root: { borderRadius: themeTokens.borderRadius },
+  indicator: { borderRadius: themeTokens.borderRadius },
+};
+
+/** 元数据标签：彩色只用于状态（成功/失败/警告/进行中），族名、平动点、动力学
+ *  能力这类描述性信息用中性线框标签，避免整屏彩色块。 */
+/** Metadata tags: colour is reserved for state (success/error/warning/running);
+ *  descriptive facts (family name, libration point, dynamics capability) use a
+ *  neutral bordered tag so the screen does not fill with colour chips. */
+export const neutralTagStyle = {
+  marginInlineEnd: 0,
+  fontSize: 11,
+  lineHeight: "16px",
+  background: "transparent",
+  borderColor: "currentColor",
+  color: "inherit",
+  opacity: 0.85,
+} as const;
+
 /** 主题 CSS 变量（#450）：助手边栏/会话视图/工具卡片引用 --tod-* 系列，
  *  此前全仓库只有 var(...) 引用而无定义处，深色模式下永远落到浅色 fallback。
  *  返回值由 App 根容器注入为内联 CSS 变量，随明暗主题切换；浅色值 = 各
@@ -67,6 +130,12 @@ export function themeCssVars(mode: "dark" | "light"): Record<string, string> {
     "--tod-user-bubble": "#0958d9",
     "--tod-assistant-bubble": dark ? "rgba(255,255,255,0.10)" : "rgba(128,128,128,0.10)",
     "--tod-text-secondary": "#8c8c8c",
+    // 强调色（ADR 0034）：时间轴等随主题着色的控件用它，浅色沿用控制台主色，
+    // 深色提亮一档（与 antd darkAlgorithm 的主色一致）
+    // Accent (ADR 0034): used by theme-aware controls such as the timeline. Light
+    // keeps the console primary, dark brightens one step (matching antd's
+    // darkAlgorithm primary).
+    "--tod-accent": dark ? "#4096ff" : "#0958d9",
     "--tod-card-bg": dark ? "rgba(255,255,255,0.06)" : "rgba(128,128,128,0.06)",
     "--tod-code-bg": dark ? "rgba(255,255,255,0.10)" : "rgba(128,128,128,0.1)",
   };

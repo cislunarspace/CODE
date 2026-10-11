@@ -21,11 +21,14 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   PlayCircleOutlined,
-  InfoCircleOutlined,
-  MoonOutlined,
-  SunOutlined,
 } from "@ant-design/icons";
-import { themeBehavior, themeTokens, themeCssVars } from "./theme";
+import { StatusBar } from "./StatusBar";
+import { AppSidebar } from "./AppSidebar";
+import { AppTopBar, type TopMenuSpec } from "./AppTopBar";
+import { DocTabs } from "./DocTabs";
+import { SopBar } from "./SopBar";
+import { deriveSop, isEpochField, missingEpochFields, type SopFix, type SopStageKey } from "./sop";
+import { themeBehavior, themeTokens, themeCssVars, shellColors, themeComponents, flatSwitchStyles } from "./theme";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { OrbitCanvas, type CanvasApi, type ProjectionMode, type CenterMode, type FrameMode } from "./OrbitCanvas";
 import { CanvasOrbitList } from "./CanvasOrbitList";
@@ -67,6 +70,7 @@ import {
   getArtifact,
   ephemerisStatus,
   formatToolError,
+  onSidecarProgress,
   type EphemerisStatus,
   type ManeuverEvent,
   type BplaneInfo,
@@ -76,7 +80,7 @@ import { AssistantSidebar } from "./assistant/AssistantSidebar";
 import { AssistantSettingsForm } from "./assistant/AssistantSettingsForm";
 import type { SelectionContext } from "./assistant/api";
 import { DU_KM, TU_SECONDS, librationPoint } from "./cr3bp";
-import { etFromEpoch } from "./timeBasis";
+import { etFromEpoch, etToUtcLabel } from "./timeBasis";
 import { moonTrackFromResponse, moonTrackRequest, idealizedMoonTrack, type MoonTrack } from "./moonEphemeris";
 import { boundariesResponseToRegionLayer, type BoundaryElementPayload, type RegionElement } from "./regionLayer";
 import {
@@ -107,21 +111,33 @@ const EARTH_MOON_MU = 0.01215058560962404;
 /** Soft cap of the pinned layer: warn past it without blocking. */
 const PINNED_LIMIT = 5;
 
-/** 左栏/中栏宽度范围（#454）：下限之和（220+240+助手边栏 280）保证最小
- *  支持窗口下画布仍有可用宽度；上限防单栏吞掉整个视口。 */
-/** Left/middle pane width ranges (#454): the combined minimums (220+240 plus
- *  the sidebar's 280) keep the canvas usable on the smallest supported window;
- *  the maximums stop one pane from swallowing the viewport. */
-const LEFT_MIN_WIDTH = 220;
-const LEFT_MAX_WIDTH = 420;
-const LEFT_DEFAULT_WIDTH = 280;
-const MID_MIN_WIDTH = 240;
-const MID_MAX_WIDTH = 440;
-const MID_DEFAULT_WIDTH = 320;
-const LEFT_WIDTH_KEY = "tod-left-width";
-const MID_WIDTH_KEY = "tod-mid-width";
-const LEFT_COLLAPSED_KEY = "tod-left-collapsed";
-const MID_COLLAPSED_KEY = "tod-mid-collapsed";
+/** 参数停靠宽度范围（#454）：下限保证最小支持窗口下画布仍有可用
+ *  宽度，上限防面板吞掉整个视口。 */
+/** Workspace parameter-panel width range (#454): the lower bound keeps the
+ *  canvas usable on the smallest supported window; the upper bound stops the
+ *  panel from swallowing the viewport. */
+const WS_PANEL_MIN_WIDTH = 260;
+const WS_PANEL_MAX_WIDTH = 560;
+const WS_PANEL_DEFAULT_WIDTH = 340;
+const WS_PANEL_WIDTH_KEY = "tod-ws-panel-width";
+const WS_PANEL_COLLAPSED_KEY = "tod-ws-panel-collapsed";
+/** 侧边栏折叠（ADR 0034）：与参数停靠一样按栏记忆开合 */
+/** Sidebar collapse (ADR 0034): remembered per rail, like the parameter panel. */
+const SIDER_COLLAPSED_KEY = "tod-sider-collapsed";
+/** 助手边栏开合与宽度（ADR 0034）：默认展开。助手是常驻协作面，不是需要
+ *  主动唤起的对话框。宽度走与参数停靠同一套钳制与持久化 */
+/** Assistant sidebar state (ADR 0034): open by default — the assistant is a
+ *  persistent collaboration surface, not a dialog you summon; its width uses the
+ *  same clamping and persistence as the parameter panel. */
+const ASSISTANT_OPEN_KEY = "tod-assistant-open";
+const ASSISTANT_WIDTH_KEY = "tod-assistant-width";
+const ASSISTANT_MIN_WIDTH = 280;
+const ASSISTANT_MAX_WIDTH = 640;
+const ASSISTANT_DEFAULT_WIDTH = 380;
+/** 主页面文档标签：刷新后回到同一组标签与同一激活标签 */
+/** Main-area document tabs: a reload restores the same set and the active one. */
+const DOC_TABS_KEY = "tod-doc-tabs";
+const DOC_ACTIVE_KEY = "tod-doc-active";
 
 /**
  * 转移响应 → 时间轴事件：优先读结构化 maneuver_events（e2m2e #575 契约，
@@ -222,6 +238,46 @@ interface FocusRowId {
   idx: number;
 }
 
+/** 主页面文档标签键（ADR 0034）：三维视图 / 轨道信息 / 轨道库 */
+/** Main-area document tab keys (ADR 0034): 3D view / orbit info / catalog. */
+export type DocTabKey = "view3d" | "orbitInfo" | "catalog";
+
+/** 标签正典顺序：默认全开，“+”菜单按此顺序列出已收起项 */
+/** Canonical tab order: all open by default; the "+" menu lists hidden ones in it. */
+export const DOC_TAB_KEYS: DocTabKey[] = ["view3d", "orbitInfo", "catalog"];
+
+/** 标签显示名的词典键 */
+/** Dictionary keys for the tab labels. */
+export const DOC_TAB_LABEL_KEYS: Record<DocTabKey, string> = {
+  view3d: "doc.view3d",
+  orbitInfo: "doc.orbit_info",
+  catalog: "doc.catalog",
+};
+
+function isDocTabKey(value: unknown): value is DocTabKey {
+  return typeof value === "string" && (DOC_TAB_KEYS as string[]).includes(value);
+}
+
+/** 已打开标签（持久化）：解析失败、空集或全是未知键时回落默认全集 */
+/** Open tabs (persisted): a parse failure, an empty set or unknown keys all fall
+ *  back to the full default set. */
+export function loadOpenTabs(): DocTabKey[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(DOC_TABS_KEY) ?? "[]");
+    const keys = Array.isArray(parsed) ? parsed.filter(isDocTabKey) : [];
+    return keys.length > 0 ? DOC_TAB_KEYS.filter((key) => keys.includes(key)) : [...DOC_TAB_KEYS];
+  } catch {
+    return [...DOC_TAB_KEYS];
+  }
+}
+
+/** 激活标签（持久化）：不在已打开集合里时取标签条最左一个 */
+/** Active tab (persisted): when it is not among the open ones, take the leftmost. */
+export function loadActiveTab(open: DocTabKey[]): DocTabKey {
+  const raw = localStorage.getItem(DOC_ACTIVE_KEY);
+  return isDocTabKey(raw) && open.includes(raw) ? raw : (open[0] ?? "view3d");
+}
+
 export default function App() {
   const { t } = useTranslation();
   const [themeMode, setThemeMode] = useState<"dark" | "light">(() => {
@@ -233,40 +289,105 @@ export default function App() {
     return Number(localStorage.getItem("tod-font-size") || "12");
   });
 
-  const [leftTab, setLeftTab] = useState<"project" | "catalog">("project");
-  // 中栏页签（#476）：设计工具与轨道信息并列；点清单/拾取轨道自动切到
-  // 轨道信息页（聚焦 + 打开详情是一个动作，见 issue 待细化决议）。
-  // Mid-pane tab (#476): design tool and orbit info side by side; clicking a
-  // list row / picking an orbit auto-switches to orbit info (focus + open
-  // details is one action, per the issue's resolution).
-  const [midTab, setMidTab] = useState<"tool" | "orbitInfo">("tool");
-  // 左/中栏宽度（#454）：拖宽手柄实时跟手、松手持久化，越界回落默认宽
-  // Left/middle pane widths (#454): the handle tracks live, persists on
-  // release, and out-of-range values fall back to the defaults.
-  const [leftWidth, setLeftWidth] = useState(() =>
-    loadPanelWidth(LEFT_WIDTH_KEY, LEFT_DEFAULT_WIDTH, LEFT_MIN_WIDTH, LEFT_MAX_WIDTH),
+  // 主页面文档标签（ADR 0034）：三维视图 / 轨道信息 / 轨道库三张标签，可开可关。
+  // 标签内容常驻挂载、非激活标签 display:none。三维视图里的 WebGL 画布是全局
+  // 唯一实例，卸载即丢相机与场景。关闭标签只是把它从标签条收起。
+  // Main-area document tabs (ADR 0034): 3D view / orbit info / catalog, each
+  // openable and closable. Their content stays mounted with display:none on the
+  // inactive ones — the WebGL canvas is a single global instance whose unmount
+  // would drop the camera and scene; closing hides the tab only.
+  const [openTabs, setOpenTabs] = useState<DocTabKey[]>(loadOpenTabs);
+  const [activeTab, setActiveTab] = useState<DocTabKey>(() => loadActiveTab(loadOpenTabs()));
+  // 侧边栏折叠与助手边栏（ADR 0034）
+  const [siderCollapsed, setSiderCollapsed] = useState(() =>
+    loadPanelCollapsed(SIDER_COLLAPSED_KEY),
   );
-  const [midWidth, setMidWidth] = useState(() =>
-    loadPanelWidth(MID_WIDTH_KEY, MID_DEFAULT_WIDTH, MID_MIN_WIDTH, MID_MAX_WIDTH),
+  const [assistantOpen, setAssistantOpen] = useState(
+    () => localStorage.getItem(ASSISTANT_OPEN_KEY) !== "0",
   );
-  // 栏折叠（#462）：折叠即面板收起、画布扩展占位；折叠态持久化，宽度
-  // 状态保留（展开还原折叠前宽度）。助手边栏另有折叠机制，不并入。
-  // Pane collapse (#462): collapsing hides the pane and lets the canvas take
-  // the space; the collapsed state persists and the width state is kept (an
-  // expanded pane restores its pre-collapse width). The assistant sidebar has
-  // its own collapse mechanism and is not merged here.
-  const [leftCollapsed, setLeftCollapsed] = useState(() => loadPanelCollapsed(LEFT_COLLAPSED_KEY));
-  const [midCollapsed, setMidCollapsed] = useState(() => loadPanelCollapsed(MID_COLLAPSED_KEY));
+  const [assistantWidth, setAssistantWidth] = useState(() =>
+    loadPanelWidth(
+      ASSISTANT_WIDTH_KEY,
+      ASSISTANT_DEFAULT_WIDTH,
+      ASSISTANT_MIN_WIDTH,
+      ASSISTANT_MAX_WIDTH,
+    ),
+  );
+
+  const toggleAssistant = () => {
+    const next = !assistantOpen;
+    setAssistantOpen(next);
+    localStorage.setItem(ASSISTANT_OPEN_KEY, next ? "1" : "0");
+  };
+
+  /** 切到某张标签：已收起时顺带放回标签条（按正典顺序重排） */
+  const switchTab = (next: DocTabKey) => {
+    const tabs = openTabs.includes(next)
+      ? openTabs
+      : DOC_TAB_KEYS.filter((key) => openTabs.includes(key) || key === next);
+    setOpenTabs(tabs);
+    setActiveTab(next);
+    localStorage.setItem(DOC_TABS_KEY, JSON.stringify(tabs));
+    localStorage.setItem(DOC_ACTIVE_KEY, next);
+  };
+
+  /** 关闭标签：只从标签条收起，内容继续挂载（画布保活）。关的是当前标签时
+   *  激活左邻（无左邻取右邻），最后一张标签不给关 */
+  const closeTab = (key: DocTabKey) => {
+    if (openTabs.length <= 1) return;
+    const index = openTabs.indexOf(key);
+    const tabs = openTabs.filter((k) => k !== key);
+    const next = activeTab === key ? (tabs[Math.max(0, index - 1)] ?? tabs[0]) : activeTab;
+    setOpenTabs(tabs);
+    setActiveTab(next);
+    localStorage.setItem(DOC_TABS_KEY, JSON.stringify(tabs));
+    localStorage.setItem(DOC_ACTIVE_KEY, next);
+  };
+  // 参数停靠宽度（#454）：拖宽手柄实时跟手、松手持久化，越界回落默认宽
+  // Panel width (#454): the handle tracks live, persists on release, and
+  // out-of-range values fall back to the default.
+  const [panelWidth, setPanelWidth] = useState(() =>
+    loadPanelWidth(
+      WS_PANEL_WIDTH_KEY,
+      WS_PANEL_DEFAULT_WIDTH,
+      WS_PANEL_MIN_WIDTH,
+      WS_PANEL_MAX_WIDTH,
+    ),
+  );
+  // 面板折叠（#462）：折叠即面板收起、画布扩展占位；折叠态持久化，宽度
+  // 状态保留（展开还原折叠前宽度）。
+  // Panel collapse (#462): collapsing hides it and lets the canvas take the
+  // space; the collapsed state persists and the width state is kept (expanding
+  // restores the pre-collapse width).
+  const [panelCollapsed, setPanelCollapsed] = useState(() =>
+    loadPanelCollapsed(WS_PANEL_COLLAPSED_KEY),
+  );
   const setPaneCollapsed = (key: string, collapsed: boolean, setter: (v: boolean) => void) => {
     setter(collapsed);
     localStorage.setItem(key, collapsed ? "1" : "0");
   };
+  /** 侧边栏与参数停靠的开合都落 localStorage，刷新后沿用（ADR 0034） */
+  /** Sidebar and parameter-dock toggles both persist, so a reload keeps them (ADR 0034). */
+  const toggleSider = () =>
+    setPaneCollapsed(SIDER_COLLAPSED_KEY, !siderCollapsed, setSiderCollapsed);
+  const toggleParams = () =>
+    setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, !panelCollapsed, setPanelCollapsed);
   const [selectedTool, setSelectedTool] = useState<string>(TOOL_REGISTRY[0].name);
   const [toolParams, setToolParams] = useState<Record<string, unknown>>({});
-  // 提交校验问题（字段名 → 原因），传给参数面板内联标红；改动参数即清
+  // 提交校验问题（字段名 → 原因），传给参数停靠内联标红；改动参数即清
   // Submission validation problems (field name → reason), passed to the params panel for inline red flags; cleared on any change.
   const [paramIssues, setParamIssues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<boolean>(false);
+
+  // 提交前防呆校验（#454/#476）：参数停靠内联红标、SOP 步骤带与运行按钮共用
+  // 同一份结论。三处必须同源，否则会出现“按钮可点却被拒”
+  // Preflight validation (#454/#476): the inline field errors, the SOP step bar and
+  // the run button share one derivation — three consumers must not disagree, or the
+  // UI offers a click it then rejects.
+  const preflightIssues = useMemo(
+    () => validateToolParams(selectedTool, toolEntry(selectedTool).schema, toolParams),
+    [selectedTool, toolParams],
+  );
 
   const [artifacts, setArtifacts] = useState<ArtifactSummary[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactSummary | null>(null);
@@ -338,20 +459,17 @@ export default function App() {
   // focus changes out of the effect's dependencies.
   const canvasFocusIdxRef = useRef<number | null>(null);
   canvasFocusIdxRef.current = canvasFocusIdx;
-  // 轨道聚焦入口（#476）：清单点击与画布拾取共用。聚焦非空 = 「聚焦 +
-  // 打开详情」一个动作——切中栏到轨道信息页签（中栏折叠时顺手展开）；
-  // 取消聚焦（点空白/再点聚焦项/轨迹替换重置）只清聚焦，页签不弹回。
+  // 轨道聚焦入口（#476）：清单点击与画布拾取共用。聚焦非空即“聚焦并打开
+  // 详情”一个动作，落点是轨道信息标签（未打开则先放回标签条）。取消聚焦
+  // （点空白、再点聚焦项、轨迹替换重置）只清聚焦，标签不弹回。
   // The orbit-focus entry (#476): shared by list clicks and canvas picking. A
-  // non-null focus is one action, "focus + open details" — switch the mid
-  // pane to the orbit-info tab (expanding it when collapsed); unfocusing
-  // (empty-space click / re-click / trajectory-replacement reset) only
-  // clears the focus and never snaps the tab back.
+  // non-null focus is one action, "focus and open the details", landing on the
+  // orbit-info tab (restored to the strip when hidden). Unfocusing (empty-space
+  // click, re-click, trajectory-replacement reset) only clears the focus and
+  // never snaps the tab back.
   const handleOrbitFocus = (i: number | null) => {
     setCanvasFocusIdx(i);
-    if (i !== null) {
-      setMidTab("orbitInfo");
-      setPaneCollapsed(MID_COLLAPSED_KEY, false, setMidCollapsed);
-    }
+    if (i !== null) switchTab("orbitInfo");
   };
   const [chart, setChart] = useChartSettings();
   const [chartModalOpen, setChartModalOpen] = useState(false);
@@ -392,29 +510,37 @@ export default function App() {
     localStorage.setItem("tod-font-size", String(size));
   };
 
+  /** 更新检查：启动后静默跑一次，顶栏菜单“检查更新”手动跑（无新版给提示） */
+  /** Update check: silent once at startup, manual from the top-bar menu (a
+   *  manual run reports "already latest"). */
+  const runUpdateCheck = async (silent: boolean) => {
+    try {
+      // deb/rpm 安装走 GitHub Releases 直下链路（应用内下载 + 系统包管理器
+      // 安装），其余走 updater 插件
+      // deb/rpm installs use the GitHub Releases direct-download channel
+      // (in-app download + system package manager); others use the plugin.
+      const bundleType = await getBundleType();
+      const update = inAppUpdateSupported(bundleType)
+        ? await checkForAppUpdates()
+        : await checkManualAppUpdate();
+      if (update) {
+        setUpdateInfo(update);
+        setUpdateModalOpen(true);
+      } else if (!silent) {
+        message.success(t("updater.latest"));
+      }
+    } catch (e) {
+      // 静默检查失败不打扰用户，手动检查失败明确报错
+      // A failed silent check never disturbs the user; a manual one reports.
+      console.warn("Update check failed:", e);
+      if (!silent) message.error(t("updater.error"));
+    }
+  };
+
   // 启动后后台静默检查更新
   // Silent update check in the background after startup.
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        // deb/rpm 安装走 GitHub Releases 直下链路（应用内下载 + 系统包管理器
-        // 安装），其余走 updater 插件
-        // deb/rpm installs use the GitHub Releases direct-download channel
-        // (in-app download + system package manager); others use the plugin.
-        const bundleType = await getBundleType();
-        const update = inAppUpdateSupported(bundleType)
-          ? await checkForAppUpdates()
-          : await checkManualAppUpdate();
-        if (update) {
-          setUpdateInfo(update);
-          setUpdateModalOpen(true);
-        }
-      } catch (e) {
-        // 静默检查失败不打扰用户
-        // A failed silent check never disturbs the user.
-        console.warn("Silent update check failed:", e);
-      }
-    }, 3000);
+    const timer = setTimeout(() => void runUpdateCheck(true), 3000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -426,17 +552,18 @@ export default function App() {
     // first mount's listener.
     let cancelled = false;
     let unlisten: (() => void) | undefined;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen<{ meta: { message: string } }>("sidecar-progress", (ev) => {
-        setProgressMsg(ev.payload.meta.message);
-      }).then((u) => {
+    onSidecarProgress((message) => setProgressMsg(message))
+      .then((u) => {
         if (cancelled) {
           u();
           return;
         }
         unlisten = u;
+      })
+      .catch(() => {
+        // 非 Tauri 环境（测试、浏览器预览）没有事件通道：保持无进度文案
+        // Outside Tauri there is no event channel: stay without progress text.
       });
-    });
     return () => {
       cancelled = true;
       unlisten?.();
@@ -509,7 +636,7 @@ export default function App() {
       ...candidateLayer.map((c) => filterByRole(c.data, contentMode)),
       filterByRole(resultData, contentMode),
     ];
-    // 来源标注 + 行身份逐层装配（#476/#479）：来源供轨道信息页签「来源」
+    // 来源标注 + 行身份逐层装配（#476/#479）：来源供轨道信息标签「来源」
     // 字段；行身份 = 层对象引用 + 层内原行号，供内容切换时聚焦迁移。两者
     // 与 filterByRole 共用 roleKeepMask 过滤，保持与 combined 严格对齐。
     // Source tags + row identities assembled per layer (#476/#479): sources
@@ -577,7 +704,7 @@ export default function App() {
       inertialIdealized: layers.flatMap(
         (l) => l.inertialIdealized ?? l.trajectories.map(() => false),
       ),
-      // 段角色逐层拼接（#476）：轨道信息页签的「类型」字段（cr3bp 参考段/
+      // 段角色逐层拼接（#476）：轨道信息标签的「类型」字段（cr3bp 参考段/
       // 星历段）取自这里——丢了它，详情永远分不出双段产物的两段。
       // Segment roles concatenated per layer (#476): the orbit-info tab's
       // "type" field (cr3bp reference / ephemeris segment) reads from here —
@@ -599,7 +726,7 @@ export default function App() {
 
   // 内容切换聚焦迁移（#479）：canvasData 行集合变化时，聚焦行按身份（层
   // 对象 + 层内行号）在新行集合中找回落位——仍在画布上则迁移（详情连续
-  // 显示同一条轨迹，含行号偏移），被内容过滤裁掉则明确清除（页签不弹回，
+  // 显示同一条轨迹，含行号偏移），被内容过滤裁掉则明确清除（标签不弹回，
   // #476 决议）。预览态是瞬态交互，不做迁移（规格 out-of-scope）。子组件
   // OrbitCanvas 的整体替换重置 effect 先于本 effect 运行（React 子先父
   // 后），本 effect 的写入在同批状态更新中最终生效。
@@ -662,7 +789,7 @@ export default function App() {
     [canvasData, canvasFrameLabels, chart.colorCycle, frame],
   );
 
-  // 轨道信息页签的详情装配（#476）：聚焦索引即 canvasData 行号
+  // 轨道信息标签的详情装配（#476）：聚焦索引即 canvasData 行号
   // （trajIndex），清单过滤无标签行后仍对齐；聚焦行无标签（不在清单）时
   // 同样可查——画布拾取允许聚焦无标签轨迹。
   // Orbit-info tab assembly (#476): the focus index IS the canvasData row
@@ -1225,9 +1352,20 @@ export default function App() {
   // Run the generic tool (preflight checks before submit: missing required fields or out-of-range values block submission).
   const handleRunTool = async () => {
     const entry = toolEntry(selectedTool);
-    const issues = validateToolParams(selectedTool, entry.schema, toolParams);
+    const issues = preflightIssues;
+    // 缺项回填给参数停靠的内联标红，与步骤带清单同一份结论，使用者不必两边对照
+    // Offending fields go back into the dock's inline errors, drawn from the same
+    // derivation as the step-bar list.
     if (issues.length > 0) {
       setParamIssues(Object.fromEntries(issues.map((i) => [i.field, i.reason])));
+    }
+    // 硬校验（ADR 0034）：阻断项非空即不允许运行。参数停靠的运行按钮已禁用，
+    // 步骤带的“求解”也走这里，两个入口共用同一份阻断结论。
+    // Hard gate (ADR 0034): any blocker stops the run. The run button in the
+    // parameter dock is already disabled and the step bar's solve step goes
+    // through here too, so both entries share one conclusion.
+    if (sop.blockers.length > 0) return;
+    if (issues.length > 0) {
       message.error(issues.map((i) => `${i.label}(${i.field}): ${i.reason}`).join("；"));
       return;
     }
@@ -1677,11 +1815,175 @@ export default function App() {
     { label: "L2", x: librationPoint(EARTH_MOON_MU, 2) },
   ];
 
+  // 顶栏历元：与时间轴、状态栏同一基准（et 秒，J2000 TDB），未选时刻给占位
+  // Top-bar epoch: the same basis as the timeline and status bar (et seconds,
+  // J2000 TDB), with a placeholder before any moment is chosen.
+  const epochLabel =
+    currentEt === null ? t("header.epoch_none") : `UTC ${etToUtcLabel(currentEt)}`;
+
+  const docTabLabel = (key: DocTabKey) => t(DOC_TAB_LABEL_KEYS[key]);
+  const colors = shellColors(themeMode);
+
+  // SOP 判定（ADR 0034）：步骤带与运行按钮同一份结论。上游产物依赖按当前参数
+  // 判定（LGA/WSB 需要先选中一条目标轨道），不引入按工具硬编码的依赖表。
+  // SOP derivation (ADR 0034): one source for the step bar and the run button.
+  // The upstream dependency comes from the current parameters (LGA/WSB need a
+  // selected target orbit) rather than a hand-maintained per-tool table.
+  const needsUpstreamRecord =
+    selectedTool === "transfer_design" &&
+    (toolParams.transfer_type === "LGA" || toolParams.transfer_type === "WSB") &&
+    !selectedArtifact?.recordId;
+  const sop = deriveSop({
+    schemaFields: Object.keys(toolEntry(selectedTool).schema.properties ?? {}),
+    requiredFields: toolEntry(selectedTool).schema.required ?? [],
+    values: toolParams,
+    paramIssues: preflightIssues,
+    needsUpstreamRecord,
+    hasResult: canvasData.trajectories.length > 0,
+    inCatalog: artifacts.length > 0,
+    pinnedCount: pinned.length,
+  });
+
+  /** 步骤带每格右侧的现状摘要（工具名、待补项数、结果条数、库与情景计数）。
+   *  基准格报必填历元字段的填报状态，时间轴的看图时刻不在此处冒充基准值。
+   * Per-stage summary on the step bar: tool name, missing fields, result count,
+   * catalog and scenario counts. The basis cell reports the required epoch
+   * fields, not the timeline's viewing moment. */
+  const epochFields = toolEntry(selectedTool).schema.required ?? [];
+  const missingEpoch = missingEpochFields(toolParams, epochFields);
+  const hasEpochConcept = epochFields.some(isEpochField);
+  const sopValues: Partial<Record<SopStageKey, string>> = {
+    basis: hasEpochConcept
+      ? missingEpoch.length > 0
+        ? `待补 ${missingEpoch.length} 项`
+        : "已定"
+      : "—",
+    task: toolEntry(selectedTool).title,
+    params: preflightIssues.length > 0 ? `${preflightIssues.length} 项待补` : "已填齐",
+    run: busy
+      ? t("run.executing")
+      : canvasData.trajectories.length > 0
+        ? `${canvasData.trajectories.length} 条`
+        : "—",
+    review: canvasFocusIdx === null ? "—" : t("sop.value.focused"),
+    catalog: artifacts.length > 0 ? `${artifacts.length} 条` : "—",
+    scenario: pinned.length > 0 ? `${pinned.length} 条` : "—",
+  };
+
+  /** 点阶段即执行该阶段动作：不做向导弹窗，落点都是既有入口 */
+  /** Clicking a stage performs that stage's action — no wizard; every target is an existing entry point. */
+  const handleSopStage = (key: SopStageKey) => {
+    switch (key) {
+      case "basis":
+      case "params":
+        setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, false, setPanelCollapsed);
+        break;
+      case "task":
+        setPaneCollapsed(SIDER_COLLAPSED_KEY, false, setSiderCollapsed);
+        break;
+      case "run":
+        void handleRunTool();
+        break;
+      case "review":
+        switchTab("orbitInfo");
+        break;
+      case "catalog":
+        switchTab("catalog");
+        break;
+      case "scenario":
+        void handleSaveScenario();
+        break;
+    }
+  };
+
+  /** 阻断项的补救动作：每一类都指向真实入口（参数停靠 / 项目树） */
+  /** A blocker's remedy: every fix points at a real entry point (parameter dock / project tree). */
+  const handleSopFix = (fix: SopFix) => {
+    switch (fix) {
+      case "pick-epoch":
+      case "fill-params":
+        setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, false, setPanelCollapsed);
+        break;
+      case "pick-record":
+        setPaneCollapsed(SIDER_COLLAPSED_KEY, false, setSiderCollapsed);
+        break;
+    }
+  };
+
+  /** 侧边栏工具列表点选：切换工具并清掉上一次的参数与提交问题 */
+  /** Picking a tool in the sidebar switches tools and clears the previous
+   *  parameters and submission problems. */
+  const handleSelectTool = (name: string) => {
+    setSelectedTool(name);
+    setToolParams({});
+    setParamIssues({});
+  };
+
+  // 顶栏菜单（ADR 0034）：每一项都接到应用已有的动作，不放占位项
+  // Top-bar menus (ADR 0034): every entry drives an action the app already has.
+  const menus: TopMenuSpec[] = [
+    {
+      key: "file",
+      label: t("menu.file"),
+      items: [
+        { key: "open", label: t("menu.open_scenario"), onClick: () => void handleOpenScenario() },
+        { key: "save", label: t("menu.save_scenario"), onClick: () => void handleSaveScenario() },
+        { key: "file-divider", type: "divider" },
+        { key: "png", label: t("menu.export_png"), onClick: handleExportPng },
+        {
+          key: "anim",
+          label: t("menu.export_anim"),
+          onClick: () => setAnimModalOpen(true),
+        },
+      ],
+    },
+    {
+      key: "view",
+      label: t("menu.view"),
+      items: [
+        { key: "sider", label: t("menu.sider"), onClick: toggleSider },
+        { key: "params", label: t("menu.params"), onClick: toggleParams },
+        { key: "assistant", label: t("menu.assistant"), onClick: toggleAssistant },
+        { key: "view-divider", type: "divider" },
+        ...DOC_TAB_KEYS.map((key) => ({
+          key: `tab-${key}`,
+          label: docTabLabel(key),
+          onClick: () => switchTab(key),
+        })),
+      ],
+    },
+    {
+      key: "tools",
+      label: t("menu.tools"),
+      items: [
+        {
+          key: "station-keeping",
+          label: t("menu.station_keeping"),
+          onClick: () => setStationKeepingOpen(true),
+        },
+        {
+          key: "chart",
+          label: t("menu.chart_settings"),
+          onClick: () => setChartModalOpen(true),
+        },
+      ],
+    },
+    {
+      key: "help",
+      label: t("menu.help"),
+      items: [
+        { key: "update", label: t("updater.check_action"), onClick: () => void runUpdateCheck(false) },
+        { key: "about", label: t("menu.about"), onClick: () => setAboutModalOpen(true) },
+      ],
+    },
+  ];
+
   return (
     <ConfigProvider
       theme={{
         algorithm: themeMode === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         ...themeBehavior,
+        components: themeComponents,
         token: {
           fontSize: fontSize,
           ...themeTokens,
@@ -1692,6 +1994,10 @@ export default function App() {
         style={
           {
             display: "flex",
+            // 外壳纵向排布：顶栏 / 主体（侧边栏 + 主页面）/ 状态栏
+            // The shell stacks vertically: top bar / body (sidebar + main) /
+            // status bar.
+            flexDirection: "column",
             width: "100vw",
             height: "100vh",
             overflow: "hidden",
@@ -1706,120 +2012,44 @@ export default function App() {
           } as React.CSSProperties
         }
       >
-        {/* 左栏：宽度可拖（#454），可折叠（#462）——折叠为窄条展开按钮，
-            画布扩展占位；宽度状态保留，展开还原 */}
-        {leftCollapsed ? (
-          <div
-            style={{
-              width: 24,
-              borderRight: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              paddingTop: 8,
-              background: themeMode === "dark" ? "#1f1f1f" : "#fff",
-              flexShrink: 0,
-            }}
-          >
-            <Button
-              type="text"
-              size="small"
-              icon={<MenuUnfoldOutlined />}
-              onClick={() => setPaneCollapsed(LEFT_COLLAPSED_KEY, false, setLeftCollapsed)}
-              title={t("panel.expand")}
-            />
-          </div>
-        ) : (
-        <div
-          style={{
-            width: leftWidth,
-            borderRight: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8",
-            display: "flex",
-            flexDirection: "column",
-            background: themeMode === "dark" ? "#1f1f1f" : "#fff",
-            padding: 8,
-            position: "relative",
-            flexShrink: 0,
-          }}
-        >
-          <ResizeHandle
-            edge="right"
-            width={leftWidth}
-            min={LEFT_MIN_WIDTH}
-            max={LEFT_MAX_WIDTH}
-            onResize={setLeftWidth}
-            onResizeEnd={(w) => localStorage.setItem(LEFT_WIDTH_KEY, String(w))}
-          />
-          {/* 页签与设置栏：底边指示线页签 + 无边框工具按钮（IDE 侧栏风格） */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 10,
-              borderBottom: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8",
-              marginBottom: 8,
-            }}
-          >
-            {(
-              [
-                ["project", t("app.tab.project")],
-                ["catalog", t("app.tab.catalog")],
-              ] as const
-            ).map(([key, label]) => {
-              const active = leftTab === key;
-              return (
-                <Button
-                  key={key}
-                  type="text"
-                  size="small"
-                  onClick={() => setLeftTab(key)}
-                  style={{
-                    padding: "1px 2px 5px",
-                    borderRadius: 0,
-                    marginBottom: -1,
-                    borderBottom: active
-                      ? `2px solid ${themeMode === "dark" ? "#4096ff" : "#0958d9"}`
-                      : "2px solid transparent",
-                    color: active ? (themeMode === "dark" ? "#fff" : "#0958d9") : "inherit",
-                    fontWeight: active ? 500 : 400,
-                  }}
-                >
-                  {label}
-                </Button>
-              );
-            })}
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 2, paddingBottom: 3 }}>
-              <Button
-                type="text"
-                size="small"
-                icon={themeMode === "dark" ? <SunOutlined /> : <MoonOutlined />}
-                onClick={handleToggleTheme}
-                title={t("app.theme_toggle_title")}
-              />
-              <Button
-                type="text"
-                size="small"
-                icon={<InfoCircleOutlined />}
-                onClick={() => setAboutModalOpen(true)}
-                title={t("app.about_title")}
-              />
-              <Button
-                type="text"
-                size="small"
-                icon={<MenuFoldOutlined />}
-                onClick={() => setPaneCollapsed(LEFT_COLLAPSED_KEY, true, setLeftCollapsed)}
-                title={t("panel.collapse")}
-              />
-            </div>
-          </div>
+        {/* 顶边栏（ADR 0034）：菜单栏 + 当前历元 + 全局动作 */}
+        {/* Top bar (ADR 0034): menu bar, current epoch and global actions. */}
+        <AppTopBar
+          mode={themeMode}
+          epochLabel={epochLabel}
+          menus={menus}
+          assistantOpen={assistantOpen}
+          onToggleAssistant={toggleAssistant}
+          onToggleTheme={handleToggleTheme}
+          onOpenSettings={() => setChartModalOpen(true)}
+          onOpenAbout={() => setAboutModalOpen(true)}
+        />
 
-          {/* 列表/过滤内容：纵向 flex，树占剩余高度（虚拟滚动由 Tree 内部接管，#468） */}
-          {/* List/filter content: a vertical flex column, the tree takes the
-              remaining height (virtual scrolling lives inside the Tree, #468). */}
-          <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
-            {leftTab === "catalog" && (
-              <CatalogFilterBar onResults={(arts) => setArtifacts(arts)} />
-            )}
+        {/* SOP 步骤带（ADR 0034）：当前阶段、各阶段现状与运行前阻断项 */}
+        {/* SOP step bar (ADR 0034): current stage, per-stage status and pre-run blockers. */}
+        <SopBar
+          mode={themeMode}
+          stages={sop.stages}
+          values={sopValues}
+          blockers={sop.blockers}
+          onStageClick={handleSopStage}
+          onFix={handleSopFix}
+        />
+
+        {/* 主体：侧边栏导航 + 主页面标签 */}
+        {/* Body: the sidebar navigation plus the main tabbed area. */}
+        <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+          {/* 侧边栏（ADR 0034）：项目树常驻 + 动力学工具列表 */}
+          {/* Sidebar (ADR 0034): the persistent project tree plus the dynamics
+              tool list. */}
+          <AppSidebar
+            mode={themeMode}
+            collapsed={siderCollapsed}
+            onToggleCollapse={toggleSider}
+            tools={TOOL_REGISTRY.map((entry) => ({ key: entry.name, label: entry.title }))}
+            selectedTool={selectedTool}
+            onSelectTool={handleSelectTool}
+          >
             <ProjectTree
               artifacts={artifacts}
               selectedId={selectedArtifact?.artifactId || null}
@@ -1838,203 +2068,77 @@ export default function App() {
               pinnedRecordIds={pinned.map((p) => p.recordId)}
               onTogglePin={handleTogglePin}
             />
-          </div>
+          </AppSidebar>
 
-          {/* 画布轨道清单（#469）：常驻左栏，替代画布内图注；与画布拾取
-              共用聚焦/预览态（#460 双向一致） */}
-          {/* Canvas orbit list (#469): persistent in the left pane, replacing
-              the in-canvas legend; shares focus/preview state with canvas
-              picking (bidirectional, #460). */}
-          <div style={{ borderTop: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8", maxHeight: 160, overflowY: "auto" }}>
-            <CanvasOrbitList
-              items={orbitItems}
-              focusIndex={canvasFocusIdx}
-              unavailableNote={t("canvas.frame.synodic_unavailable")}
-              onFocusChange={handleOrbitFocus}
-              onPreviewChange={setCanvasPreviewIdx}
+          {/* 主页面：文档标签条 + 标签内容 + 参数停靠 + 时间轴。
+              标签内容常驻挂载（非激活 display:none），切换保留画布相机与
+              各面板滚动位置。 */}
+          {/* Main area: the document tab strip, the tab content, the parameter
+              dock and the timeline. The content stays mounted (inactive tabs are
+              display:none), so switching keeps the canvas camera and every
+              panel's scroll position. */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <DocTabs
+              tabs={openTabs.map((key) => ({ key, label: docTabLabel(key) }))}
+              available={DOC_TAB_KEYS.map((key) => ({ key, label: docTabLabel(key) }))}
+              activeKey={activeTab}
+              mode={themeMode}
+              // DocTabs 的标签键是通用字符串（组件不依赖本页的键集合），
+              // 回调里过一遍 isDocTabKey 收窄，非本页标签的键直接忽略
+              // DocTabs keeps keys as plain strings (the component knows nothing
+              // about this page's key set); each callback narrows through
+              // isDocTabKey and ignores anything foreign.
+              onActivate={(key) => {
+                if (isDocTabKey(key)) switchTab(key);
+              }}
+              onClose={(key) => {
+                if (isDocTabKey(key)) closeTab(key);
+              }}
+              onOpen={(key) => {
+                if (isDocTabKey(key)) switchTab(key);
+              }}
             />
-          </div>
 
-          {/* 详情面板 */}
-          <div style={{ maxHeight: 280, overflowY: "auto", borderTop: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8" }}>
-            <RecordDetailPanel
-              record={selectedRecordDetail}
-              transferCandidates={candidateViews}
-              selectedLabel={selectedArtifact?.label ?? null}
-              onRefresh={refreshArtifacts}
-              onOpenStationKeeping={() => setStationKeepingOpen(true)}
-            />
-          </div>
-        </div>
-        )}
-
-        {/* 中栏：工具选择与参数面板，宽度可拖（#454），可折叠（#462） */}
-        {midCollapsed ? (
-          <div
-            style={{
-              width: 24,
-              borderRight: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              paddingTop: 8,
-              background: themeMode === "dark" ? "#1a1a1a" : "#fafafa",
-              flexShrink: 0,
-            }}
-          >
-            <Button
-              type="text"
-              size="small"
-              icon={<MenuUnfoldOutlined />}
-              onClick={() => setPaneCollapsed(MID_COLLAPSED_KEY, false, setMidCollapsed)}
-              title={t("panel.expand")}
-            />
-          </div>
-        ) : (
-        <div
-          style={{
-            width: midWidth,
-            borderRight: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8",
-            display: "flex",
-            flexDirection: "column",
-            background: themeMode === "dark" ? "#1a1a1a" : "#fafafa",
-            padding: 10,
-            position: "relative",
-            flexShrink: 0,
-          }}
-        >
-          <ResizeHandle
-            edge="right"
-            width={midWidth}
-            min={MID_MIN_WIDTH}
-            max={MID_MAX_WIDTH}
-            onResize={setMidWidth}
-            onResizeEnd={(w) => localStorage.setItem(MID_WIDTH_KEY, String(w))}
-          />
-          {/* 页签条（#476）：设计工具 | 轨道信息，沿用左栏底边指示线页签
-              样式；点清单/拾取轨道经 handleOrbitFocus 自动切到轨道信息页 */}
-          {/* Tab strip (#476): design tool | orbit info, following the left
-              pane's underline-tab idiom; list clicks / canvas picks switch to
-              the orbit-info tab via handleOrbitFocus. */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 10,
-              borderBottom: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8",
-              marginBottom: 8,
-            }}
-          >
-            {(
-              [
-                ["tool", t("panel.tool_title")],
-                ["orbitInfo", t("panel.tab.orbit_info")],
-              ] as const
-            ).map(([key, label]) => {
-              const active = midTab === key;
-              return (
-                <Button
-                  key={key}
-                  type="text"
-                  size="small"
-                  data-testid={`mid-tab-${key}`}
-                  onClick={() => setMidTab(key)}
+            {/* 内容行：标签内容列 + 右侧参数停靠 */}
+            {/* Content row: the tab content column plus the right parameter dock. */}
+            <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+              {/* 标签内容列：三张标签常驻挂载，非激活 display:none。
+                  minWidth: 0 不可省：flex 子项默认 min-width: auto，而 WebGL
+                  画布是 renderer.setSize 写上的 px 宽，会抬高本列的 min-content。
+                  折叠参数停靠时画布变宽，再展开时本列就不能窄于那个旧宽，整排
+                  超 100vw，助手边栏被顶出窗口。
+                  minWidth: 0 is required: a flex item defaults to min-width: auto,
+                  and the WebGL canvas carries the px width renderer.setSize wrote
+                  onto it, which raises this column's min-content. Collapsing the
+                  parameter dock widens the canvas; expanding then cannot narrow
+                  this column below that stale width and the row exceeds 100vw,
+                  pushing the assistant drawer out of the window. */}
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                {/* 三维视图标签：画布工具栏 + 画布 */}
+                <div
+                  data-testid="doc-view3d"
                   style={{
-                    padding: "1px 2px 5px",
-                    borderRadius: 0,
-                    marginBottom: -1,
-                    borderBottom: active
-                      ? `2px solid ${themeMode === "dark" ? "#4096ff" : "#0958d9"}`
-                      : "2px solid transparent",
-                    color: active ? (themeMode === "dark" ? "#fff" : "#0958d9") : "inherit",
-                    fontWeight: active ? 500 : 400,
+                    display: activeTab === "view3d" ? "flex" : "none",
+                    flexDirection: "column",
+                    flex: 1,
+                    minHeight: 0,
                   }}
                 >
-                  {label}
-                </Button>
-              );
-            })}
-            <div style={{ marginLeft: "auto", paddingBottom: 3 }}>
-              <Button
-                type="text"
-                size="small"
-                icon={<MenuFoldOutlined />}
-                onClick={() => setPaneCollapsed(MID_COLLAPSED_KEY, true, setMidCollapsed)}
-                title={t("panel.collapse")}
-              />
-            </div>
-          </div>
-          {midTab === "tool" ? (
-          <>
-          <Select
-            size="small"
-            style={{ width: "100%", marginBottom: 8 }}
-            value={selectedTool}
-            onChange={(val) => {
-              setSelectedTool(val);
-              setToolParams({});
-              setParamIssues({});
-            }}
-            options={TOOL_REGISTRY.map((t) => ({ label: t.title, value: t.name }))}
-          />
-
-          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-            <ParamsPanel
-              toolName={selectedTool}
-              schema={toolEntry(selectedTool).schema}
-              values={toolParams}
-              onChange={(vals) => {
-                setToolParams(vals);
-                setParamIssues({});
-              }}
-              fieldErrors={paramIssues}
-            />
-          </div>
-
-          <div style={{ marginTop: 8 }}>
-            <Button
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              loading={busy}
-              onClick={handleRunTool}
-              style={{ width: "100%" }}
-            >
-              {busy ? t("run.executing") : t("run.execute")}
-            </Button>
-            {progressMsg && (
-              <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: 4 }}>
-                {progressMsg}
-              </Text>
-            )}
-          </div>
-          </>
-          ) : (
-          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-            <OrbitInfoPanel info={orbitInfo} />
-          </div>
-          )}
-        </div>
-        )}
-
-        {/* 右栏：主画布与时间轴。minWidth: 0 不可省：flex 子项默认
-            min-width: auto，而 WebGL 画布是 renderer.setSize 写上的 px 宽，会抬高
-            本栏的 min-content。折叠左栏时画布变宽，再展开时本栏就不能窄于那个
-            旧宽，整排超 100vw，助手边栏被顶出窗口且再也收不回来。
-            minWidth: 0 把本栏宽度交回 flex 分配，ResizeObserver 随后把画布缩回。
-            minWidth: 0 is required: a flex item defaults to min-width: auto, and the
-            WebGL canvas carries the px width renderer.setSize wrote onto it, which
-            raises this column's min-content. Collapse widens the canvas; expanding then
-            cannot narrow this column below that stale width, the row exceeds 100vw and the
-            assistant sidebar is pushed out of the window for good. minWidth: 0 hands the
-            width back to flex, and the ResizeObserver shrinks the canvas right after. */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          {/* 画布工具栏：投影/中心选择 + 适配/导出/设置，停靠于画布上方 */}
-          <div
-            style={{
-              background: themeMode === "dark" ? "#1a1a1a" : "#fff",
-              borderBottom: themeMode === "dark" ? "1px solid #303030" : "1px solid #e8e8e8",
-            }}
-          >
+                  {/* 画布工具栏：投影/中心选择 + 适配/导出/设置，停靠于画布上方 */}
+                  <div
+                    style={{
+                      background: colors.barBg,
+                      borderBottom: `1px solid ${colors.border}`,
+                    }}
+                  >
             <CanvasToolbar
               projection={projection}
               center={center}
@@ -2081,36 +2185,268 @@ export default function App() {
             />
           </div>
 
-          {/* 底部时间轴 */}
-          <div style={{ padding: "4px 8px", background: themeMode === "dark" ? "#1a1a1a" : "#fff" }}>
-            <TimelineBar
-              timeRange={canvasData.timeRange}
-              currentEt={currentEt}
-              onTimeChange={(et) => {
-                // 录制时间轴扫描期间忽略用户时刻输入（故事 9）：导出驱动同
-                // 一状态，双写会互相打架
-                // User moment input is ignored during a timeline sweep (story
-                // 9): the export drives the same state — double writes clash.
-                if (!sweepingRef.current) setCurrentEt(et);
+                </div>
+
+                {/* 轨道信息标签：画布轨道清单点选与画布拾取都切到这里 */}
+                {/* Orbit info tab: orbit-list clicks and canvas picks land here. */}
+                <div
+                  data-testid="doc-orbit-info"
+                  style={{
+                    display: activeTab === "orbitInfo" ? "block" : "none",
+                    flex: 1,
+                    minWidth: 0,
+                    minHeight: 0,
+                    overflowY: "auto",
+                  }}
+                >
+                  <OrbitInfoPanel info={orbitInfo} />
+                </div>
+
+                {/* 轨道库标签：过滤条 + 记录详情。项目树在左侧边栏常驻，这里
+                    只管筛选与详情。 */}
+                {/* Catalog tab: the filter bar plus the record detail. The project
+                    tree lives in the sidebar; this tab browses and inspects. */}
+                <div
+                  data-testid="doc-catalog"
+                  style={{
+                    display: activeTab === "catalog" ? "flex" : "none",
+                    flex: 1,
+                    minWidth: 0,
+                    minHeight: 0,
+                    flexDirection: "column",
+                  }}
+                >
+                  {/* 过滤条（#468）：结果回灌侧边栏项目树 */}
+                  <div
+                    style={{
+                      padding: "6px 8px",
+                      borderBottom: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    <CatalogFilterBar onResults={(arts) => setArtifacts(arts)} />
+                  </div>
+                  <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                    <RecordDetailPanel
+                      record={selectedRecordDetail}
+                      transferCandidates={candidateViews}
+                      selectedLabel={selectedArtifact?.label ?? null}
+                      onRefresh={refreshArtifacts}
+                      onOpenStationKeeping={() => setStationKeepingOpen(true)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 参数停靠（右侧）：当前工具参数与运行入口 + 画布轨道清单。
+                  宽度可拖（#454）、可折叠（#462）。与助手边栏同在右侧。 */}
+              {/* Parameter dock (right): the selected tool's parameters, its run
+                  entry and the canvas orbit list. Resizable (#454) and
+                  collapsible (#462); it shares the right side with the assistant. */}
+              {panelCollapsed ? (
+                <div
+                  style={{
+                    width: 24,
+                    flexShrink: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    paddingTop: 8,
+                    background: colors.panelBg,
+                    borderLeft: `1px solid ${colors.border}`,
+                  }}
+                >
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<MenuUnfoldOutlined />}
+                    data-testid="params-expand"
+                    onClick={() =>
+                      setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, false, setPanelCollapsed)
+                    }
+                    title={t("panel.expand")}
+                  />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    width: panelWidth,
+                    flexShrink: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    background: colors.panelBg,
+                    borderLeft: `1px solid ${colors.border}`,
+                    padding: 10,
+                    position: "relative",
+                  }}
+                >
+                  <ResizeHandle
+                    edge="left"
+                    width={panelWidth}
+                    min={WS_PANEL_MIN_WIDTH}
+                    max={WS_PANEL_MAX_WIDTH}
+                    onResize={setPanelWidth}
+                    onResizeEnd={(w) => localStorage.setItem(WS_PANEL_WIDTH_KEY, String(w))}
+                  />
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                    <Text strong style={{ fontSize: 12 }}>
+                      {toolEntry(selectedTool).title}
+                    </Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<MenuFoldOutlined />}
+                      data-testid="params-collapse"
+                      onClick={() =>
+                        setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, true, setPanelCollapsed)
+                      }
+                      title={t("panel.collapse")}
+                      style={{ marginLeft: "auto" }}
+                    />
+                  </div>
+
+                  <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+                    <ParamsPanel
+                      toolName={selectedTool}
+                      schema={toolEntry(selectedTool).schema}
+                      values={toolParams}
+                      onChange={(vals) => {
+                        setToolParams(vals);
+                        setParamIssues({});
+                      }}
+                      fieldErrors={paramIssues}
+                    />
+                  </div>
+
+                  <div style={{ marginTop: 8 }}>
+                    <Button
+                      type="primary"
+                      icon={<PlayCircleOutlined />}
+                      loading={busy}
+                      // 硬校验（ADR 0034）：阻断项非空即禁用。原因只列在 SOP
+                      // 步骤带上（同一份结论的唯一呈现处），按钮不再重复一遍
+                      // Hard gate (ADR 0034): any blocker disables the run. The
+                      // reasons are listed on the SOP bar only — one display site
+                      // for one derivation, not two.
+                      disabled={sop.blockers.length > 0}
+                      onClick={handleRunTool}
+                      style={{ width: "100%" }}
+                    >
+                      {busy ? t("run.executing") : t("run.execute")}
+                    </Button>
+                    {progressMsg && (
+                      <Text
+                        type="secondary"
+                        style={{ fontSize: 11, display: "block", marginTop: 4 }}
+                      >
+                        {progressMsg}
+                      </Text>
+                    )}
+                  </div>
+
+                  {/* 画布轨道清单（#469）：常驻参数停靠底部，替代画布内图注。
+                      与画布拾取共用聚焦/预览态（#460 双向一致）。清单为空时
+                      组件自身不渲染，这里连包装层一起省掉，免得留空分隔线。 */}
+                  {/* Canvas orbit list (#469): persistent at the dock bottom,
+                      replacing the in-canvas legend; shares focus/preview state
+                      with canvas picking (bidirectional, #460). The component
+                      renders nothing when empty — skip the wrapper too so no
+                      stray divider is left behind. */}
+                  {orbitItems.length > 0 && (
+                    <div
+                      style={{
+                        borderTop: `1px solid ${colors.border}`,
+                        maxHeight: 150,
+                        overflowY: "auto",
+                        marginTop: 8,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <CanvasOrbitList
+                        items={orbitItems}
+                        focusIndex={canvasFocusIdx}
+                        unavailableNote={t("canvas.frame.synodic_unavailable")}
+                        onFocusChange={handleOrbitFocus}
+                        onPreviewChange={setCanvasPreviewIdx}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 时间轴条：状态栏之上、横跨主页面（含参数停靠） */}
+            {/* Timeline strip: above the status bar and spanning the main area
+                (parameter dock included). */}
+            <div
+              style={{
+                padding: "4px 8px",
+                flexShrink: 0,
+                background: colors.barBg,
+                borderTop: `1px solid ${colors.border}`,
               }}
-              mode={canvasData.mode}
-              events={timelineEvents}
-              playbackRate={playback.rate}
-              loop={playback.loop}
-              onPlaybackConfigChange={(c) => setPlayback((prev) => ({ ...prev, ...c }))}
+            >
+              <TimelineBar
+                timeRange={canvasData.timeRange}
+                currentEt={currentEt}
+                onTimeChange={(et) => {
+                  // 录制时间轴扫描期间忽略用户时刻输入（故事 9）：导出驱动同
+                  // 一状态，双写会互相打架
+                  // User moment input is ignored during a timeline sweep (story
+                  // 9): the export drives the same state — double writes clash.
+                  if (!sweepingRef.current) setCurrentEt(et);
+                }}
+                mode={canvasData.mode}
+                events={timelineEvents}
+                playbackRate={playback.rate}
+                loop={playback.loop}
+                onPlaybackConfigChange={(c) => setPlayback((prev) => ({ ...prev, ...c }))}
+              />
+            </div>
+          </div>
+
+          {/* 助手边栏（右侧常驻，可收起）：唯一实例，收起时 display:none 保活
+              不重挂载，订阅与流式回复都不中断。 */}
+          {/* Assistant sidebar (persistent on the right, collapsible): one instance
+              that keeps running while hidden (display:none) — no remount, so its
+              subscriptions and streaming replies survive. */}
+          <div
+            data-testid="assistant-sidebar"
+            style={{
+              display: assistantOpen ? "flex" : "none",
+              width: assistantWidth,
+              flexShrink: 0,
+              minHeight: 0,
+              position: "relative",
+              background: colors.panelBg,
+              borderLeft: `1px solid ${colors.border}`,
+            }}
+          >
+            <ResizeHandle
+              edge="left"
+              width={assistantWidth}
+              min={ASSISTANT_MIN_WIDTH}
+              max={ASSISTANT_MAX_WIDTH}
+              onResize={setAssistantWidth}
+              onResizeEnd={(w) => localStorage.setItem(ASSISTANT_WIDTH_KEY, String(w))}
+            />
+            {/* AI 助手（CONTEXT.md 术语：助手边栏）。agent loop 在后端，此处
+                仅交互转发（ADR 0022/0023） */}
+            {/* Assistant (CONTEXT.md term: assistant sidebar): the agent loop
+                lives in the backend and this only renders and forwards (ADR 0022/0023). */}
+            <AssistantSidebar
+              embedded
+              selection={assistantSelection}
+              onArtifactProduced={handleAssistantArtifact}
+              onOpenRecord={(recordId) => handleAssistantOpenRecord(recordId)}
+              onApplyScenario={handleApplyScenario}
+              onOpenSettings={() => setChartModalOpen(true)}
             />
           </div>
         </div>
 
-        {/* 最右栏：AI 助手边栏（CONTEXT.md 术语：助手边栏）。可折叠、可拖宽，
-            agent loop 在后端，此处仅交互转发（ADR 0022/0023） */}
-        <AssistantSidebar
-          selection={assistantSelection}
-          onArtifactProduced={handleAssistantArtifact}
-          onOpenRecord={(recordId) => handleAssistantOpenRecord(recordId)}
-          onApplyScenario={handleApplyScenario}
-          onOpenSettings={() => setChartModalOpen(true)}
-        />
+        {/* 底部状态栏：当前视图 / 时间 / 系统性能 / 任务状态 / 软件版本 */}
+        {/* Bottom status bar: active view / time / system performance / task state / version. */}
+        <StatusBar busy={busy} progress={progressMsg} view={docTabLabel(activeTab)} />
 
         {/* 独立弹窗：导出动画设置（模式/时长，#455） */}
         <AnimationExportModal
@@ -2191,6 +2527,7 @@ export default function App() {
                 <Form.Item label={t("chart.axes")}>
                   <Switch
                     size="small"
+                    styles={flatSwitchStyles}
                     checked={chart.axesVisible}
                     onChange={(v) => setChart({ ...chart, axesVisible: v })}
                   />
@@ -2200,6 +2537,7 @@ export default function App() {
                 <Form.Item label={t("chart.regions")}>
                   <Switch
                     size="small"
+                    styles={flatSwitchStyles}
                     checked={chart.regionsVisible}
                     onChange={(v) => setChart({ ...chart, regionsVisible: v })}
                   />

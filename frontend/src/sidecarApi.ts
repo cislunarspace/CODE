@@ -1,6 +1,8 @@
 // sidecar 前端封装：Tauri command 调用 + 类型。
 // Frontend wrappers for the sidecar: Tauri command calls plus types.
 
+import { listen } from "@tauri-apps/api/event";
+
 export interface FamilyMember {
   states: number[]; // n×6 状态（初态帧时 n=1）
   times: number[];
@@ -144,4 +146,23 @@ export interface EphemerisStatus {
 export async function ephemerisStatus(): Promise<EphemerisStatus> {
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke("ephemeris_status");
+}
+
+/** 订阅 sidecar 进度事件（`sidecar-progress`），返回退订函数。
+ *
+ *  放在本模块而不是组件里：测试整模块替身（mock "./sidecarApi"）即可，组件里
+ *  直接订阅会绕过替身、落到真模块并抛 “transformCallback of undefined”。非
+ *  Tauri 环境（浏览器预览）由调用方捕获失败并降级。
+ *
+ * Subscribe to the sidecar-progress event and return the unsubscribe function.
+ * This lives here rather than in a component so tests can replace the whole
+ * module; subscribing inside a component escapes those replacements and reaches
+ * the real module, throwing "transformCallback of undefined". Outside Tauri
+ * (browser preview) the caller catches the failure and degrades. */
+export async function onSidecarProgress(
+  cb: (message: string) => void,
+): Promise<() => void> {
+  return listen<{ meta: { message: string } }>("sidecar-progress", (event) => {
+    cb(event.payload.meta.message);
+  });
 }

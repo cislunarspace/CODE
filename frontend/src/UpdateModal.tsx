@@ -160,7 +160,11 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
                     ? t("updater.installing")
                     : t("updater.downloading")}
                 </Text>
-                <Progress percent={percent} status={errorMsg ? "exception" : "active"} />
+                <Progress
+                  percent={percent}
+                  strokeLinecap="butt"
+                  status={errorMsg ? "exception" : "active"}
+                />
                 <Text type="secondary">
                   {totalBytes > 0
                     ? t("updater.download_stats")

@@ -1,6 +1,6 @@
 [package]
 name = "cislunar-code"
-version = "5.0.0"
+version = "5.1.0"
 edition = "2021"
 description = "CODE（Cislunar Orbit DesignEr）Tauri 桌面应用（Rust 壳 + React 前端 + e2m2e sidecar）"
 
@@ -31,6 +31,7 @@ tauri-plugin-opener = "2"
 # 更新器 HTTP（rustls，避开 Windows OpenSSL 现场编译）。AI 会话已由 pi
 # 基座接管（ADR 0032），keyring/key 不再由本应用保存
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+sysinfo = "0.39.6"
 
 # sidecar 子树生命周期兜底（Job Object kill-on-close），仅 Windows 需要
 [target.'cfg(windows)'.dependencies]

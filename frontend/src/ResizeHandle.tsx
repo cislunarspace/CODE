@@ -1,6 +1,6 @@
 // 共享面板拖宽手柄（#454）：mousedown 记录起点，mousemove 实时上报钳制
 // 后的宽度，mouseup 上报一次终值。持久化时机与存储键由调用方决定
-// （onResizeEnd），组件自身不碰 localStorage。助手边栏、左栏、中栏三处
+// （onResizeEnd），组件自身不碰 localStorage。助手边栏、侧边栏、参数停靠三处
 // 复用同一手柄，交互手感一致（实时跟手、松手持久化、无动画，ADR 0020）。
 // Shared panel resize handle (#454): mousedown records the origin, mousemove
 // reports the clamped width live, mouseup reports the final width once.

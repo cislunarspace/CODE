@@ -56,6 +56,7 @@ describe("themeCssVars（--tod-* 主题变量，修复助手边栏深色缺失�
       "--tod-user-bubble": "#0958d9",
       "--tod-assistant-bubble": "rgba(128,128,128,0.10)",
       "--tod-text-secondary": "#8c8c8c",
+      "--tod-accent": "#0958d9",
       "--tod-card-bg": "rgba(128,128,128,0.06)",
       "--tod-code-bg": "rgba(128,128,128,0.1)",
     });
@@ -74,6 +75,11 @@ describe("themeCssVars（--tod-* 主题变量，修复助手边栏深色缺失�
     expect(dark["--tod-panel-bg"]).toBe("#1a1a1a");
     expect(dark["--tod-user-bubble"]).toBe("#0958d9");
     expect(dark["--tod-text-secondary"]).toBe("#8c8c8c");
+    // 强调色反过来：深色底上必须提亮（时间轴等随主题着色的控件用它）
+    // The accent goes the other way: it must brighten on dark surfaces (used by
+    // theme-aware controls such as the timeline).
+    expect(dark["--tod-accent"]).toBe("#4096ff");
+    expect(light["--tod-accent"]).toBe("#0958d9");
   });
 
   it("两种模式暴露同一组键（App 注入不因模式缺变量）", () => {

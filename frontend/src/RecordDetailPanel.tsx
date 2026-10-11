@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { Card, Descriptions, Tag, Input, Button, Space, Typography, message } from "antd";
 import { EditOutlined, RocketOutlined } from "@ant-design/icons";
 import { type CatalogRecord, catalogTag, STAR_TAG } from "./catalogApi";
+import { neutralTagStyle } from "./theme";
 import { useTranslation } from "./i18n";
 
 const { Text } = Typography;
@@ -101,8 +102,10 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
           <Text copyable style={{ fontSize: 11 }}>{record.record_id}</Text>
         </Descriptions.Item>
         <Descriptions.Item label="轨道族">
-          <Tag color="blue">{record.orbit_family || "未指定"}</Tag>
-          {record.libration_point && <Tag color="cyan">L{record.libration_point}</Tag>}
+          <Tag style={neutralTagStyle}>{record.orbit_family || "未指定"}</Tag>
+          {record.libration_point && (
+            <Tag style={neutralTagStyle}>L{record.libration_point}</Tag>
+          )}
         </Descriptions.Item>
         {record.jacobi !== undefined && (
           <Descriptions.Item label="Jacobi">{Number(record.jacobi).toFixed(4)}</Descriptions.Item>
@@ -117,8 +120,8 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
         )}
         <Descriptions.Item label="动力学段">
           <Space orientation="horizontal" size={4}>
-            {record.has_cr3bp && <Tag color="green">CR3BP</Tag>}
-            {record.has_ephemeris && <Tag color="purple">星历</Tag>}
+            {record.has_cr3bp && <Tag style={neutralTagStyle}>CR3BP</Tag>}
+            {record.has_ephemeris && <Tag style={neutralTagStyle}>星历</Tag>}
           </Space>
         </Descriptions.Item>
         {record.source_record_id && (
