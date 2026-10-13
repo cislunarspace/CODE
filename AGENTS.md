@@ -111,7 +111,7 @@ uv run python scripts/smoke_mcp_serve.py         # sidecar 打包冒烟（releas
 
 - marker 只有 `spice`（需 SPICE 内核真算）与 `slow`；日常跑 `-m "not spice"`，真路径冒烟 `uv run pytest tests/engine/test_facade_bridge_e2m2e_smoke.py -m spice`。
 - **CI 只跑 Python**（`-m "not spice"`）；cargo test 与 npm test 不在任何 workflow，改 Rust / 前端必须本地跑对应测试。
-- Rust 侧：无 Python 环境用 `cargo test --manifest-path src-tauri/Cargo.toml -- --skip sidecar`；`assistant_pi_rpc` 依赖 python3 且须串行跑。
+- Rust 侧：无 Python 环境用 `cargo test --manifest-path src-tauri/Cargo.toml -- --skip sidecar`；`assistant_pi_rpc` 依赖本仓 uv 环境（`uv run python` 拉起 fake 服务端，缺 uv 时自动跳过并打印原因，见 #502）且须串行跑。
 - 命名与组织：Python `test_<module>.py` 镜像 `src/`，方法 `test_<行为>_<期望>`；前端 `describe` / `it` 用中文并带 issue 号；Rust 集成测试一文件一主题放 `src-tauri/tests/`，golden 夹具在 `src-tauri/tests/fixtures/`。
 - 断言：标量 `pytest.approx`、数组 `np.testing.assert_allclose`（atol 1e-6 量级）、Rust f32 容差 1e-6。随机数不设种子——不断言随机值，只断言形状或由输入推导的期望。
 - 共享设施：`tests/conftest.py`（注入 `SPICE_KERNEL_DIR`、Agg 后端、隔离 `CATALOG_DIR`）、`tests/engine/conftest.py`（fake e2m2e 结果族、`mock_design_orbit`）。

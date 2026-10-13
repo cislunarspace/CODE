@@ -199,7 +199,8 @@ impl PiState {
             format!("创建 pi 会话目录失败：{}", session_dir.display())
         })?;
         let mut cmd = Command::new(&command[0]);
-        // command 形如 [pi] 或 [python3, <fixture>]：前置参数先落，pi 旗标在后
+        // command 形如 [pi] 或 [uv, run, --no-sync, --project, <repo>, python,
+        // <fixture>]（集成测试）：前置参数先落，pi 旗标在后
         cmd.args(&command[1..]);
         // --no-extensions：不加载用户个人扩展，显式 -e 保住内置 MCP 与桥接。
         cmd.args([
