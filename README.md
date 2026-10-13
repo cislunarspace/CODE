@@ -1,4 +1,4 @@
-# CODE：Cislunar Orbit DesignEr（地月空间轨道设计 GUI）
+# CODE（地月空间轨道设计工具）
 
 ![CODE](assets/banner.png)
 
