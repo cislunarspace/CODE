@@ -1,11 +1,14 @@
-# CODE：cislunar orbit designer（地月空间轨道设计 GUI）
+# CODE：Cislunar Orbit DesignEr（地月空间轨道设计 GUI）
+
+![CODE](assets/banner.png)
 
 [![Release](https://img.shields.io/github/v/release/cislunarspace/CODE?label=release)](https://github.com/cislunarspace/CODE/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/cislunarspace/CODE/ci.yml?branch=master&label=CI)](https://github.com/cislunarspace/CODE/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/docs-online-2f6feb)](https://cislunarspace.github.io/CODE/zh/)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-CODE（cislunar orbit designer）是 [e2m2e](https://github.com/cislunarspace/CODE-core) 的 GUI 前端。e2m2e 提供地月空间轨道设计所需的动力学模型、修正器、延拓器与转移算法，本仓库把它们封装成可视化桌面应用：React 前端负责界面，Rust 壳负责进程编排，e2m2e 以 sidecar 子进程运行（stdio JSON 行 + 二进制帧协议）。界面不碰算法，算法不进界面。
+CODE（Cislunar Orbit DesignEr）是 [e2m2e](https://github.com/cislunarspace/CODE-core) 的 GUI 前端。e2m2e 提供地月空间轨道设计所需的动力学模型、修正器、延拓器与转移算法，本仓库把它们封装成可视化桌面应用：React 前端负责界面，Rust 壳负责进程编排，e2m2e 以 sidecar 子进程运行（stdio JSON 行 + 二进制帧协议）。界面不碰算法，算法不进界面。
 
 ## 安装
 
@@ -18,13 +21,25 @@ CODE（cislunar orbit designer）是 [e2m2e](https://github.com/cislunarspace/CO
 
 ## 开发环境
 
-要求 Python >= 3.13、Node.js >= 22.13（jsdom 30 下限）、Rust 稳定版工具链，包管理用 [uv](https://docs.astral.sh/uv/)：
+需要 Python、Node.js 与 Rust 工具链，Linux 另需 Tauri 前置的 GTK 与 WebKit 开发库（见 [Tauri 前置条件](https://tauri.app/start/prerequisites/)），Python 依赖用 [uv](https://docs.astral.sh/uv/) 管理。
 
 ```bash
-uv sync                             # Python 依赖（e2m2e[mcp]>=5.9.8 等）
+uv sync                             # Python 依赖
 npm ci --prefix frontend            # 前端依赖
-npx --prefix frontend tauri dev     # 开发模式：Vite 热更新 + Rust 壳拉起 sidecar
+npx --prefix frontend tauri dev     # 开发模式启动
 ```
+
+启动方式有两种，区别在算法侧从哪来：
+
+- 开发模式 `npx --prefix frontend tauri dev`：起 Vite 开发服务器（`127.0.0.1:1430`）、以 debug 配置编译并运行 Rust 壳、Rust 壳再用 `uv run e2m2e serve-stdio` 在仓库根拉起 sidecar。算法走仓库源码，改 Python 不用打包。
+- 打包模式：先产 sidecar 单文件 `uv run --no-sync pyinstaller packaging/cislunar_code_sidecar.spec --noconfirm`，把 `dist/cislunar-code-sidecar`（Windows 为 `.exe`）复制到 `src-tauri/binaries/`，再执行 `npm --prefix frontend exec -- tauri build --config packaging/tauri.release.conf.json`。这一档的 sidecar 取 `binaries/` 内的 PyInstaller 产物，与安装包一致。
+
+开发期调试：
+
+- 界面：改前端源码由 Vite 热更新即刻生效，不必重启。窗口内右键可开 devtools。界面只在桌面窗口里完整可用，纯浏览器打开 `127.0.0.1:1430` 发不出计算（Tauri IPC 不在）。
+- Rust：`tauri dev` 监听 `src-tauri/`，改动后自动重编译并重启。
+- Python：sidecar 是常驻子进程，改完代码要重启应用才生效。它的 stderr 直接打在 `tauri dev` 的终端，排障先看这里。
+- 助手链路：开发期需要本机 pi（`TOD_PI_BIN` 指定或 PATH 里能找到），mcp-serve 同样由 `uv run e2m2e mcp-serve` 拉起。
 
 ## SPICE 内核
 
@@ -49,11 +64,11 @@ SPICE 内核经 Git LFS 随仓库分发（克隆后位于 `kernels/`），安装
 - **轨道族生成**：八族（Halo / NRHO / Axial / Lissajous / SPO / LPO / Horseshoe / DRO）周期延拓与参数采样，成员轨迹逐条渲染。
 - **轨道库**：产物自动入 e2m2e 轨道库（多维分类），可过滤查询、多选同屏绘制、写备注加星标；标注、族成员提升、导出包与删除入口齐备。
 - **画布**：Three.js 3D 视图，结果层（当前计算产物）与固定层（钉住的库记录）双层。NASA 贴图天体（真实半径比例、晨昏线）、坐标轴与网格参照层、地月空间分区图层（Rosengren Primer 分区边界）；轨迹按 Jacobi 常数 coolwarm 着色，图例标注数据系（会合无量纲 / 会合物理 km / 地心惯性 km）；时间轴播放驱动画布时刻沿轨迹走查，机动事件以 chip 标注、点击跳转；图表设置持久化、webm 动画导出。
-- **AI 助手（pi 会话运行时，ADR 0022/0032）**：右侧可折叠、可拖宽边栏。模型服务与 API key 由 pi 原生配置管理（BYOK，应用不收集不保存密钥；provider 登录在终端跑交互式 pi 完成，设置分区按钮直开终端）。会话与 agent loop 由随应用分发的固定版本 pi（RPC 协议）承载，工具经桥接扩展调 e2m2e 与宿主情景工具；工具调用分级确认——只读查询免确认直接执行，计算与改库先出工具卡片待批准或拒绝。会话跨重启恢复、多会话可切换续聊，输入区上方配置条直接切换模型与思考档（选项与 pi 原生配置同源）。助手触发的产物与手动运行语义一致：同一轨道库与画布叠加。开发期需本机 pi（`TOD_PI_BIN` 或 PATH）。
+- **AI 助手（pi 会话运行时）**：右侧可折叠、可拖宽边栏。模型服务与 API key 由 pi 原生配置管理（BYOK，应用不收集不保存密钥；provider 登录在终端跑交互式 pi 完成，设置分区按钮直开终端）。会话与 agent loop 由随应用分发的固定版本 pi（RPC 协议）承载，工具经桥接扩展调 e2m2e 与宿主情景工具；工具调用分级确认——只读查询免确认直接执行，计算与改库先出工具卡片待批准或拒绝。会话跨重启恢复、多会话可切换续聊，输入区上方配置条直接切换模型与思考档（选项与 pi 原生配置同源）。助手触发的产物与手动运行语义一致：同一轨道库与画布叠加。开发期需本机 pi（`TOD_PI_BIN` 或 PATH）。
 
 ## 数据流与产物
 
-参数表单 → Rust 命令 → e2m2e sidecar（JSON 行信封 + 二进制帧，e2m2e ADR 0035）→ 产物自动入轨道库 → 项目树与画布经 `catalog_query` / `get_artifact` 取用。AI 助手是并行的第二条链路：pi（RPC）→ 桥接扩展 → 应用 MCP 桥接 → `mcp-serve` 调同一套工具，与画布长计算互不阻塞。
+参数表单 → Rust 命令 → e2m2e sidecar（JSON 行信封 + 二进制帧）→ 产物自动入轨道库 → 项目树与画布经 `catalog_query` / `get_artifact` 取用。AI 助手是并行的第二条链路：pi（RPC）→ 桥接扩展 → 应用 MCP 桥接 → `mcp-serve` 调同一套工具，与画布长计算互不阻塞。
 
 轨道库 `catalog/` 位于用户配置目录（Windows `%APPDATA%/cislunar-code/catalog`，Linux 为 XDG 配置目录下同名路径），由 Rust 壳启动时显式指定，不随工作目录漂移，`E2M2E_CATALOG_DIR` 预设优先；库内是 e2m2e catalog 格式（多维分类、谱系指针），可直接被 e2m2e 或其他宿主打开。`output/` 仅保留转移遗留分区与脚本场景。
 
@@ -66,14 +81,20 @@ uv sync --extra docs
 uv run sphinx-build -b html -D language=zh docs/source docs/build/html
 ```
 
+- [CONTEXT.md](CONTEXT.md)：领域术语表，代码与文档的用词以它为正典。
+- [docs/architecture/architecture.md](docs/architecture/architecture.md)：分层与依赖规则。
+- [CHANGELOG.md](CHANGELOG.md)：版本历史。
+
 ## 测试与代码规范
 
 ```bash
 uv run pytest tests/ -m "not spice"                # Python 领域层
 cargo test --manifest-path src-tauri/Cargo.toml    # Rust 壳与 sidecar 协议
 npm --prefix frontend run test                     # 前端（vitest）
-uv run ruff check . && uv run pyright              # Python 静态检查
+uv run ruff check . && uv run ruff format --check . && uv run pyright  # Python 静态检查（CI 同款）
 ```
+
+无 Python 环境时 Rust 测试加 `-- --skip sidecar`。`assistant_pi_rpc` 用例依赖本仓库 uv 环境，须串行跑。
 
 ## 贡献
 

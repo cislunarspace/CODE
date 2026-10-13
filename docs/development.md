@@ -158,7 +158,7 @@ set PYTHONLOGLEVEL=DEBUG
 ## 工具链约束
 
 - Python 钉在 3.13（`>=3.13,<3.14`），因为 calcephpy 的预编译轮子只有 cp313，原因见 `pyproject.toml` 的注释。包管理只用 uv，`uv.lock` 入库，index 钉 `https://pypi.org/simple`，重锁用 `uv lock --upgrade-package calcephpy`。Windows 的 calcephpy 走 `[tool.uv.sources]` 的预编译 wheel，不要删。
-- Node.js 需 20 以上，前端测试实际需要 22.13 以上（jsdom 30）。包管理用 npm，`package-lock.json` 入库，命令一律带 `--prefix frontend`。
+- Node.js 需 20 以上，前端测试实际需要 22.13 以上（jsdom 30）。包管理用 npm，`package-lock.json` 入库，命令一律带 `--prefix` 指向目标工程，前端是 `--prefix frontend`，品牌资产工具链是 `--prefix tools/assets`。
 - Rust 用稳定版工具链，edition 2021，Tauri 2，`Cargo.lock` 入库。
 - 打包。PyInstaller onefile 产 sidecar（`packaging/cislunar_code_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历，漏收即坏包）。release 分 slim（无 kernels，供更新通道）与全量（含 kernels，供新装）。pi 钉版本随包分发，见 `release.yml` 的 env。
 - 新增依赖前先看有没有现成依赖或标准库可用，确实要加时说明理由。
