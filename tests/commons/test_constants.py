@@ -1,12 +1,13 @@
 """constants 模块的常量一致性测试（#531）。
 
 硬编码常量不依赖 e2m2e 即可用；CR3BP 派生常量惰性计算，其 DU / TU 必须与
-units.py 的模板常量对齐（同源不漂移，AGENTS.md 硬契约 2 的两条口径互证）。
+units.py 的模板常量对齐（同源不漂移，跨层硬契约 2（docs/architecture/architecture.md）
+的两条口径互证）。
 
 English: consistency tests for src.commons.constants (#531). Hardcoded
 constants are available without e2m2e; the lazily computed CR3BP-derived
 DU / TU must stay aligned with the template-derived constants in
-units.py (the two calibers of AGENTS.md hard contract 2 cross-check).
+units.py (the two calibers of cross-layer hard contract 2 cross-check).
 """
 
 import pytest

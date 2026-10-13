@@ -222,6 +222,16 @@ src/commons/ → 无内部依赖（commons 是叶子，只被上层引用）
 3. `src/commons/` 是叶子：只被上层引用，自身不引用 `src/model/`、`src/engine/`。
 4. 前端与 Rust 壳不 import e2m2e 或 `src/`：界面要算的东西一律走 sidecar 协议。
 
+## 跨层硬契约
+
+以下五条跨层不变量违反即坏，改动前先看对应的实现或注释：
+
+1. `import e2m2e` 之前必须把内核目录写入 `SPICE_KERNEL_DIR`（见 `src-tauri/src/lib.rs` 的 setup 与 `tests/conftest.py`）。
+2. 单位换算的唯一来源是 `src/commons/units.py`（`DU_KM=384400`，`TU_SECONDS≈375190.26`，由 e2m2e 模板常量导出），不得另立换算常量。前端的 TU 有两种口径，见 `frontend/src/paramOverlay/index.ts` 的注释。
+3. 时间的唯一绝对基准是 et 秒（J2000 TDB），`frontend/src/timeBasis.ts` 是换算的唯一出口（ADR 0021）。
+4. 质心归一（画布）与地心归一（算法层）的换算点是 `centroid_normalized_states`（减 μ）。理想化会合系到惯性系的旋转在 `viz_adapter` 与 `trajectoryParsing` 两处必须同口径（#477、#521，`cr3bp` 已不含旋转实现）。
+5. `serde_json` 的 `preserve_order` 不能关，二进制帧的帧序依赖它（见 `src-tauri/Cargo.toml` 的注释）。
+
 ## 可视化架构
 
 画布为 Three.js（`frontend/src/OrbitCanvas.tsx`），单一坐标系：会合系（质心

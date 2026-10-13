@@ -209,7 +209,7 @@ class TestSynodicToGcrs:
 
         frontend/src/trajectoryParsing.ts 的 idealizedInertialGeometry 按
         Rz(θ)·(p + (μ,0,0)) 实现；本测试按同一公式复现期望值逐点对照，
-        守住 AGENTS.md 硬契约 4（#477）的多实现同口径。
+        守住跨层硬契约 4（docs/architecture/architecture.md，#477）的多实现同口径。
         """
         from src.commons.units import DU_KM
 

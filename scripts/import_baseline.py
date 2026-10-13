@@ -104,10 +104,10 @@ def main() -> int:
 
     catalog_dir = args.catalog_dir or _default_catalog_dir()
 
-    # 内核目录注入（硬契约 1，AGENTS.md）：e2m2e 在 import 期读
-    # SPICE_KERNEL_DIR 搜闰秒内核，必须在任何 import e2m2e 之前设置
-    # （比照 tests/conftest.py）。
-    # Kernel-dir injection (hard contract 1 in AGENTS.md): e2m2e reads
+    # 内核目录注入（硬契约 1，docs/architecture/architecture.md 跨层硬契约）：
+    # e2m2e 在 import 期读 SPICE_KERNEL_DIR 搜闰秒内核，必须在任何
+    # import e2m2e 之前设置（比照 tests/conftest.py）。
+    # Kernel-dir injection (hard contract 1 in docs/architecture/architecture.md): e2m2e reads
     # SPICE_KERNEL_DIR at import time to locate the leap-second kernel;
     # set it before any `import e2m2e` (mirrors tests/conftest.py).
     from src.commons.paths import detect_kernel_dir

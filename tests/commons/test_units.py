@@ -1,10 +1,10 @@
 """units 模块的换算与上游常量一致性测试（#531）。
 
-units.py 是 AGENTS.md 硬契约 2 的唯一单位换算来源，本模块钉住两件事：
-常量取自 e2m2e 模板（不另立一套）、换算函数往返闭合。
+units.py 是跨层硬契约 2（docs/architecture/architecture.md）的唯一单位换算来源，
+本模块钉住两件事：常量取自 e2m2e 模板（不另立一套）、换算函数往返闭合。
 
 English: tests for src.commons.units (#531). units.py is the single
-source of unit conversion (AGENTS.md hard contract 2); these tests pin
+source of unit conversion (cross-layer hard contract 2); these tests pin
 that its constants derive from the e2m2e templates (no second set of
 conversions) and that the converters round-trip.
 """

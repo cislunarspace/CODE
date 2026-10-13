@@ -22,9 +22,10 @@ from pathlib import Path
 
 from src.commons.paths import detect_kernel_dir
 
-# 硬契约 1（AGENTS.md）：e2m2e 在 import 期读 SPICE_KERNEL_DIR 搜闰秒内核，
-# 必须在任何 import e2m2e 之前设置（比照 tests/conftest.py）。
-# Hard contract 1 (AGENTS.md): e2m2e reads SPICE_KERNEL_DIR at import time
+# 硬契约 1（docs/architecture/architecture.md 跨层硬契约）：e2m2e 在 import 期读
+# SPICE_KERNEL_DIR 搜闰秒内核，必须在任何 import e2m2e 之前设置（比照 tests/conftest.py）。
+# Hard contract 1 (cross-layer contracts in docs/architecture/architecture.md):
+# e2m2e reads SPICE_KERNEL_DIR at import time
 # to locate the leap-second kernel; set it before any `import e2m2e`
 # (mirrors tests/conftest.py).
 _kernel_dir = detect_kernel_dir()

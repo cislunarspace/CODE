@@ -1,8 +1,8 @@
 # ADR 0029：贡献流程——type/kind/area 标签、五类模板与共用推进面板
 
-**状态**：已接受
+**状态**：已接受（wontfix 的处置由 ADR 0035 取代，标签已恢复。正文结构约定与评论格式已迁出 AGENTS.md，行文见 CONTRIBUTING.md 的正文写作约定一节，流程见同文件的提 Issue 与提 Pull Request 两节，以下正文保留决策当时的表述）
 **日期**：2026-09-04
-**关联**：AGENTS.md（issue / PR / 评论的格式——本 ADR 不改它的正文结构约定，只补它没覆盖的分类、标签与面板）；e2m2e 仓 ADR 0046（同一体系的先行决策）；GitHub 面板 ouyangjiahong26/projects/1
+**关联**：AGENTS.md（issue / PR / 评论的格式，该节现迁入 CONTRIBUTING.md 的提 Issue、提 Pull Request、评审与评论三节。本 ADR 不改它的正文结构约定，只补它没覆盖的分类、标签与面板）；e2m2e 仓 ADR 0046（同一体系的先行决策）；GitHub 面板 ouyangjiahong26/projects/1
 
 ## 背景
 
