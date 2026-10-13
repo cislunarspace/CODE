@@ -4,7 +4,7 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
-## 5.1.0 (2026-10-11)
+## 5.1.0 (2026-10-13)
 
 ### 界面
 
@@ -18,6 +18,9 @@
 
 - **sidecar 进度订阅下沉到 `sidecarApi.onSidecarProgress`**：订阅过去在 App 里用动态 `import("@tauri-apps/api/event")`，绕过了测试对模块的整替身，落回真实 Tauri 运行时并抛 `transformCallback of undefined`。改到叶子模块后测试可整模块替身，也顺带对齐“Tauri 依赖走叶子模块”的既有做法。
 - **布局收缩契约随外壳更新**：`minWidth: 0` 的锚点从“主画布右栏”改为“标签内容列”，测试改为沿 DOM 向上定位 `doc-view3d` 的父列。
+- **package-lock 的 resolved 改用官方 npm 源（#536）**：frontend/package-lock.json 的 236 处 resolved 从 registry.npmmirror.com 换成 registry.npmjs.org，版本与 integrity 零变化。官方源-only 环境的 npm ci 不再报 EALLOWREMOTE。
+- **assistant_pi_rpc 集成测试经 uv 拉起 fake 服务端（#537）**：fake pi 服务端改经 uv run 拉起，绕开 Windows 的 .bat 垫片。环境不可用时预检打印原因并跳过，不再被事件超时掩盖。
+- **README 横幅与品牌资产工具链（#539）**：顶部加横幅与在线文档徽章，英文名改用正典写法 Cislunar Orbit DesignEr。横幅由 tools/assets/banner.svg 母版经 resvg 光栅化产出，改文案重跑 npm --prefix tools/assets run banner 即可复现。开发环境一节改写为两种启动方式与开发期调试说明。
 
 ## 5.0.0 (2026-10-03)
 
