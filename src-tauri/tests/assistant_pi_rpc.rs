@@ -6,9 +6,12 @@
 //! 子进程退出重连、会话索引目录扫描、配置面。工具桥接的进程级面在
 //! bridge.rs 单测与 scripts/smoke_pi_rpc.py 冒烟里覆盖。
 //!
-//! 依赖：python3（fake 服务端脚本）。单测试函数串行推进——
-//! AssistantState 的事件发射器与 PiState 配置是进程级单例，并行用例
-//! 会互踩：cargo test -- --test-threads=1。
+//! 依赖：本仓 uv 环境（`uv run --no-sync --project <仓库根> python` 拉起
+//! fake 服务端脚本；Windows 上 python3 可能是 .bat 垫片、std Command 不执行
+//! 批处理，故不经 PATH 直取解释器，#502。缺 uv 时开头预检跳过，原因打印到
+//! stderr，`-- --nocapture` 可见）。单测试函数串行推进——AssistantState 的
+//! 事件发射器与 PiState 配置是进程级单例，并行用例会互踩：
+//! cargo test -- --test-threads=1。
 
 use std::future::Future;
 use std::sync::Arc;
@@ -22,6 +25,32 @@ use cislunar_code_lib::assistant::{set_emitter, AssistantState};
 fn fixture() -> String {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake_pi_rpc.py");
     dir.to_string_lossy().into_owned()
+}
+
+/// 预检 fake 服务端的解释器能否拉起（与正式 spawn 同形：uv run --no-sync
+/// --project <仓库根> python）。Err(原因) 供跳过时打印。Windows 上 python3
+/// 可能是 .bat 垫片、std Command 不执行批处理，统一经 uv（真二进制）解析
+/// 解释器（#502）。
+fn interpreter_available() -> Result<(), String> {
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    match std::process::Command::new("uv")
+        .arg("run")
+        .arg("--no-sync")
+        .arg("--project")
+        .arg(repo_root)
+        .args(["python", "--version"])
+        .output()
+    {
+        Ok(out) if out.status.success() => Ok(()),
+        Ok(out) => Err(format!(
+            "uv run python 退出码非零（{}），stderr：{}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+        Err(e) => Err(format!("uv 拉起失败：{e}")),
+    }
 }
 
 async fn next_event(rx: &mut mpsc::UnboundedReceiver<Value>) -> Value {
@@ -84,6 +113,13 @@ where
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn pi_rpc_lifecycle_over_fake_process() {
+    // 缺 uv 环境显式跳过并给可读原因（--nocapture / --show-output 可见），
+    // 不再等 10 秒超时才暴露（#502）
+    if let Err(reason) = interpreter_available() {
+        eprintln!("跳过 pi_rpc_lifecycle_over_fake_process：{reason}");
+        return;
+    }
+
     let (tx, mut rx) = mpsc::unbounded_channel();
     set_emitter(Arc::new(move |v: &Value| {
         let _ = tx.send(v.clone());
@@ -93,8 +129,21 @@ async fn pi_rpc_lifecycle_over_fake_process() {
     let session_dir = std::env::temp_dir().join(format!("tod-pi-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&session_dir);
     std::fs::create_dir_all(&session_dir).unwrap();
+    // pi.rs spawn() 强制 cwd = session_dir（临时目录），uv 无法向上发现仓库，
+    // 故 --project 给绝对仓库根（与 sidecar_process.rs 同款）
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
     cislunar_code_lib::assistant::pi::PiState::configure(
-        vec!["python3".into(), fixture()],
+        vec![
+            "uv".into(),
+            "run".into(),
+            "--no-sync".into(),
+            "--project".into(),
+            repo_root.to_string_lossy().into_owned(),
+            "python".into(),
+            fixture(),
+        ],
         session_dir.clone(),
     );
 
