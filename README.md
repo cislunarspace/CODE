@@ -36,9 +36,9 @@ npx --prefix frontend tauri dev     # 开发模式启动
 
 开发期调试：
 
-- 界面：改前端源码由 Vite 热更新即刻生效，不必重启；窗口内右键可开 devtools。界面只在桌面窗口里完整可用，纯浏览器打开 `127.0.0.1:1430` 发不出计算（Tauri IPC 不在）。
+- 界面：改前端源码由 Vite 热更新即刻生效，不必重启。窗口内右键可开 devtools。界面只在桌面窗口里完整可用，纯浏览器打开 `127.0.0.1:1430` 发不出计算（Tauri IPC 不在）。
 - Rust：`tauri dev` 监听 `src-tauri/`，改动后自动重编译并重启。
-- Python：sidecar 是常驻子进程，改完代码要重启应用才生效；它的 stderr 直接打在 `tauri dev` 的终端，排障先看这里。
+- Python：sidecar 是常驻子进程，改完代码要重启应用才生效。它的 stderr 直接打在 `tauri dev` 的终端，排障先看这里。
 - 助手链路：开发期需要本机 pi（`TOD_PI_BIN` 指定或 PATH 里能找到），mcp-serve 同样由 `uv run e2m2e mcp-serve` 拉起。
 
 ## SPICE 内核
@@ -81,8 +81,8 @@ uv sync --extra docs
 uv run sphinx-build -b html -D language=zh docs/source docs/build/html
 ```
 
-- [CONTEXT.md](CONTEXT.md)：领域术语表，代码与文档的用词以它为正典；
-- [docs/architecture/architecture.md](docs/architecture/architecture.md)：分层与依赖规则；
+- [CONTEXT.md](CONTEXT.md)：领域术语表，代码与文档的用词以它为正典。
+- [docs/architecture/architecture.md](docs/architecture/architecture.md)：分层与依赖规则。
 - [CHANGELOG.md](CHANGELOG.md)：版本历史。
 
 ## 测试与代码规范
@@ -94,7 +94,7 @@ npm --prefix frontend run test                     # 前端（vitest）
 uv run ruff check . && uv run ruff format --check . && uv run pyright  # Python 静态检查（CI 同款）
 ```
 
-无 Python 环境时 Rust 测试加 `-- --skip sidecar`；`assistant_pi_rpc` 用例依赖本仓库 uv 环境，须串行跑。
+无 Python 环境时 Rust 测试加 `-- --skip sidecar`。`assistant_pi_rpc` 用例依赖本仓库 uv 环境，须串行跑。
 
 ## 贡献
 
