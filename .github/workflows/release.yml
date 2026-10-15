@@ -102,7 +102,7 @@ jobs:
           persist-credentials: false
           # 星历内核（kernels/*.bsp）经 Git LFS 入库，需拉取真实二进制
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -262,7 +262,7 @@ jobs:
             rpm \
             cmake \
             xdg-utils
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
