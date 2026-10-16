@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.13.*"
 resolution-markers = [
     "sys_platform != 'win32'",
@@ -65,7 +65,7 @@ wheels = [
 
 [[package]]
 name = "calcephpy"
-version = "5.0.0"
+version = "5.0.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "sys_platform != 'win32'",
@@ -75,12 +75,12 @@ dependencies = [
     { name = "numpy" },
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/83/a3e830fd0ea6e1427fd172b5a4d4f0704cfae5e86471920581ca8e22c0c9/calcephpy-5.0.0.tar.gz", hash = "sha256:abf52b8d2898299ff837f90ed9824cc40d70745700b440374d6f375a86a5e831", size = 8633564, upload-time = "2026-07-06T11:48:01.49Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/20/3b7866a13265630e8881485f03d145716def63a47b7305e4c322dad11126/calcephpy-5.0.1.tar.gz", hash = "sha256:30e880c2559c4e555dec42a707555c613e5dab455c339041960785529cdb1448", size = 8675687, upload-time = "2026-09-21T11:43:42.666Z" }
 
 [[package]]
 name = "calcephpy"
-version = "5.0.0"
-source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }
+version = "5.0.1"
+source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.1-cp313-cp313-win_amd64.whl" }
 resolution-markers = [
     "sys_platform == 'win32'",
 ]
@@ -90,7 +90,7 @@ dependencies = [
     { name = "setuptools" },
 ]
 wheels = [
-    { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:b8098bc44ccd1b94921cf84ba9460220da1dd56131461f920445452c111fac69" },
+    { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:c6627cfa31939a010f46f70e1af971b5df9f7c5e259109e17d8b32e53186f5bf" },
 ]
 
 [package.metadata]
@@ -164,8 +164,8 @@ name = "cislunar-code"
 version = "5.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
-    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "calcephpy", version = "5.0.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "calcephpy", version = "5.0.1", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.1-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "e2m2e", extra = ["mcp"] },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -195,8 +195,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "calcephpy", marker = "sys_platform != 'win32'", specifier = "==5.0.0" },
-    { name = "calcephpy", marker = "sys_platform == 'win32'", url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" },
+    { name = "calcephpy", marker = "sys_platform != 'win32'", specifier = "==5.0.1" },
+    { name = "calcephpy", marker = "sys_platform == 'win32'", url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.1-cp313-cp313-win_amd64.whl" },
     { name = "e2m2e", extras = ["mcp"], specifier = ">=5.9.8" },
     { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=2.0" },
@@ -350,11 +350,11 @@ wheels = [
 
 [[package]]
 name = "e2m2e"
-version = "5.9.8"
+version = "5.9.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
-    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "calcephpy", version = "5.0.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "calcephpy", version = "5.0.1", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.1-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "numpy" },
     { name = "pydantic" },
     { name = "pyerfa" },
@@ -363,11 +363,11 @@ dependencies = [
     { name = "spiceypy" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f0/ad/7852b80952123ad3a385c169521dec0d15f1f56445115e89c1b2632f9713/e2m2e-5.9.8.tar.gz", hash = "sha256:156196bf7cbb77e57a3ad7a15f35009a2a3aa1cb9fc0036299690ca60f66b884", size = 3942958, upload-time = "2026-10-02T09:17:16.309Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/f5/cd7219d157af3a74e4474983978d38392b5f5a2773855194619aa8e140f2/e2m2e-5.9.11.tar.gz", hash = "sha256:6491de39e3bd1955ab54645fbdc46e9723eb291d7d5518bf969ad3ec2d0d34f7", size = 3964440, upload-time = "2026-10-16T00:23:16.885Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/99/c9/b126140a79743fe6e08c9c2494ab025e6ae702c0f36d215d23e83564c500/e2m2e-5.9.8-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:cdda07bf65871544a86117aaabeedc1b122d6f9a64dbe34f017a763bdb99633f", size = 5847063, upload-time = "2026-10-02T09:17:09.95Z" },
-    { url = "https://files.pythonhosted.org/packages/fa/51/38ed99a3984b8e17597fd8a8febd15a15b80e00263dbd6299e0fb995afce/e2m2e-5.9.8-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:3e4ee4785cefda0513135fe3d19fc8838319dc578cbbf418ceb9c2c4c8c55ccd", size = 6003440, upload-time = "2026-10-02T09:17:12.115Z" },
-    { url = "https://files.pythonhosted.org/packages/44/9b/f431863904733e3148160724a21fcfbd6b8eb5b2c8fe4611f3b7ba4769cf/e2m2e-5.9.8-cp310-abi3-win_amd64.whl", hash = "sha256:aa48d14e9dea699345a39c150677a26a08ece081b53efa9f438c6cec39f99c2e", size = 5722824, upload-time = "2026-10-02T09:17:14.21Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/85/109c0fcacba0cdbf148787632adb318ee7e897d6b6c936e21606e39562a1/e2m2e-5.9.11-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:00ca1c2f4b2feac0114e673f245e4fe55aa8563425e0b6a337898cdd913dff95", size = 5980203, upload-time = "2026-10-16T00:23:11.597Z" },
+    { url = "https://files.pythonhosted.org/packages/13/bb/fb5401028d7614619d1daeca6312e408444ac755e42cf911c8525b70bc52/e2m2e-5.9.11-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:6817e1a2e8e9df0bf569a949c03086abce743ae88b272af4c76f3261fa31f884", size = 6139338, upload-time = "2026-10-16T00:23:13.248Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/19/fe67c94f5535004c3a403e2a8b6b53aecdf6e21695e19bb86aa14658c58b/e2m2e-5.9.11-cp310-abi3-win_amd64.whl", hash = "sha256:1c43cc32d3ed9d88ed4869ae41805fe8f0a0765ef54164b46010b43c9f200158", size = 5849625, upload-time = "2026-10-16T00:23:15.136Z" },
 ]
 
 [package.optional-dependencies]
@@ -1048,8 +1048,8 @@ name = "r2s2"
 version = "0.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "calcephpy", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
-    { name = "calcephpy", version = "5.0.0", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "calcephpy", version = "5.0.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "calcephpy", version = "5.0.1", source = { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.1-cp313-cp313-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "numpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/17/1d/ad3be7135ebd9c65189247726349fe5dd758b8163ba7a686cbffb2085916/r2s2-0.1.0.tar.gz", hash = "sha256:3f8f56d9fe01bb87ff425ebfab1f396a12046f828ee346765df83dc1fdf727b0", size = 10033886, upload-time = "2026-01-22T09:00:19.628Z" }

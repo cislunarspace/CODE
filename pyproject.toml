@@ -25,7 +25,7 @@ dependencies = [
     "tqdm>=4.66",
     "e2m2e[mcp]>=5.9.8",
     "pillow>=10.0.0",
-    "calcephpy==5.0.0",
+    "calcephpy==5.0.1",
 ]
 
 [project.optional-dependencies]
@@ -72,7 +72,7 @@ build = ["pyinstaller>=6.0"]
 # 到镜像 sdist 现场编译（CI runner 自带工具链）。本仓库 requires-python
 # 钉在 3.13（上界 <3.14：e2m2e 5.8.8 起发 cp310-abi3 轮子，解析器会为
 # 3.14+ 求解，而 calcephpy 预编译轮子只有 cp313），故只需 cp313。
-# 重新生成 uv.lock 需 uv lock --upgrade-package calcephpy。
+# 重新生成 uv.lock 需 uv lock --upgrade-package calcephpy --upgrade-package e2m2e。
 [tool.uv]
 # 锁文件会记录制品下载 URL；使用 PyPI 官方源保证 GitHub Actions 与开发环境
 # 都能按 --frozen 重现安装。需要镜像时由本地 UV_INDEX_URL 显式覆盖。
@@ -80,7 +80,7 @@ index-url = "https://pypi.org/simple"
 
 [tool.uv.sources]
 calcephpy = [
-  { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.0-cp313-cp313-win_amd64.whl", marker = "sys_platform == 'win32'" },
+  { url = "https://github.com/cislunarspace/CODE-core/releases/download/calcephpy-v1/calcephpy-5.0.1-cp313-cp313-win_amd64.whl", marker = "sys_platform == 'win32'" },
 ]
 
 [tool.ruff]
