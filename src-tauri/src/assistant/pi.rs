@@ -118,11 +118,22 @@ fn is_executable(_p: &Path) -> bool {
 static SPAWN_CONFIG: std::sync::OnceLock<(Vec<String>, std::path::PathBuf)> =
     std::sync::OnceLock::new();
 
+/// pi 子进程与其 Windows kill-on-close job 句柄。
+///
+/// 句柄与进程配对存放，生命周期至少与进程一样长：本结构 drop 时关闭
+/// 句柄，kill-on-close 由内核终结整棵子树（ADR 0019、ADR 0023）。
+struct PiChild {
+    child: Child,
+    #[cfg(windows)]
+    _job: Option<Arc<job::JobHandle>>,
+}
+
 /// pi 进程状态：懒启动 + 崩溃重建（与 SidecarState/McpState 同型）。
 pub struct PiState {
     conn: tokio::sync::Mutex<Option<RpcConn>>,
-    /// 进程退出收割 + 换代关停（与 mcp.rs 同策略）。
-    child: Arc<tokio::sync::Mutex<Option<Child>>>,
+    /// 进程退出收割 + 换代关停（与 mcp.rs 同策略）。job 句柄与进程
+    /// 一起存放，见 `PiChild`。
+    child: Arc<tokio::sync::Mutex<Option<PiChild>>>,
 }
 
 impl Default for PiState {
@@ -240,16 +251,21 @@ impl PiState {
             .spawn()
             .with_context(|| format!("拉起 {} 失败", command[0]))?;
         #[cfg(windows)]
-        let _job = job::assign_tree_to_kill_on_close_job(&mut child);
+        let job = job::assign_tree_to_kill_on_close_job(&mut child);
         let stdin = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");
         let conn = RpcConn::spawn_on(stdout, stdin, handlers);
-        // 换代：收割旧进程
+        // 换代：收割旧进程。旧 PiChild 在本块结束时 drop，job 句柄随之
+        // 关闭，kill-on-close 收尾旧子树
         if let Some(mut old) = self.child.lock().await.take() {
-            let _ = old.start_kill();
-            let _ = old.wait().await;
+            let _ = old.child.start_kill();
+            let _ = old.child.wait().await;
         }
-        *self.child.lock().await = Some(child);
+        *self.child.lock().await = Some(PiChild {
+            child,
+            #[cfg(windows)]
+            _job: job,
+        });
         // pi RPC 无握手命令：get_state 即探活（pi 未配置 provider 时也成功；
         // 模型错误在 prompt 时暴露）
         conn.request("get_state", serde_json::json!({})).await?;

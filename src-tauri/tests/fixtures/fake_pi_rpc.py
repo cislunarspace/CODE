@@ -27,6 +27,11 @@ import sys
 import threading
 import time
 
+# Windows 下管道 stdio 默认按 ANSI 代码页（如 gbk），而 Rust 侧按 UTF-8
+# 收发 JSON。固定 UTF-8，避免中文 prompt 被按本地代码页解成乱码（#502）。
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
+
 write_lock = threading.Lock()
 
 SESSION_DIR = os.environ.get("PI_CODING_AGENT_SESSION_DIR", "/tmp")
