@@ -1,6 +1,6 @@
 # 开发指南
 
-## 文档规范
+## 文档标准
 
 本项目的文档面向中文研究用户和维护者，所有新增 README、Sphinx 页面、GUI 描述、CLI help 与 docstring 均使用中文。Python docstring 采用 Google style，以便 `sphinx.ext.napoleon` 自动解析。
 
@@ -103,7 +103,7 @@ uv run --extra docs python -m sphinx -b html docs/source docs/build/html
 
 默认日志级别为 `WARNING`，只有更高级别的日志会输出。
 
-### 使用规范
+### 使用标准
 
 脚本入口模块应配置 logging：
 
@@ -134,7 +134,7 @@ set PYTHONLOGLEVEL=INFO
 set PYTHONLOGLEVEL=DEBUG
 ```
 
-## 代码规范
+## 代码标准
 
 - 语言。文档、注释、docstring 用中文，命令、路径、代码标识符不翻译，项目文档不使用「」这类直角引号。`src/` 的每个生产模块必须有模块级 docstring，函数与类的 docstring 用 Google style。脚本的输出走 `logging` 不走 `print`，CLI help 要回答参数控制什么、默认值、单位三问。
 - 格式。行尾与缩进由 `.editorconfig` 给定（Python 4 空格，YAML/JSON/TOML 2 空格，LF）。ruff 行长 100，`tests/`、`docs/`、`scripts/`、`tools/` 不做行长检查。TypeScript 走 strict 模式（`tsc -b`）。前端没有 prettier 与 eslint，Rust 没有 rustfmt 与 clippy 配置，不要引入格式化重排制造噪音 diff。
@@ -144,9 +144,9 @@ set PYTHONLOGLEVEL=DEBUG
 - 异步。Python 纯同步，不用 asyncio。Rust 用 tokio，配合 mpsc 与 oneshot，sidecar 单任务串行，MCP 按 id 多路复用并发，进程级配置经 `OnceLock` 在 app setup 注入。前端用 async/await，Tauri API 动态 import，在 effect 里处理竞态取消。
 - 依赖注入与状态。Rust 用 Tauri managed state（`SidecarState`、`ProjectState`、`AssistantState`）加 `State<'_>`。Python 用构造器注入（`FacadeBridge(kernel_dir, catalog_dir)`、`CatalogService(bridge)`）。前端没有 store 库，`App.tsx` 用单组件 `useState` 集中管理状态，持久化走 `localStorage` 的 `tod-*` 键。
 
-## 测试规范
+## 测试标准
 
-- 三套栈并存：pytest（`tests/`）、cargo test（`src-tauri/tests/` 加源文件尾的 `#[cfg(test)]`）、vitest（`frontend/src/` 同目录的 `*.test.ts(x)`）。命令见 README 的测试与代码规范一节。
+- 三套栈并存：pytest（`tests/`）、cargo test（`src-tauri/tests/` 加源文件尾的 `#[cfg(test)]`）、vitest（`frontend/src/` 同目录的 `*.test.ts(x)`）。命令见 README 的测试与代码标准一节。
 - marker 只有 `spice`（需要 SPICE 内核真算）与 `slow`。日常跑 `-m "not spice"`，真路径冒烟用 `uv run pytest tests/engine/test_facade_bridge_e2m2e_smoke.py -m spice`。
 - CI 只跑 Python（`-m "not spice"`）。cargo test 与 npm test 不在任何 workflow 里，改 Rust 或前端必须本地跑对应测试。Rust 侧没有 Python 环境时用 `cargo test --manifest-path src-tauri/Cargo.toml -- --skip sidecar`。`assistant_pi_rpc` 用例依赖本仓 uv 环境（`uv run python` 拉起 fake 服务端，缺 uv 时自动跳过并打印原因，见 #502），必须串行跑。
 - 命名与组织。Python 用 `test_<module>.py` 镜像 `src/` 的布局，方法名是 `test_<行为>_<期望>`。前端 `describe` 与 `it` 用中文并带 issue 号。Rust 集成测试一文件一主题，放在 `src-tauri/tests/`，golden 夹具在 `src-tauri/tests/fixtures/`。

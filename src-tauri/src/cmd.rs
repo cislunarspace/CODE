@@ -557,7 +557,7 @@ mod get_artifact_tests {
         FrameArray::F32 { shape: shape.to_vec(), data: data.to_vec() }
     }
 
-    /// 浮点按标准容差比较（docs/development.md 测试规范：f32 容差 1e-6；按量值
+    /// 浮点按标准容差比较（docs/development.md 测试标准：f32 容差 1e-6；按量值
     /// 放缩以覆盖 km 级大数，其 f32 ULP 大于绝对 1e-6）。
     fn assert_close_f32(actual: f32, expected: f32) {
         assert!(
