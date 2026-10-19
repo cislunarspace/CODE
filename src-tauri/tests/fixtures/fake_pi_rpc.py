@@ -18,7 +18,7 @@
 fake-77.jsonl（回放用）与 fail-load.jsonl（切换失败用），运行期把消息
 追加到 <session>.jsonl——Rust 的会话索引靠目录扫描，文件必须真实存在。
 
-依赖：python3（标准库）。单连接单线程 + 审批/abort 处的阻塞读。
+依赖：Python 3 标准库（测试经 `uv run python` 拉起，#502）。单连接单线程 + 审批/abort 处的阻塞读。
 """
 
 import json
@@ -456,6 +456,12 @@ def dispatch(msg):
 
 
 def main():
+    # Rust 侧按 UTF-8 行协议读写管道；Windows 上 Python 对管道默认走
+    # locale 编码（如 cp936），中文 prompt 会解码成乱码（落单代理项经
+    # json.dumps 转义后成为非法 JSON，整行被对端跳过）。显式钉死 UTF-8。
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     seed_session_files()
     while True:
         line = sys.stdin.readline()
