@@ -123,6 +123,10 @@ pub struct PiState {
     conn: tokio::sync::Mutex<Option<RpcConn>>,
     /// 进程退出收割 + 换代关停（与 mcp.rs 同策略）。
     child: Arc<tokio::sync::Mutex<Option<Child>>>,
+    /// Windows 子树生命周期兜底（ADR 0019）：句柄必须随本状态存活，
+    /// 局部持有会在 spawn 返回时立即终结整棵子树（#502）。
+    #[cfg(windows)]
+    _job: std::sync::Mutex<Option<Arc<job::JobHandle>>>,
 }
 
 impl Default for PiState {
@@ -136,6 +140,8 @@ impl PiState {
         Self {
             conn: tokio::sync::Mutex::new(None),
             child: Arc::new(tokio::sync::Mutex::new(None)),
+            #[cfg(windows)]
+            _job: std::sync::Mutex::new(None),
         }
     }
     /// 注册拉起配置（app setup 阶段调用一次）。session_dir 是应用会话目录
@@ -240,16 +246,22 @@ impl PiState {
             .spawn()
             .with_context(|| format!("拉起 {} 失败", command[0]))?;
         #[cfg(windows)]
-        let _job = job::assign_tree_to_kill_on_close_job(&mut child);
+        let job_handle = job::assign_tree_to_kill_on_close_job(&mut child);
         let stdin = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");
         let conn = RpcConn::spawn_on(stdout, stdin, handlers);
-        // 换代：收割旧进程
+        // 换代：收割旧进程（kill_on_drop 只杀直接子进程，dev 期 uv 拉起的
+        // python 是孙进程，靠旧 job 句柄 drop 兜住，见下方替换处）
         if let Some(mut old) = self.child.lock().await.take() {
             let _ = old.start_kill();
             let _ = old.wait().await;
         }
         *self.child.lock().await = Some(child);
+        // job 句柄随状态存活，drop 即终结 job 内子树（ADR 0019）
+        #[cfg(windows)]
+        if let Ok(mut guard) = self._job.lock() {
+            *guard = job_handle;
+        }
         // pi RPC 无握手命令：get_state 即探活（pi 未配置 provider 时也成功；
         // 模型错误在 prompt 时暴露）
         conn.request("get_state", serde_json::json!({})).await?;
