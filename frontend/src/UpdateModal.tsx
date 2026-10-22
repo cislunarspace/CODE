@@ -101,25 +101,30 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   return (
     <Modal
       title={
-        downloaded
-          ? updateInfo.manualAsset
-            ? t("updater.installed_title")
-            : t("updater.downloaded_title")
-          : `${t("updater.available_title")} (v${updateInfo.version})`
+        <span style={{ fontSize: 14, fontWeight: 600 }}>
+          {downloaded
+            ? updateInfo.manualAsset
+              ? t("updater.installed_title")
+              : t("updater.downloaded_title")
+            : `${t("updater.available_title")} (v${updateInfo.version})`}
+        </span>
       }
       open={open}
+      width={480}
+      styles={{ body: { paddingTop: 4 } }}
       onCancel={downloading ? undefined : onClose}
       footer={
         downloaded ? (
-          <Button type="primary" onClick={handleRestart}>
+          <Button size="small" type="primary" onClick={handleRestart}>
             {t("updater.restart_now")}
           </Button>
         ) : (
-          <Space>
-            <Button disabled={downloading} onClick={onClose}>
+          <Space size={8}>
+            <Button size="small" disabled={downloading} onClick={onClose}>
               {t("updater.later")}
             </Button>
             <Button
+              size="small"
               type="primary"
               loading={downloading}
               onClick={handleStartDownload}
@@ -132,10 +137,10 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
       closable={!downloading}
       maskClosable={!downloading}
     >
-      <div style={{ marginTop: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {!downloaded ? (
           <>
-            <Paragraph>
+            <Paragraph style={{ margin: 0, fontSize: 12, color: "var(--ldc-text-secondary)" }}>
               {t("updater.available_desc").replace("{version}", updateInfo.version)}
             </Paragraph>
             {updateInfo.body && (
@@ -143,29 +148,32 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
                 style={{
                   maxHeight: 180,
                   overflowY: "auto",
-                  background: "rgba(0,0,0,0.03)",
-                  padding: 8,
-                  borderRadius: 2,
-                  marginBottom: 12,
+                  background: "var(--ldc-muted-bg)",
+                  padding: "8px 10px",
+                  borderRadius: "var(--ldc-radius)",
                   whiteSpace: "pre-wrap",
                 }}
+                className="ldc-scroll"
               >
-                <Text type="secondary">{updateInfo.body}</Text>
+                <Text style={{ fontSize: 11, color: "var(--ldc-text-secondary)" }}>
+                  {updateInfo.body}
+                </Text>
               </div>
             )}
             {downloading && (
-              <div style={{ marginTop: 16 }}>
-                <Text>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <Text style={{ fontSize: 12 }}>
                   {installing
                     ? t("updater.installing")
                     : t("updater.downloading")}
                 </Text>
                 <Progress
                   percent={percent}
-                  strokeLinecap="butt"
+                  strokeLinecap="round"
+                  size="small"
                   status={errorMsg ? "exception" : "active"}
                 />
-                <Text type="secondary">
+                <Text style={{ fontSize: 11, color: "var(--ldc-text-muted)" }} className="ldc-num">
                   {totalBytes > 0
                     ? t("updater.download_stats")
                         .replace("{received}", formatBytes(receivedBytes))
@@ -178,17 +186,15 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               </div>
             )}
             {errorMsg && (
-              <div style={{ marginTop: 8 }}>
-                <Text type="danger">{`${t("updater.error")}: ${errorMsg}`}</Text>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 11, color: "var(--ldc-error)" }}>
+                  {`${t("updater.error")}: ${errorMsg}`}
+                </Text>
                 {/* 手动路径失败时的自救：浏览器下载（自带断点续传） */}
                 {/* Escape hatch for the manual path: browser download
                  *  (resumable) when the in-app engine fails. */}
                 {updateInfo.manualAsset && !downloading && (
-                  <Button
-                    size="small"
-                    style={{ marginLeft: 8 }}
-                    onClick={() => openUrl(RELEASES_PAGE_URL)}
-                  >
+                  <Button size="small" onClick={() => openUrl(RELEASES_PAGE_URL)}>
                     {t("updater.open_releases")}
                   </Button>
                 )}
@@ -196,7 +202,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
             )}
           </>
         ) : (
-          <Paragraph>
+          <Paragraph style={{ margin: 0, fontSize: 12, color: "var(--ldc-text-secondary)" }}>
             {updateInfo.manualAsset
               ? t("updater.installed_desc")
               : t("updater.downloaded_desc")}

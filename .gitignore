@@ -72,6 +72,8 @@ Desktop.ini
 !assets/*.png
 !tools/assets/*.png
 !tools/assets/*.svg
+# 界面纹理与品牌资产除外（地球与月球贴图、顶栏标志）
+!frontend/src/assets/*.png
 
 # SPICE 内核：全部入库（含星历 .bsp，Git LFS，与 e2m2e 仓库一致）；
 # 随 tauri.release.conf.json 的 "../kernels": "kernels" 映射进安装包，

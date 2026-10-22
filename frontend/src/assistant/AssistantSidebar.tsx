@@ -247,12 +247,12 @@ export function AssistantSidebar({
       <div
         style={{
           width: 36,
-          borderLeft: "1px solid var(--tod-border, #e8e8e8)",
+          borderLeft: "1px solid var(--ldc-border)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           paddingTop: 8,
-          background: "var(--tod-panel-bg, transparent)",
+          background: "var(--ldc-panel-bg)",
         }}
       >
         <Tooltip title={t("assistant.title")} placement="left">
@@ -270,10 +270,11 @@ export function AssistantSidebar({
                   right: 4,
                   width: 6,
                   height: 6,
-                  // 状态点去圆（ADR 0020/0034）：方形 2px，与线框语言一致
-                  // Square the status dot (ADR 0020/0034) to match the wireframe look.
-                  borderRadius: 2,
-                  background: "#faad14",
+                  // 状态点是圆点，不可用取警告色：与状态徽标同一套语义色（ADR 0037）
+                  // The status dot is round and takes the warning colour when pi is
+                  // unavailable — the same semantic palette as the status chips (ADR 0037).
+                  borderRadius: 999,
+                  background: "var(--ldc-warning)",
                 }}
               />
             )}
@@ -292,14 +293,14 @@ export function AssistantSidebar({
               minWidth: 0,
               display: "flex",
               flexDirection: "column",
-              background: "var(--tod-panel-bg, transparent)",
+              background: "var(--ldc-panel-bg)",
             }
           : {
               width,
-              borderLeft: "1px solid var(--tod-border, #e8e8e8)",
+              borderLeft: "1px solid var(--ldc-border)",
               display: "flex",
               flexDirection: "column",
-              background: "var(--tod-panel-bg, transparent)",
+              background: "var(--ldc-panel-bg)",
               position: "relative",
               flexShrink: 0,
             }
@@ -317,18 +318,13 @@ export function AssistantSidebar({
         />
       )}
 
-      {/* 头部：标题 + 会话切换器 + 清空 + 折叠 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "6px 8px",
-          borderBottom: "1px solid var(--tod-border, #e8e8e8)",
-        }}
-      >
-        <RobotOutlined />
-        <Text strong style={{ fontSize: 13, flexShrink: 0 }}>
+      {/* 头部：标题 + 会话切换器 + 清空 + 折叠。复用 ldc.css 的面板头条：
+          32px 行高、一条淡分隔线、12px 标题，两侧栏面板头同档 */}
+      {/* Head: title + session switcher + clear + collapse, reusing the .ldc-panel-head
+          row in ldc.css (32px, one hairline, 12px title) so both side panels agree. */}
+      <div className="ldc-panel-head" style={{ gap: 4, padding: "0 8px" }}>
+        <RobotOutlined style={{ fontSize: 13, color: "var(--ldc-text-muted)" }} />
+        <Text style={{ fontSize: 12, fontWeight: 500, flexShrink: 0 }}>
           {t("assistant.title")}
         </Text>
         {available && (
@@ -375,23 +371,12 @@ export function AssistantSidebar({
         </div>
       ) : available === false ? (
         // 空态引导：pi 未安装/不可执行
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-            padding: 24,
-            textAlign: "center",
-          }}
-        >
-          <RobotOutlined style={{ fontSize: 32, opacity: 0.4 }} />
+        <div className="ldc-empty" style={{ flex: 1 }}>
+          <RobotOutlined className="ldc-empty-icon" />
           <Text type="secondary" style={{ fontSize: 12 }}>
             {t("assistant.empty_pi")}
           </Text>
-          <Button type="primary" icon={<SettingOutlined />} onClick={onOpenSettings}>
+          <Button type="primary" size="small" icon={<SettingOutlined />} onClick={onOpenSettings}>
             {t("assistant.go_settings")}
           </Button>
         </div>
@@ -408,7 +393,7 @@ export function AssistantSidebar({
           <div
             style={{
               padding: 8,
-              borderTop: "1px solid var(--tod-border, #e8e8e8)",
+              borderTop: "1px solid var(--ldc-border)",
             }}
           >
             <AssistantConfigStrip

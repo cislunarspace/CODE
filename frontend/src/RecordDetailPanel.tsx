@@ -63,8 +63,14 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
         {transferCandidates && transferCandidates.length > 0 && (
           <CandidateComparisonCard candidates={transferCandidates} />
         )}
-        <Card size="small" title={detailTitle} style={{ marginTop: 8 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>请在上方项目树或轨道库中选中一条记录查看详情。</Text>
+        <Card
+          size="small"
+          title={<span style={{ fontSize: 12, fontWeight: 500 }}>{detailTitle}</span>}
+          style={{ marginTop: 8 }}
+        >
+          <div className="ldc-empty">
+            <Text type="secondary" style={{ fontSize: 12 }}>请在上方项目树或轨道库中选中一条记录查看详情。</Text>
+          </div>
         </Card>
       </>
     );
@@ -96,10 +102,35 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
     {transferCandidates && transferCandidates.length > 0 && (
       <CandidateComparisonCard candidates={transferCandidates} />
     )}
-    <Card size="small" title={detailTitle} style={{ marginTop: 8 }} styles={{ body: { padding: "8px 12px" } }}>
-      <Descriptions size="small" column={1} bordered={false}>
+    <Card
+      size="small"
+      title={<span style={{ fontSize: 12, fontWeight: 500 }}>{detailTitle}</span>}
+      style={{ marginTop: 8 }}
+      styles={{ body: { padding: "8px 12px" } }}
+    >
+      <Descriptions
+        size="small"
+        column={1}
+        bordered={false}
+        // 键值行：标签 11px 三级文字，值 12px 主文字，行间一条 hairline
+        // Key/value rows: 11px tertiary labels, 12px primary values, one hairline
+        // between rows.
+        styles={{
+          label: {
+            fontSize: 11,
+            color: "var(--ldc-text-muted)",
+            paddingBlock: 5,
+            borderBottom: "1px solid var(--ldc-border)",
+          },
+          content: {
+            fontSize: 12,
+            paddingBlock: 5,
+            borderBottom: "1px solid var(--ldc-border)",
+          },
+        }}
+      >
         <Descriptions.Item label="ID">
-          <Text copyable style={{ fontSize: 11 }}>{record.record_id}</Text>
+          <Text copyable className="ldc-num" style={{ fontSize: 11 }}>{record.record_id}</Text>
         </Descriptions.Item>
         <Descriptions.Item label="轨道族">
           <Tag style={neutralTagStyle}>{record.orbit_family || "未指定"}</Tag>
@@ -108,14 +139,18 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
           )}
         </Descriptions.Item>
         {record.jacobi !== undefined && (
-          <Descriptions.Item label="Jacobi">{Number(record.jacobi).toFixed(4)}</Descriptions.Item>
+          <Descriptions.Item label="Jacobi">
+            <span className="ldc-num">{Number(record.jacobi).toFixed(4)}</span>
+          </Descriptions.Item>
         )}
         {record.member_index !== undefined && (
-          <Descriptions.Item label="族内序号">#{record.member_index}</Descriptions.Item>
+          <Descriptions.Item label="族内序号">
+            <span className="ldc-num">#{record.member_index}</span>
+          </Descriptions.Item>
         )}
         {record.family_id && (
           <Descriptions.Item label="所属族批次">
-            <Text style={{ fontSize: 11 }}>{record.family_id}</Text>
+            <Text className="ldc-num" style={{ fontSize: 11 }}>{record.family_id}</Text>
           </Descriptions.Item>
         )}
         <Descriptions.Item label="动力学段">
@@ -126,13 +161,13 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
         </Descriptions.Item>
         {record.source_record_id && (
           <Descriptions.Item label="上游谱系">
-            <Text style={{ fontSize: 11 }}>{record.source_record_id}</Text>
+            <Text className="ldc-num" style={{ fontSize: 11 }}>{record.source_record_id}</Text>
           </Descriptions.Item>
         )}
       </Descriptions>
 
       {/* 轨道保持入口 */}
-      <div style={{ marginTop: 8 }}>
+      <div style={{ marginTop: 10 }}>
         <Button
           size="small"
           type="primary"
@@ -147,8 +182,10 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
       </div>
 
       {/* 备注与标签（原“教学标注”，2026-08 更名） */}
-      <div style={{ marginTop: 10, borderTop: "1px dashed #434343", paddingTop: 8 }}>
-        <Text strong style={{ fontSize: 11 }}>{t("panel.annotation_title")}</Text>
+      <div style={{ marginTop: 10, borderTop: "1px solid var(--ldc-border)", paddingTop: 8 }}>
+        <Text style={{ fontSize: 11, fontWeight: 500, color: "var(--ldc-text-muted)" }}>
+          {t("panel.annotation_title")}
+        </Text>
         <Input
           size="small"
           placeholder="标签 (逗号分隔)"
@@ -184,7 +221,11 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
 function CandidateComparisonCard({ candidates }: { candidates: TransferCandidateView[] }) {
   const { t } = useTranslation();
   return (
-    <Card size="small" title={t("panel.candidates_title")} styles={{ body: { padding: "4px 12px" } }}>
+    <Card
+      size="small"
+      title={<span style={{ fontSize: 12, fontWeight: 500 }}>{t("panel.candidates_title")}</span>}
+      styles={{ body: { padding: "4px 12px" } }}
+    >
       {candidates.map((c) => (
         <div
           key={c.key}
@@ -193,18 +234,18 @@ function CandidateComparisonCard({ candidates }: { candidates: TransferCandidate
             alignItems: "center",
             gap: 6,
             fontSize: 11,
-            padding: "3px 0",
-            borderBottom: "1px dashed rgba(128,128,128,0.25)",
+            padding: "4px 0",
+            borderBottom: "1px solid var(--ldc-border)",
           }}
         >
-          <Text strong style={{ fontSize: 11, minWidth: 18 }}>#{c.rank}</Text>
-          <Text code style={{ fontSize: 11 }}>Δv {c.deltaVKmS.toFixed(3)}</Text>
-          <Text style={{ fontSize: 11 }}>TLI {c.tliEpochText}</Text>
-          <Text style={{ fontSize: 11 }}>TOF {c.tofSecText}</Text>
+          <Text strong className="ldc-num" style={{ fontSize: 11, minWidth: 18 }}>#{c.rank}</Text>
+          <Text code className="ldc-num" style={{ fontSize: 11 }}>Δv {c.deltaVKmS.toFixed(3)}</Text>
+          <Text className="ldc-num" style={{ fontSize: 11 }}>TLI {c.tliEpochText}</Text>
+          <Text className="ldc-num" style={{ fontSize: 11 }}>TOF {c.tofSecText}</Text>
           {c.selected ? (
             <Tag color="gold" style={{ marginInlineEnd: 0 }}>{t("panel.cand_selected")}</Tag>
           ) : null}
-          <Tag style={{ marginInlineEnd: 0 }}>
+          <Tag style={neutralTagStyle}>
             {c.refined ? t("panel.cand_refined_true") : t("panel.cand_refined_false")}
           </Tag>
           {!c.hasTrajectory && (

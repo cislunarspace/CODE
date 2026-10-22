@@ -4,7 +4,7 @@
 // 没有可用元数据时只显示当前会话，不凭空生成标题。有进行中回复或未决
 // 确认时整体禁用并提示等待。
 
-import { Button, Select, Tooltip } from "antd";
+import { Button, Select, Tooltip, theme } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { SessionMeta } from "./api";
 import { useTranslation } from "../i18n";
@@ -37,6 +37,14 @@ export function SessionSwitcher({
   onNew: () => void;
 }) {
   const { t } = useTranslation();
+  // 下拉浮层挂在 body 上，拿不到应用根容器上的 --ldc-* 变量，所以行内文字色
+  // 取 antd token：当前会话底与悬停底由 ConfigProvider 的 controlItemBgActive
+  // / controlItemBgHover 统一给出，与页面选中态同色。
+  // The dropdown portal lives under body and cannot see the --ldc-* variables set
+  // on the app root, so the row text colours come from antd tokens; the selected
+  // and hover fills come from controlItemBgActive / controlItemBgHover in the
+  // ConfigProvider, matching the app's selected state.
+  const { token } = theme.useToken();
 
   // 首次使用（列表为空）时下拉也要能显示当前会话本体
   const options = sessions.some((s) => s.id === currentId)
@@ -59,7 +67,13 @@ export function SessionSwitcher({
       <div style={{ display: "flex", flex: 1, gap: 4, minWidth: 0 }}>
         <Select
           size="small"
-          style={{ flex: 1, minWidth: 0 }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: 24,
+            borderRadius: "var(--ldc-radius-sm)",
+            fontSize: 11,
+          }}
           value={currentId ?? undefined}
           disabled={disabled}
           onChange={(id) => onSwitch(id)}
@@ -68,13 +82,22 @@ export function SessionSwitcher({
             const s = options.find((x) => x.id === option.value);
             if (!s) return option.label;
             return (
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <span
                   style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                 >
                   {label(s)}
                 </span>
-                <span style={{ opacity: 0.55, fontSize: 11, flexShrink: 0 }}>{meta(s)}</span>
+                {/* 行内元数据（消息数 · 相对时间）压到 10px 与最弱一级文字色，
+                    标题仍是行内主角 */}
+                {/* Inline metadata (message count · relative time) drops to 10px in
+                    the weakest text colour so the title stays the row's subject. */}
+                <span
+                  className="ldc-num"
+                  style={{ color: token.colorTextQuaternary, fontSize: 10, flexShrink: 0 }}
+                >
+                  {meta(s)}
+                </span>
               </div>
             );
           }}
@@ -86,6 +109,7 @@ export function SessionSwitcher({
           disabled={disabled}
           onClick={onNew}
           title={t("assistant.session.new")}
+          style={{ borderRadius: "var(--ldc-radius-sm)" }}
         />
       </div>
     </Tooltip>

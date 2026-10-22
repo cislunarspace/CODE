@@ -1,17 +1,22 @@
 // 轨道库过滤栏
 
 import { useEffect, useRef, useState } from "react";
-import { Form, Select, InputNumber, Button, Space, message, Modal, Input, Switch, Tag, Typography } from "antd";
+import { Form, Select, InputNumber, Button, Space, message, Modal, Input, Switch, Tag } from "antd";
 import { SearchOutlined, DownloadOutlined, RedoOutlined } from "@ant-design/icons";
 import { catalogQuery, catalogExport, STAR_TAG } from "./catalogApi";
 import type { CatalogRecord } from "./catalogApi";
-import { flatSwitchStyles, neutralTagStyle } from "./theme";
+import { neutralTagStyle } from "./theme";
 import { useTranslation } from "./i18n";
 import type { ArtifactSummary } from "./projectApi";
 
-const { Text } = Typography;
+// 筛选栏字段标签：11px 次级色，与参数停靠、记录详情同档
+// Filter label: 11px in the secondary colour, the same step as the parameter dock
+// and the record detail panel.
+const FIELD_LABEL_STYLE = {
+  fontSize: 11,
+  color: "var(--ldc-text-secondary)",
+} as const;
 
-// 状态行条件 Tag 的统一小号样式（#468）
 export interface CatalogFilterBarProps {
   onResults: (artifacts: ArtifactSummary[], count: number, message: string) => void;
 }
@@ -122,7 +127,7 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
   return (
     <div style={{ marginBottom: 12, flexShrink: 0 }}>
       <Form layout="vertical" size="small">
-        <Form.Item label="轨道族类型" style={{ marginBottom: 6 }}>
+        <Form.Item label={<span style={FIELD_LABEL_STYLE}>轨道族类型</span>} style={{ marginBottom: 6 }}>
           <Select
             allowClear
             placeholder="不限族"
@@ -142,7 +147,7 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
           />
         </Form.Item>
 
-        <Form.Item label="平动点" style={{ marginBottom: 6 }}>
+        <Form.Item label={<span style={FIELD_LABEL_STYLE}>平动点</span>} style={{ marginBottom: 6 }}>
           <Select
             allowClear
             placeholder="不限平动点"
@@ -158,13 +163,14 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
           />
         </Form.Item>
 
-        <Form.Item label={t("catalog.star_only")} style={{ marginBottom: 6 }}>
-          <Switch size="small" styles={flatSwitchStyles} checked={starOnly} onChange={setStarOnly} />
+        <Form.Item label={<span style={FIELD_LABEL_STYLE}>{t("catalog.star_only")}</span>} style={{ marginBottom: 6 }}>
+          <Switch size="small" checked={starOnly} onChange={setStarOnly} />
         </Form.Item>
 
         <Space orientation="horizontal" style={{ width: "100%", marginBottom: 8 }} size={6}>
-          <Form.Item label="Jacobi 下限" style={{ marginBottom: 0, flex: 1 }}>
+          <Form.Item label={<span style={FIELD_LABEL_STYLE}>Jacobi 下限</span>} style={{ marginBottom: 0, flex: 1 }}>
             <InputNumber
+              className="ldc-num"
               style={{ width: "100%" }}
               step={0.05}
               placeholder="Min"
@@ -172,8 +178,9 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
               onChange={(v) => setJacobiMin(v ?? undefined)}
             />
           </Form.Item>
-          <Form.Item label="Jacobi 上限" style={{ marginBottom: 0, flex: 1 }}>
+          <Form.Item label={<span style={FIELD_LABEL_STYLE}>Jacobi 上限</span>} style={{ marginBottom: 0, flex: 1 }}>
             <InputNumber
+              className="ldc-num"
               style={{ width: "100%" }}
               step={0.05}
               placeholder="Max"
@@ -214,7 +221,9 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
               marginTop: 2,
             }}
           >
-            <Text type="secondary" style={{ fontSize: 11 }}>共 {resultCount} 条</Text>
+            <span className="ldc-num" style={{ fontSize: 11, color: "var(--ldc-text-secondary)" }}>
+              共 {resultCount} 条
+            </span>
             {starOnly && (
               <Tag style={neutralTagStyle}>{t("catalog.star_only")}</Tag>
             )}
@@ -232,7 +241,7 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
       </Form>
 
       <Modal
-        title="导出教学案例包 (Catalog Export)"
+        title={<span style={{ fontSize: 14, fontWeight: 600 }}>导出教学案例包 (Catalog Export)</span>}
         open={exportModalOpen}
         onCancel={() => setExportModalOpen(false)}
         onOk={handleExportPackage}
@@ -241,11 +250,11 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
         cancelText="取消"
         width={450}
       >
-        <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 8, fontSize: 12, color: "var(--ldc-text-secondary)" }}>
           将根据当前过滤条件将匹配的轨道记录打包并导出到指定路径。
         </div>
         <Form layout="vertical" size="small">
-          <Form.Item label="目标保存路径 (zip 或目录)">
+          <Form.Item label={<span style={FIELD_LABEL_STYLE}>目标保存路径 (zip 或目录)</span>}>
             <Input
               value={exportDest}
               onChange={(e) => setExportDest(e.target.value)}

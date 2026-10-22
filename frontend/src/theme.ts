@@ -1,142 +1,312 @@
-// 严肃视觉语言：直角(2px) + 高密度平面化 + 收敛语义色板（黑/白/灰/红/蓝/绿/橙）
-// 有意偏离 antd 圆润亮色默认，见 docs/adr/0020-serious-semantic-ui-visual-language.md
-// Serious visual language: square corners (2px) + high-density flatness + a restrained semantic palette
-// (black/white/gray/red/blue/green/orange); deliberately departs from antd's rounded bright defaults — see
-// docs/adr/0020-serious-semantic-ui-visual-language.md.
+// LDC 视觉语言（linux-do/cdk）：shadcn/ui new-york + Tailwind v4 的 zinc 中性灰阶。
+// 亮色为主、暗色可切；扁平，无渐变、无霓虹、无多层投影；圆角 8–12px，卡片与弹层更大。
+// 中性色承担全部控件与选中态，彩色只用于状态（成功、失败、警告）与数据面强调（画布选中、
+// 时间轴游标、链接）。取代 ADR 0020 的直角线框口径，见 docs/adr/0037-ui-ldc-visual-language.md。
+// LDC visual language (linux-do/cdk): shadcn/ui new-york on Tailwind v4's zinc neutral
+// scale. Light-first with a dark switch; flat, no gradients, no neon, no stacked
+// shadows; 8–12px radii with larger cards and overlays. Neutral tones carry every
+// control and selected state; colour is reserved for status (success, error, warning)
+// and for data-surface emphasis (canvas selection, timeline cursor, links). Supersedes
+// the square wireframe direction of ADR 0020. See docs/adr/0037-ui-ldc-visual-language.md.
 
 // 与 token 平级的主题开关
 // Theme switches at the same level as tokens.
 export const themeBehavior = {
-  // 关闭全部过渡动画：按钮/弹窗/下拉的缓动是"卡通感"的主要来源
-  // Disable all transition animations: button/modal/dropdown easing is the main source of the "cartoonish" feel.
+  // 关闭 antd 组件级的缓动：弹窗、下拉的缩放位移是"卡通感"的主要来源。
+  // 交互反馈改由 CSS 的颜色过渡承担（见 ldc.css 的 .ldc-hover-row），
+  // 不靠位移与缩放。
+  // Disable antd's component-level easing: modal and dropdown scale/slide is the main
+  // source of the "cartoonish" feel. Feedback comes from CSS colour transitions
+  // instead (see .ldc-hover-row in ldc.css), never from movement or scaling.
   motion: false,
   // 线框风：组件去渐变、阴影改边框式，走向平面观感
-  // Wireframe style: remove gradients, turn shadows into borders, and go flat.
+  // Wireframe style: remove gradients, turn shadows into borders, go flat.
   wireframe: true,
 } as const;
 
-export const themeTokens = {
-  // 直角：antd 默认 6–8px 圆角，全系列统一收到 2px
-  // Square corners: antd defaults to 6-8px radii; the whole series is tightened to 2px.
-  borderRadius: 2,
-  borderRadiusLG: 2,
-  borderRadiusSM: 2,
-  borderRadiusXS: 2,
-  borderRadiusOuter: 2,
-  // 密度：控件高度从默认 32/24/40 收紧到桌面工具量级
-  // Density: control heights tightened from the default 32/24/40 to desktop-tool scale.
-  controlHeight: 26,
-  controlHeightSM: 22,
-  controlHeightLG: 30,
-  // 平面阴影：只留一层浅投影，不用 antd 默认的大扩散多层阴影
-  // Flat shadows: keep one shallow shadow layer, not antd's default wide multi-layer shadows.
-  boxShadow: "0 1px 2px rgba(0, 0, 0, 0.10)",
-  boxShadowSecondary: "0 2px 6px rgba(0, 0, 0, 0.12)",
-  // 字体：桌面系统 UI 栈，Windows 上 Segoe UI + 雅黑
-  // Fonts: desktop system UI stack; on Windows Segoe UI + Microsoft YaHei.
-  fontFamily:
-    '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif',
-  // 主色/信息色：收敛深蓝（替换 antd 默认亮蓝 #1677ff）
-  // Primary/info colors: restrained deep blue (replacing antd's default bright blue #1677ff).
-  colorPrimary: "#0958d9",
-  colorInfo: "#0958d9",
-  // 语义色沿用 antd 默认：绿=成功、橙=警告、红=错误
-  // Semantic colors follow antd defaults: green = success, orange = warning, red = error.
-  colorSuccess: "#52c41a",
-  colorWarning: "#faad14",
-  colorError: "#ff4d4f",
-} as const;
-
-/** 界面外壳配色：顶边栏、侧边栏、停靠面板、标签条共用一份取值，集中一处便于
- *  整体调整对比度。
- * Shell palette: one source for the top bar, sidebar, docked panel and tab strip,
- * so contrast adjustments stay a single edit. */
+/** 界面色板与几何：一处定义，antd token、内联样式与 CSS 变量（--ldc-*）共用。
+ *  One palette and geometry source shared by the antd tokens, the inline styles and
+ *  the --ldc-* CSS variables. */
 export interface ShellColors {
-  /** 面板分隔线 */
-  border: string;
-  /** 顶边栏与标签条底色（比面板亮/深一档，拉出层次） */
-  barBg: string;
-  /** 侧边栏与停靠面板底色 */
+  mode: "dark" | "light";
+  /** 页面底（主页面、顶边栏、标签条同色，靠一条淡分隔线区分） */
+  pageBg: string;
+  /** 侧边栏、助手边栏、停靠面板底色 */
   panelBg: string;
-  /** 标签激活底色 */
+  /** 顶边栏与标签条底色 */
+  barBg: string;
+  /** 卡片、浮层底色 */
+  cardBg: string;
+  /** 次级块、统计块、徽标底 */
+  mutedBg: string;
+  /** 行与图标按钮的悬停底 */
+  hoverBg: string;
+  /** 选中行底色 */
   activeBg: string;
-  /** 标签激活文字 */
+  /** 选中行文字 */
   activeText: string;
+  /** 分隔线与描边（很淡） */
+  border: string;
+  /** 需要更明显区分的描边（输入框、分隔） */
+  borderStrong: string;
+  /** 主文字 */
+  text: string;
+  /** 次级文字（说明、标签） */
+  textSecondary: string;
+  /** 三级文字（元数据、占位） */
+  textMuted: string;
+  /** 四级文字（停用、极弱提示） */
+  textFaint: string;
+  /** 控件主色：中性近黑（亮）／近白（暗） */
+  primary: string;
+  primaryHover: string;
+  /** 主色上的文字 */
+  onPrimary: string;
+  /** 主色的浅底（选中态、徽标） */
+  primarySoft: string;
+  success: string;
+  successSoft: string;
+  warning: string;
+  warningSoft: string;
+  error: string;
+  errorSoft: string;
+  /** 数据面强调色：画布选中、时间轴游标、链接 */
+  info: string;
+  infoSoft: string;
+  /** 阴影：卡片几乎不用，浮层一层柔和投影 */
+  shadow: string;
+  shadowOverlay: string;
+  radiusSm: number;
+  radius: number;
+  radiusLg: number;
+  radiusXl: number;
+  radiusPill: number;
 }
 
 export function shellColors(mode: "dark" | "light"): ShellColors {
   const dark = mode === "dark";
+  if (dark) {
+    return {
+      mode,
+      pageBg: "#09090b",
+      panelBg: "#111113",
+      barBg: "#09090b",
+      cardBg: "#18181b",
+      mutedBg: "#1f1f23",
+      hoverBg: "#27272a",
+      activeBg: "#27272a",
+      activeText: "#fafafa",
+      border: "rgba(255, 255, 255, 0.10)",
+      borderStrong: "rgba(255, 255, 255, 0.18)",
+      text: "#fafafa",
+      textSecondary: "#d4d4d8",
+      textMuted: "#a1a1aa",
+      textFaint: "#71717a",
+      primary: "#fafafa",
+      primaryHover: "#e4e4e7",
+      onPrimary: "#18181b",
+      primarySoft: "rgba(255, 255, 255, 0.08)",
+      success: "#34d399",
+      successSoft: "rgba(52, 211, 153, 0.12)",
+      warning: "#fbbf24",
+      warningSoft: "rgba(251, 191, 36, 0.12)",
+      error: "#f87171",
+      errorSoft: "rgba(248, 113, 113, 0.12)",
+      info: "#60a5fa",
+      infoSoft: "rgba(96, 165, 250, 0.14)",
+      shadow: "0 1px 2px rgba(0, 0, 0, 0.45)",
+      shadowOverlay: "0 16px 40px rgba(0, 0, 0, 0.55)",
+      radiusSm: 6,
+      radius: 8,
+      radiusLg: 12,
+      radiusXl: 16,
+      radiusPill: 999,
+    };
+  }
   return {
-    border: dark ? "#303030" : "#e8e8e8",
-    barBg: dark ? "#1f1f1f" : "#ffffff",
-    panelBg: dark ? "#1a1a1a" : "#fafafa",
-    activeBg: dark ? "rgba(64, 150, 255, 0.16)" : "rgba(9, 88, 217, 0.08)",
-    activeText: dark ? "#ffffff" : "#0958d9",
+    mode,
+    pageBg: "#ffffff",
+    panelBg: "#fafafa",
+    barBg: "#ffffff",
+    cardBg: "#ffffff",
+    mutedBg: "#f4f4f5",
+    hoverBg: "#f4f4f5",
+    activeBg: "#f4f4f5",
+    activeText: "#18181b",
+    border: "#e4e4e7",
+    borderStrong: "#d4d4d8",
+    text: "#18181b",
+    textSecondary: "#52525b",
+    textMuted: "#71717a",
+    textFaint: "#a1a1aa",
+    primary: "#18181b",
+    primaryHover: "#27272a",
+    onPrimary: "#fafafa",
+    primarySoft: "#f4f4f5",
+    success: "#10b981",
+    successSoft: "rgba(16, 185, 129, 0.10)",
+    warning: "#f59e0b",
+    warningSoft: "rgba(245, 158, 11, 0.14)",
+    error: "#ef4444",
+    errorSoft: "rgba(239, 68, 68, 0.10)",
+    info: "#2563eb",
+    infoSoft: "rgba(37, 99, 235, 0.10)",
+    shadow: "0 1px 2px rgba(24, 24, 27, 0.06)",
+    shadowOverlay: "0 16px 40px rgba(24, 24, 27, 0.12)",
+    radiusSm: 6,
+    radius: 8,
+    radiusLg: 12,
+    radiusXl: 16,
+    radiusPill: 999,
   };
 }
 
-/** 组件级 token（ADR 0020/0034）：主按钮自带的蓝色投影是 antd“立体感”的
- *  主要来源，控制台要平面化，直接去掉。开关胶囊与彩色元数据标签 antd 不给
- *  token，只能逐实例给语义化 styles，见 flatSwitchStyles / neutralTagStyle。
- * Component-level tokens (ADR 0020/0034): the primary button's blue drop shadow is
- * the main source of antd's dimensionality and the console goes flat, so it is
- * removed. The switch pill and coloured metadata tags have no token — they are
- * overridden per instance via the semantic styles below. */
+/** 与主题无关的几何与字体：圆角、控件高度、字体栈。
+ *  Theme-independent geometry and typography: radii, control heights, font stack. */
+export const themeShape = {
+  // 圆角：shadcn 的 radius 10 → md 8（按钮、输入框）、lg 12（卡片、弹层）
+  // Radii: shadcn's radius 10 → md 8 (buttons, inputs), lg 12 (cards, overlays).
+  borderRadius: 8,
+  borderRadiusSM: 6,
+  borderRadiusXS: 4,
+  borderRadiusLG: 12,
+  borderRadiusOuter: 16,
+  // 密度：桌面工具量级，比 antd 默认略紧，比上一版直角口径略松
+  // Density: desktop-tool scale. A little tighter than antd's default, a little
+  // looser than the previous square-cornered pass.
+  controlHeight: 28,
+  controlHeightSM: 24,
+  controlHeightLG: 32,
+  // 字体：拉丁走 Inter，中文走系统黑体；不随安装包分发 Web 字体
+  // Fonts: Inter for Latin, the system sans for Chinese; no web font is shipped
+  // with the installer.
+  fontFamily:
+    '"Inter", "Segoe UI Variable Text", "Segoe UI", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif',
+} as const;
+
+/** antd token：色板随明暗切换，几何与字体固定。
+ *  antd tokens: the palette follows the theme switch, geometry and typography do not. */
+export function themeTokens(mode: "dark" | "light") {
+  const c = shellColors(mode);
+  return {
+    ...themeShape,
+    colorPrimary: c.primary,
+    colorPrimaryHover: c.primaryHover,
+    colorPrimaryActive: c.primary,
+    colorInfo: c.info,
+    colorSuccess: c.success,
+    colorWarning: c.warning,
+    colorError: c.error,
+    colorLink: c.info,
+    colorLinkHover: mode === "dark" ? "#93c5fd" : "#1d4ed8",
+    // 表面
+    // Surfaces
+    colorBgLayout: c.pageBg,
+    colorBgContainer: c.cardBg,
+    colorBgElevated: c.cardBg,
+    colorBgSpotlight: mode === "dark" ? "#fafafa" : "#18181b",
+    colorTextLightSolid: mode === "dark" ? "#18181b" : "#fafafa",
+    // 描边
+    // Borders
+    colorBorder: c.border,
+    colorBorderSecondary: c.border,
+    // 文字
+    // Text
+    colorText: c.text,
+    colorTextSecondary: c.textSecondary,
+    colorTextTertiary: c.textMuted,
+    colorTextQuaternary: c.textFaint,
+    colorTextDescription: c.textMuted,
+    colorTextPlaceholder: c.textFaint,
+    // 填充：图标按钮与行的悬停底
+    // Fills: hover background of icon buttons and rows
+    colorFillSecondary: c.mutedBg,
+    colorFillTertiary: c.mutedBg,
+    colorFillQuaternary: c.hoverBg,
+    controlItemBgHover: c.hoverBg,
+    controlItemBgActive: c.activeBg,
+    // 投影：控件不用，浮层一层
+    // Shadows: none on controls, one soft layer on overlays
+    boxShadow: c.shadow,
+    boxShadowSecondary: c.shadowOverlay,
+    boxShadowTertiary: c.shadow,
+  };
+}
+
+/** 组件级 token：主按钮去掉 antd 自带的投影，按钮文字给到 500。
+ *  Component-level tokens: drop the primary button's drop shadow and set button text
+ *  to weight 500. */
 export const themeComponents = {
-  Button: { primaryShadow: "none" },
-};
+  Button: { primaryShadow: "none", fontWeight: 500 },
+} as const;
 
-/** 开关去胶囊化：antd 的 Switch 根与滑块都是 100px 圆角，与控制台其余直角
- *  控件不一致，收到 2px。 */
-/** De-pill the switch: antd's Switch root and handle carry a 100px radius, out of
- *  step with the console's square controls; tightened to 2px. */
-export const flatSwitchStyles = {
-  root: { borderRadius: themeTokens.borderRadius },
-  indicator: { borderRadius: themeTokens.borderRadius },
-};
-
-/** 元数据标签：彩色只用于状态（成功/失败/警告/进行中），族名、平动点、动力学
- *  能力这类描述性信息用中性线框标签，避免整屏彩色块。 */
-/** Metadata tags: colour is reserved for state (success/error/warning/running);
- *  descriptive facts (family name, libration point, dynamics capability) use a
- *  neutral bordered tag so the screen does not fill with colour chips. */
+/** 元数据标签：彩色只留给状态；族名、平动点这类描述性信息是中性徽标。
+ *  取 CSS 变量而非色板对象，调用方不必持有明暗模式；变量挂在文档根元素上，
+ *  弹层里的标签同样解析得到（App 注入）。
+ *  Metadata tags: colour is reserved for status; descriptive facts (family name,
+ *  libration point) are neutral badges. The style reads CSS variables instead of a
+ *  palette object so callers need not know the theme; the variables live on the
+ *  document root (injected by App), so tags inside portals resolve them too. */
 export const neutralTagStyle = {
   marginInlineEnd: 0,
   fontSize: 11,
-  lineHeight: "16px",
-  background: "transparent",
-  borderColor: "currentColor",
-  color: "inherit",
-  opacity: 0.85,
+  lineHeight: "18px",
+  borderRadius: 6,
+  borderColor: "transparent",
+  background: "var(--ldc-muted-bg)",
+  color: "var(--ldc-text-secondary)",
 } as const;
 
-/** 主题 CSS 变量（#450）：助手边栏/会话视图/工具卡片引用 --tod-* 系列，
- *  此前全仓库只有 var(...) 引用而无定义处，深色模式下永远落到浅色 fallback。
- *  返回值由 App 根容器注入为内联 CSS 变量，随明暗主题切换；浅色值 = 各
- *  消费端既有 fallback（浅色零回归），深色值与 App 深色界面同源
- *  （边框 #303030、面板 #1a1a1a，白系叠加层对齐 antd darkAlgorithm 口径）。
- * Theme CSS variables (#450): the assistant sidebar / chat view / tool cards
- * reference the --tod-* series, which until now had no definition anywhere —
- * dark mode always fell back to the light values. The map is injected as
- * inline CSS variables on the App root and follows the theme switch; light
- * values equal the consumers' existing fallbacks (zero light-mode regression),
- * dark values share the app's dark surfaces (border #303030, panel #1a1a1a;
- * white-overlay layers aligned with antd's darkAlgorithm). */
+/** 主题 CSS 变量（#450）：--ldc-* 供 ldc.css 与内联样式消费，--tod-* 是既有
+ *  消费端（状态栏、时间轴、助手边栏）沿用的旧名，两套同源。
+ *  Theme CSS variables (#450): --ldc-* feeds ldc.css and inline styles; --tod-* keeps
+ *  the older names already consumed by the status bar, timeline and assistant
+ *  sidebar. Both series resolve to the same palette. */
 export function themeCssVars(mode: "dark" | "light"): Record<string, string> {
-  const dark = mode === "dark";
+  const c = shellColors(mode);
   return {
-    "--tod-border": dark ? "#303030" : "#e8e8e8",
-    "--tod-panel-bg": dark ? "#1a1a1a" : "transparent",
-    "--tod-user-bubble": "#0958d9",
-    "--tod-assistant-bubble": dark ? "rgba(255,255,255,0.10)" : "rgba(128,128,128,0.10)",
-    "--tod-text-secondary": "#8c8c8c",
-    // 强调色（ADR 0034）：时间轴等随主题着色的控件用它，浅色沿用控制台主色，
-    // 深色提亮一档（与 antd darkAlgorithm 的主色一致）
-    // Accent (ADR 0034): used by theme-aware controls such as the timeline. Light
-    // keeps the console primary, dark brightens one step (matching antd's
-    // darkAlgorithm primary).
-    "--tod-accent": dark ? "#4096ff" : "#0958d9",
-    "--tod-card-bg": dark ? "rgba(255,255,255,0.06)" : "rgba(128,128,128,0.06)",
-    "--tod-code-bg": dark ? "rgba(255,255,255,0.10)" : "rgba(128,128,128,0.1)",
+    "--ldc-page-bg": c.pageBg,
+    "--ldc-panel-bg": c.panelBg,
+    "--ldc-bar-bg": c.barBg,
+    "--ldc-card-bg": c.cardBg,
+    "--ldc-muted-bg": c.mutedBg,
+    "--ldc-hover-bg": c.hoverBg,
+    "--ldc-active-bg": c.activeBg,
+    "--ldc-active-text": c.activeText,
+    "--ldc-border": c.border,
+    "--ldc-border-strong": c.borderStrong,
+    "--ldc-text": c.text,
+    "--ldc-text-secondary": c.textSecondary,
+    "--ldc-text-muted": c.textMuted,
+    "--ldc-text-faint": c.textFaint,
+    "--ldc-primary": c.primary,
+    "--ldc-primary-hover": c.primaryHover,
+    "--ldc-on-primary": c.onPrimary,
+    "--ldc-primary-soft": c.primarySoft,
+    "--ldc-success": c.success,
+    "--ldc-success-soft": c.successSoft,
+    "--ldc-warning": c.warning,
+    "--ldc-warning-soft": c.warningSoft,
+    "--ldc-error": c.error,
+    "--ldc-error-soft": c.errorSoft,
+    "--ldc-info": c.info,
+    "--ldc-info-soft": c.infoSoft,
+    "--ldc-shadow": c.shadow,
+    "--ldc-shadow-overlay": c.shadowOverlay,
+    "--ldc-radius-sm": `${c.radiusSm}px`,
+    "--ldc-radius": `${c.radius}px`,
+    "--ldc-radius-lg": `${c.radiusLg}px`,
+    "--ldc-radius-xl": `${c.radiusXl}px`,
+    // 旧名（--tod-*）：助手边栏、时间轴、状态栏沿用
+    // Legacy names (--tod-*) still used by the assistant sidebar, timeline and status bar.
+    "--tod-border": c.border,
+    "--tod-panel-bg": c.panelBg,
+    "--tod-user-bubble": c.primary,
+    "--tod-user-bubble-text": c.onPrimary,
+    "--tod-assistant-bubble": c.mutedBg,
+    "--tod-text-secondary": c.textMuted,
+    "--tod-accent": c.info,
+    "--tod-card-bg": c.mutedBg,
+    "--tod-code-bg": c.mutedBg,
   };
 }

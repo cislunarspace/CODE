@@ -41,6 +41,12 @@ export function AssistantConfigStrip({
             style={{
               minWidth: opt.id === "model" ? 150 : 96,
               maxWidth: opt.id === "model" ? 220 : undefined,
+              // 配置条是输入区的辅助控件：24px 高、11px 文字，与元数据同档
+              // The config strip is a helper above the input: 24px tall with 11px
+              // text, the same step as metadata.
+              height: 24,
+              borderRadius: "var(--ldc-radius-sm)",
+              fontSize: 11,
             }}
             value={opt.currentValue ?? undefined}
             disabled={disabled}

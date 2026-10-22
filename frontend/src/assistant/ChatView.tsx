@@ -21,25 +21,28 @@ function ThinkingBlock({ text }: { text: string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ margin: "4px 0", maxWidth: "92%" }}>
+    <div style={{ margin: "0 0 10px", maxWidth: "92%" }}>
       <Button
         type="text"
         size="small"
         icon={<BulbOutlined />}
         onClick={() => setOpen((o) => !o)}
-        style={{ padding: "0 4px", fontSize: 12, color: "var(--tod-text-secondary, #8c8c8c)" }}
+        style={{ padding: "0 4px", fontSize: 11, color: "var(--ldc-text-muted)" }}
       >
         {t("assistant.thinking.title")}
       </Button>
       {open && (
+        // 折叠正文用左侧竖线标出层级：竖线取调暗的描边色，正文与气泡同字号
+        // The expanded body marks its level with a left rule in the dimmed border
+        // colour and uses the same size as the bubbles.
         <div
           style={{
             margin: "2px 0 4px 6px",
             padding: "2px 0 2px 8px",
-            borderLeft: "2px solid rgba(128,128,128,0.35)",
-            color: "var(--tod-text-secondary, #8c8c8c)",
+            borderLeft: "2px solid var(--ldc-border-strong)",
+            color: "var(--ldc-text-muted)",
             fontSize: 12,
-            lineHeight: 1.55,
+            lineHeight: 1.6,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
           }}
@@ -51,25 +54,27 @@ function ThinkingBlock({ text }: { text: string }) {
   );
 }
 
-// 本仓无全局样式表（全内联 + antd），markdown 元素经 components 映射内联样式。
+// 全局样式表 ldc.css 只提供令牌与复用类，markdown 元素仍经 components 映射
+// 内联样式，颜色取 --ldc-* 变量，随明暗主题切换。
 // remark-gfm 启用 GFM 扩展（表格/删除线/任务列表）——助手输出的参数对比表
 // 是管道表语法，没有该插件只会显示原始管道文本。
-// The repo has no global stylesheet (all inline + antd), so markdown elements
-// get inline styles via the components mapping. remark-gfm enables GFM
-// extensions (tables/strikethrough/task lists) — the assistant's parameter
+// The global stylesheet (ldc.css) only supplies tokens and reusable classes, so
+// markdown elements still get inline styles via the components mapping; colours
+// read the --ldc-* variables and follow the light/dark switch. remark-gfm enables
+// GFM extensions (tables/strikethrough/task lists) — the assistant's parameter
 // tables use pipe syntax, which renders as raw pipes without the plugin.
 const mdComponents = {
   p: ({ children }: any) => <p style={{ margin: "4px 0" }}>{children}</p>,
   code: ({ children, className }: any) =>
     className ? ( //  fenced code block 内的 code 由 pre 管
-      <code className={className} style={{ fontSize: 12 }}>{children}</code>
+      <code className={className} style={{ fontSize: 11 }}>{children}</code>
     ) : (
       <code
         style={{
-          fontSize: 12,
-          background: "rgba(128,128,128,0.18)",
+          fontSize: 11,
+          background: "var(--ldc-muted-bg)",
           padding: "0 4px",
-          borderRadius: 3,
+          borderRadius: 4,
         }}
       >
         {children}
@@ -80,10 +85,10 @@ const mdComponents = {
       style={{
         margin: "6px 0",
         padding: 8,
-        fontSize: 12,
+        fontSize: 11,
         overflow: "auto",
-        background: "rgba(128,128,128,0.14)",
-        borderRadius: 4,
+        background: "var(--ldc-muted-bg)",
+        borderRadius: 6,
       }}
     >
       {children}
@@ -92,7 +97,7 @@ const mdComponents = {
   ul: ({ children }: any) => <ul style={{ margin: "4px 0", paddingLeft: 20 }}>{children}</ul>,
   ol: ({ children }: any) => <ol style={{ margin: "4px 0", paddingLeft: 20 }}>{children}</ol>,
   a: ({ children, href }: any) => (
-    <a href={href} target="_blank" rel="noreferrer" style={{ color: "#0958d9" }}>
+    <a href={href} target="_blank" rel="noreferrer" style={{ color: "var(--ldc-info)" }}>
       {children}
     </a>
   ),
@@ -103,7 +108,7 @@ const mdComponents = {
       style={{
         borderCollapse: "collapse",
         margin: "6px 0",
-        fontSize: 12,
+        fontSize: 11,
         display: "block",
         maxWidth: "100%",
         overflowX: "auto",
@@ -115,11 +120,11 @@ const mdComponents = {
   th: ({ children }: any) => (
     <th
       style={{
-        border: "1px solid rgba(128,128,128,0.45)",
+        border: "1px solid var(--ldc-border)",
         padding: "3px 8px",
-        background: "rgba(128,128,128,0.12)",
+        background: "var(--ldc-muted-bg)",
         textAlign: "left",
-        fontWeight: 600,
+        fontWeight: 500,
         whiteSpace: "nowrap",
       }}
     >
@@ -127,9 +132,7 @@ const mdComponents = {
     </th>
   ),
   td: ({ children }: any) => (
-    <td style={{ border: "1px solid rgba(128,128,128,0.45)", padding: "3px 8px" }}>
-      {children}
-    </td>
+    <td style={{ border: "1px solid var(--ldc-border)", padding: "3px 8px" }}>{children}</td>
   ),
 };
 
@@ -184,19 +187,31 @@ export function ChatView({
   }, [items]);
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "4px 2px" }}>
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className="ldc-scroll"
+      style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "10px 8px 4px" }}
+    >
       {items.map((item, idx) => {
         if (item.kind === "user") {
           return (
-            <div key={idx} style={{ display: "flex", justifyContent: "flex-end", margin: "6px 0" }}>
+            <div key={idx} style={{ display: "flex", justifyContent: "flex-end", margin: "0 0 10px" }}>
               <div
                 style={{
-                  maxWidth: "88%",
+                  maxWidth: "92%",
                   padding: "6px 10px",
-                  borderRadius: 6,
-                  background: "var(--tod-user-bubble, #0958d9)",
-                  color: "#fff",
-                  fontSize: 13,
+                  // 气泡圆角 12：比控件大一号，靠形状把“说话人”与卡片区分开
+                  // Bubbles take the 12px card radius: one step larger than controls,
+                  // so shape alone separates a speaker from a card.
+                  borderRadius: "var(--ldc-radius-lg)",
+                  background: "var(--tod-user-bubble)",
+                  // 主色上的文字必须取反色：暗色下主色是近白，写死白色会看不见
+                  // Text on the primary fill must be the inverted colour: in dark mode
+                  // the primary is near-white, so a hard-coded white would vanish.
+                  color: "var(--tod-user-bubble-text)",
+                  fontSize: 12,
+                  lineHeight: 1.6,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}
@@ -208,15 +223,16 @@ export function ChatView({
         }
         if (item.kind === "assistant") {
           return (
-            <div key={idx} style={{ display: "flex", justifyContent: "flex-start", margin: "6px 0" }}>
+            <div key={idx} style={{ display: "flex", justifyContent: "flex-start", margin: "0 0 10px" }}>
               <div
                 style={{
                   maxWidth: "92%",
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  background: "var(--tod-assistant-bubble, rgba(128,128,128,0.10))",
-                  fontSize: 13,
-                  lineHeight: 1.55,
+                  padding: "6px 10px",
+                  borderRadius: "var(--ldc-radius-lg)",
+                  background: "var(--tod-assistant-bubble)",
+                  color: "var(--ldc-text)",
+                  fontSize: 12,
+                  lineHeight: 1.6,
                   wordBreak: "break-word",
                 }}
               >
@@ -245,12 +261,12 @@ export function ChatView({
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                margin: "8px 4px",
-                color: "var(--tod-text-secondary, #8c8c8c)",
+                margin: "0 4px 10px",
+                color: "var(--ldc-text-muted)",
                 fontSize: 11,
               }}
             >
-              <span style={{ flex: 1, borderTop: "1px dashed rgba(128, 128, 128, 0.4)" }} />
+              <span style={{ flex: 1, borderTop: "1px dashed var(--ldc-border-strong)" }} />
               {t("assistant.interrupted")}
               {canContinue && (
                 <Button
@@ -262,20 +278,23 @@ export function ChatView({
                   {t("assistant.continue")}
                 </Button>
               )}
-              <span style={{ flex: 1, borderTop: "1px dashed rgba(128, 128, 128, 0.4)" }} />
+              <span style={{ flex: 1, borderTop: "1px dashed var(--ldc-border-strong)" }} />
             </div>
           );
         }
         if (item.kind === "error") {
+          // 错误气泡沿用状态语义：浅红底 + 错误红前景，不加描边（描边留给卡片）
+          // The error bubble keeps the status semantics: error-soft fill with the
+          // error foreground and no border (borders belong to cards).
           return (
-            <div key={idx} style={{ display: "flex", justifyContent: "flex-start", margin: "6px 0" }}>
+            <div key={idx} style={{ display: "flex", justifyContent: "flex-start", margin: "0 0 10px" }}>
               <div
                 style={{
                   maxWidth: "92%",
                   padding: "6px 10px",
-                  borderRadius: 6,
-                  border: "1px solid #ff4d4f",
-                  color: "#ff4d4f",
+                  borderRadius: "var(--ldc-radius-lg)",
+                  background: "var(--ldc-error-soft)",
+                  color: "var(--ldc-error)",
                   fontSize: 12,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
@@ -291,10 +310,11 @@ export function ChatView({
         );
       })}
       {running && (
-        // 生成中指示（#450）：替代静态省略号；Spin 是平面指示器，符合 ADR 0020
-        // Generating indicator (#450): replaces the static ellipsis; Spin is a
-        // flat indicator, in line with ADR 0020.
-        <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "4px 6px" }}>
+        // 生成中指示（#450）：替代静态省略号。Spin 只有旋转，不带 antd 的缩放
+        // 位移，与 ADR 0037 关闭位移动效的口径一致
+        // Generating indicator (#450): replaces the static ellipsis. Spin only
+        // rotates — no antd scale/slide — which matches the motion rule of ADR 0037.
+        <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "0 2px 4px" }}>
           <Spin size="small" />
           <Text type="secondary" style={{ fontSize: 11 }}>
             {t("assistant.generating")}

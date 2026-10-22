@@ -1,15 +1,15 @@
 // 共享面板拖宽手柄（#454）：mousedown 记录起点，mousemove 实时上报钳制
 // 后的宽度，mouseup 上报一次终值。持久化时机与存储键由调用方决定
 // （onResizeEnd），组件自身不碰 localStorage。助手边栏、侧边栏、参数停靠三处
-// 复用同一手柄，交互手感一致（实时跟手、松手持久化、无动画，ADR 0020）。
+// 复用同一手柄，交互手感一致（实时跟手、松手持久化、只过渡颜色，ADR 0037）。
 // Shared panel resize handle (#454): mousedown records the origin, mousemove
 // reports the clamped width live, mouseup reports the final width once.
 // Persistence timing and the storage key belong to the caller (onResizeEnd) —
 // the component never touches localStorage. Shared by the assistant sidebar,
 // the left pane, and the middle pane; one consistent feel (live tracking,
-// persist on release, no animation, per ADR 0020).
+// persist on release, colour-only feedback per ADR 0037).
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 export interface ResizeHandleProps {
   /** 手柄贴面板的哪条边：右缘向右拖增宽，左缘向左拖增宽 */
@@ -32,11 +32,18 @@ export interface ResizeHandleProps {
 export function ResizeHandle({ edge, width, min, max, onResize, onResizeEnd }: ResizeHandleProps) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const lastWidthRef = useRef(width);
+  // 悬停与拖拽共用一条 4px 的命中区：平时完全透明，不做常驻分隔线——
+  // 面板之间已经有一条 hairline，再画一条会变成双线。反馈只改颜色
+  // Hover and drag share one 4px hit area that is fully transparent at rest: the
+  // panels already carry a hairline between them and a second line would read as
+  // a double border. The feedback is colour only.
+  const [hot, setHot] = useState(false);
 
   const onDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
     dragRef.current = { startX: e.clientX, startWidth: width };
     lastWidthRef.current = width;
+    setHot(true);
     const clamp = (w: number) => Math.min(max, Math.max(min, w));
     const onMove = (ev: MouseEvent) => {
       const start = dragRef.current;
@@ -50,6 +57,7 @@ export function ResizeHandle({ edge, width, min, max, onResize, onResizeEnd }: R
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       dragRef.current = null;
+      setHot(false);
       onResizeEnd?.(lastWidthRef.current);
     };
     window.addEventListener("mousemove", onMove);
@@ -59,14 +67,23 @@ export function ResizeHandle({ edge, width, min, max, onResize, onResizeEnd }: R
   return (
     <div
       onMouseDown={onDragStart}
+      onMouseEnter={() => setHot(true)}
+      onMouseLeave={() => {
+        // 拖拽中指针可能短暂移出手柄：松手前保持高亮，避免反馈闪烁
+        // The pointer may leave the handle mid-drag: keep the highlight until
+        // release so the feedback never flickers.
+        if (!dragRef.current) setHot(false);
+      }}
       style={{
         position: "absolute",
-        [edge]: -3,
+        [edge]: -2,
         top: 0,
         bottom: 0,
-        width: 6,
+        width: 4,
         cursor: "col-resize",
         zIndex: 10,
+        background: hot ? "var(--ldc-info-soft, rgba(37, 99, 235, 0.10))" : "transparent",
+        transition: "background-color 120ms ease",
       }}
     />
   );

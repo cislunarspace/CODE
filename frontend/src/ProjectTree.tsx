@@ -3,7 +3,7 @@
 // 容器量高后启用虚拟滚动（#468）
 
 import { useEffect, useRef, useState, type Key } from "react";
-import { Tree, Dropdown, Modal, Typography, message, Button, Input, Tooltip, Badge } from "antd";
+import { Tree, Dropdown, Modal, message, Button, Input, Tooltip, Badge } from "antd";
 import type { MenuProps } from "antd";
 import {
   RocketOutlined,
@@ -18,12 +18,12 @@ import type { ArtifactSummary } from "./projectApi";
 import { catalogDelete, catalogTag, catalogQuery, STAR_TAG } from "./catalogApi";
 import { useTranslation } from "./i18n";
 
-const { Text } = Typography;
-
 // 备注摘要截断长度（Tooltip 悬停显示）
 const NOTE_PREVIEW_LEN = 80;
 
-// 分组文案（ADR 0020：严肃视觉，不用 emoji；计数走徽标）
+// 分组文案：纯文字，不用 emoji；计数走徽标（扁平克制，见 ADR 0037）
+// Group labels: plain text, no emoji; counts live in a badge (flat and restrained,
+// per ADR 0037).
 const GROUP_LABELS: Record<string, string> = {
   orbit: "轨道",
   family: "轨道族",
@@ -225,7 +225,9 @@ export function ProjectTree({
           height={treeHeight > 0 ? treeHeight : undefined}
           expandedKeys={expandedKeys}
           onExpand={(keys: Key[]) => setExpandedKeys(keys)}
-          // ADR 0020 去动画：收起/展开过渡停用，子行直接显隐
+          // 收起/展开直接显隐子行，不做位移过渡（ADR 0037 关闭位移动效）
+          // Collapse and expand show or hide children directly, with no sliding
+          // transition (ADR 0037 disables movement effects).
           motion={false}
           checkable
           selectedKeys={selectedId ? [selectedId] : []}
@@ -243,20 +245,33 @@ export function ProjectTree({
           }}
           titleRender={(node: any) => {
             if (!node.data) {
-              // 分组头（#468）：文字 + 计数徽标；空组整头置灰（组固定渲染，徽标同灰）
+              // 分组头（#468）：分区标签 + 计数徽标；空组整头褪到最弱的文字档
+              // Group header (#468): a section label plus a count badge; an empty
+              // group fades the whole header to the faintest text step.
               const empty = node.count === 0;
               return (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Text strong style={{ fontSize: 12, color: empty ? "#8c8c8c" : undefined }}>
+                  <span
+                    className="ldc-section-label"
+                    style={empty ? { color: "var(--ldc-text-faint)" } : undefined}
+                  >
                     {node.title}
-                  </Text>
+                  </span>
                   <Badge
                     count={node.count}
                     showZero
                     overflowCount={99999}
-                    // 计数徽标去胶囊（ADR 0020/0034）：圆角 2px 与其他控件一致
-                    // Square the count badge (ADR 0020/0034): 2px matches the rest.
-                    style={{ backgroundColor: empty ? "#8c8c8c" : "#0958d9", borderRadius: 2 }}
+                    // 计数徽标：中性浅底、6px 圆角、11px 次级文字；空组褪成透明底
+                    // Count badge: neutral fill, 6px radius, 11px secondary text; an
+                    // empty group drops the fill altogether.
+                    style={{
+                      backgroundColor: empty ? "transparent" : "var(--ldc-muted-bg)",
+                      color: empty ? "var(--ldc-text-faint)" : "var(--ldc-text-secondary)",
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontVariantNumeric: "tabular-nums",
+                      boxShadow: "none",
+                    }}
                   />
                 </span>
               );
@@ -293,43 +308,51 @@ export function ProjectTree({
                     minWidth: 0,
                   }}
                 >
-                  {/* 图钉切换：钉住/取消固定层，点击不改选中，不冒泡触发树选中 */}
+                  {/* 图钉与星标：默认淡显，指针或键盘进入该行才浮现（.ldc-hover-actions）。
+                      两个开关都不改选中、不冒泡触发树选中 */}
+                  {/* Pin and star: faint by default, revealed when the pointer or
+                      keyboard enters the row (.ldc-hover-actions). Neither changes the
+                      selection nor bubbles into the tree selection. */}
                   <span
-                    role="button"
-                    aria-label={t("tree.pin_toggle")}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTogglePin?.(item);
-                    }}
-                    style={{
-                      cursor: "pointer",
-                      color: pinned ? "#0958d9" : "#bfbfbf",
-                      fontSize: 11,
-                      lineHeight: 1,
-                      display: "inline-flex",
-                      flexShrink: 0,
-                    }}
+                    className="ldc-hover-actions"
+                    style={{ display: "inline-flex", gap: 2, flexShrink: 0 }}
                   >
-                    {pinned ? <PushpinFilled /> : <PushpinOutlined />}
-                  </span>
-                  {/* 星标切换：点击不改选中，不冒泡触发树选中 */}
-                  <span
-                    role="button"
-                    aria-label={t("tree.star_toggle")}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleStar(item);
-                    }}
-                    style={{
-                      cursor: "pointer",
-                      color: starred ? "#faad14" : "#bfbfbf",
-                      fontSize: 11,
-                      lineHeight: 1,
-                      display: "inline-flex",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {starred ? <StarFilled /> : <StarOutlined />}
+                    <span
+                      role="button"
+                      aria-label={t("tree.pin_toggle")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTogglePin?.(item);
+                      }}
+                      style={{
+                        cursor: "pointer",
+                        color: pinned ? "var(--ldc-primary)" : "var(--ldc-text-faint)",
+                        fontSize: 12,
+                        lineHeight: 1,
+                        display: "inline-flex",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {pinned ? <PushpinFilled /> : <PushpinOutlined />}
+                    </span>
+                    <span
+                      role="button"
+                      aria-label={t("tree.star_toggle")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleStar(item);
+                      }}
+                      style={{
+                        cursor: "pointer",
+                        color: starred ? "var(--ldc-warning)" : "var(--ldc-text-faint)",
+                        fontSize: 12,
+                        lineHeight: 1,
+                        display: "inline-flex",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {starred ? <StarFilled /> : <StarOutlined />}
+                    </span>
                   </span>
                   <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                     {item.note ? (
@@ -341,9 +364,10 @@ export function ProjectTree({
                     )}
                     {summaryParts.length > 0 && (
                       <span
+                        className="ldc-num"
                         style={{
-                          fontSize: 10,
-                          color: "#8c8c8c",
+                          fontSize: 11,
+                          color: "var(--ldc-text-muted)",
                           lineHeight: 1.4,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -363,7 +387,7 @@ export function ProjectTree({
 
       {/* 编辑备注：保存走 catalog_tag 整体替换（tags 用查得的当前值） */}
       <Modal
-        title={t("tree.edit_note")}
+        title={<span style={{ fontSize: 14, fontWeight: 600 }}>{t("tree.edit_note")}</span>}
         open={!!noteEditing}
         onCancel={() => setNoteEditing(null)}
         onOk={handleSaveNote}

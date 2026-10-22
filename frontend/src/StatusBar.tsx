@@ -8,13 +8,10 @@
 // degrade to placeholders silently.
 
 import { useEffect, useState } from "react";
-import { Typography } from "antd";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { useTranslation } from "./i18n";
 import { etFromEpoch, etToUtcLabel } from "./timeBasis";
-
-const { Text } = Typography;
 
 /** Rust stats::SystemStats 的前端对偶（IPC 字段 camelCase） */
 export interface SystemStats {
@@ -34,6 +31,28 @@ export function formatLocalTime(date: Date): string {
   return (
     `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ` +
     `${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`
+  );
+}
+
+// 状态栏没有 mode 参数：它读根容器注入的 --ldc-* 变量，颜色随明暗自动跟随，
+// 单独渲染（组件测试）时回落到同一份亮色令牌
+// The status bar takes no mode prop: it reads the --ldc-* variables the app root
+// injects, so colours follow the theme switch on their own; rendered standalone
+// (component tests) it falls back to the same light-mode tokens.
+const ITEM_STYLE = {
+  fontSize: 11,
+  color: "var(--ldc-text-muted, #71717a)",
+  whiteSpace: "nowrap",
+} as const;
+
+/** 弱化圆点分隔：比竖线安静，和 11px 的元数据文字同一档重量。
+ *  A faint dot separator: quieter than a pipe and on the same weight as the
+ *  11px metadata text. */
+function Separator() {
+  return (
+    <span aria-hidden style={{ fontSize: 11, color: "var(--ldc-text-faint, #a1a1aa)" }}>
+      ·
+    </span>
   );
 }
 
@@ -83,12 +102,6 @@ export function StatusBar({
 
   // 当前 ET（J2000 TDB 秒）：UT 时钟经 timeBasis 换算，展示口径与画布一致
   const et = etFromEpoch(now.toISOString());
-  const itemStyle = { fontSize: 12 } as const;
-  const sep = (
-    <Text type="secondary" style={{ fontSize: 12, opacity: 0.35 }}>
-      |
-    </Text>
-  );
 
   return (
     <div
@@ -96,47 +109,47 @@ export function StatusBar({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: 8,
         height: 26,
         padding: "0 12px",
         flexShrink: 0,
-        borderTop: "1px solid var(--tod-border, #e8e8e8)",
-        background: "var(--tod-panel-bg, transparent)",
+        borderTop: "1px solid var(--ldc-border, #e4e4e7)",
+        background: "var(--ldc-panel-bg, #fafafa)",
+        overflow: "hidden",
       }}
     >
-      <Text type="secondary" style={itemStyle} data-testid="status-view">
+      <span style={ITEM_STYLE} data-testid="status-view">
         {t("status.view")}：{view}
-      </Text>
-      {sep}
-      <Text type="secondary" style={itemStyle}>
+      </span>
+      <Separator />
+      <span style={ITEM_STYLE}>
         {t("status.task")}：{busy ? progress || t("run.executing") : t("status.task.idle")}
-      </Text>
-      {sep}
-      <Text type="secondary" style={itemStyle}>
+      </span>
+      <Separator />
+      <span style={ITEM_STYLE} className="ldc-num">
         {t("status.local")} {formatLocalTime(now)}
-      </Text>
-      <Text type="secondary" style={itemStyle}>
+      </span>
+      <span style={ITEM_STYLE} className="ldc-num">
         {t("status.utc")} {etToUtcLabel(et)}
-      </Text>
-      <Text type="secondary" style={itemStyle}>
+      </span>
+      <span style={ITEM_STYLE} className="ldc-num">
         {t("status.et")} {Math.round(et)} s
-      </Text>
-      {sep}
-      <Text type="secondary" style={itemStyle}>
-        {t("status.cpu")}{" "}
-        {stats?.cpuPercent == null ? "—" : `${stats.cpuPercent.toFixed(1)}%`}
-      </Text>
-      <Text type="secondary" style={itemStyle}>
+      </span>
+      <Separator />
+      <span style={ITEM_STYLE} className="ldc-num">
+        {t("status.cpu")} {stats?.cpuPercent == null ? "—" : `${stats.cpuPercent.toFixed(1)}%`}
+      </span>
+      <span style={ITEM_STYLE} className="ldc-num">
         {t("status.memory")}{" "}
         {stats === null
           ? "—"
           : `${(stats.memUsedBytes / 1024 ** 3).toFixed(1)} GB / ${(
               stats.memTotalBytes / 1024 ** 3
             ).toFixed(1)} GB`}
-      </Text>
-      <Text type="secondary" style={{ ...itemStyle, marginLeft: "auto" }}>
+      </span>
+      <span style={{ ...ITEM_STYLE, marginLeft: "auto" }} className="ldc-num">
         {t("status.version")} {version === null ? "—" : `v${version}`}
-      </Text>
+      </span>
     </div>
   );
 }
