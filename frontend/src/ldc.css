@@ -1,0 +1,244 @@
+/* LDC 全局层：壳体基础样式与可复用类。
+   令牌由 theme.ts 的 themeCssVars 注入应用根容器的内联 CSS 变量，本文件只消费 --ldc-*，
+   不重复定义颜色，避免两处色板漂移。
+   The LDC global layer: shell basics and reusable classes. Tokens are injected as
+   inline CSS variables on the app root by themeCssVars in theme.ts; this file only
+   consumes --ldc-* and never redefines a colour, so the palette cannot drift. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ldc-page-bg, #ffffff);
+  color: var(--ldc-text, #18181b);
+  font-family:
+    "Inter", "Segoe UI Variable Text", "Segoe UI", "Noto Sans SC", "Microsoft YaHei UI",
+    "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--ldc-info-soft, rgba(37, 99, 235, 0.1));
+}
+
+/* 数字等宽：状态栏、参数值、时间轴标签的字宽不随数值跳动
+   Tabular figures: status bar, parameter values and timeline labels keep a steady width. */
+.ldc-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 细滚动条：浏览器默认滚动条偏宽、带轨道，嵌在面板里显得突兀。颜色跟随令牌
+   Slim scrollbars: the browser default is wide and draws a track that looks heavy
+   inside panels; colours follow the tokens. */
+.ldc-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ldc-text-muted) 32%, transparent) transparent;
+}
+
+.ldc-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ldc-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ldc-scroll::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--ldc-text-muted) 32%, transparent);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: padding-box;
+}
+
+.ldc-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--ldc-text-muted) 55%, transparent);
+}
+
+.ldc-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 分区标题：侧栏底部的工具清单、面板内的小节都用它
+   Section label: the sidebar tool list and panel subsections. */
+.ldc-section-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ldc-text-muted);
+}
+
+/* 面板头：固定高度、一条淡分隔线、标题 12px
+   Panel head: fixed height, one hairline, 12px title. */
+.ldc-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ldc-border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ldc-text);
+}
+
+/* 徽标：中性底、6px 圆角、11px
+   Chip: neutral fill, 6px radius, 11px text. */
+.ldc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--ldc-radius-sm);
+  background: var(--ldc-muted-bg);
+  color: var(--ldc-text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 可交互行：颜色过渡代替位移与缩放
+   Interactive row: colour transition instead of movement or scaling. */
+.ldc-hover-row {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.ldc-hover-row:hover {
+  background: var(--ldc-hover-bg);
+}
+
+/* 悬停外壳：透明包裹层拿悬停底，内部 antd 按钮透出它。
+   外观只有 display 与圆角，四处外壳共用这一条类
+   Hover shell: a transparent wrapper takes the hover fill and the antd button
+   inside lets it show through. Only display, radius and the hover feedback belong
+   here, so the shells across the chrome share one class. */
+.ldc-hover-shell {
+  display: flex;
+  flex-shrink: 0;
+  border-radius: var(--ldc-radius);
+  transition: background-color 120ms ease;
+}
+
+.ldc-hover-shell:hover {
+  background: var(--ldc-hover-bg);
+}
+
+/* 表单字段标签：11px 次级色，参数停靠、库筛选栏、弹窗共用
+   Form field label: 11px in the secondary tone, shared by the parameter dock,
+   the catalog filter bar and the dialogs. */
+.ldc-field-label {
+  font-size: 11px;
+  color: var(--ldc-text-secondary);
+}
+
+/* 行内操作图标：默认淡显，指针或键盘进入该行时浮现，避免一屏图标抢注意力
+   In-row action icons: faint by default and revealed when the pointer or keyboard
+   enters the row, so a screenful of icons does not compete with the content. */
+.ldc-hover-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.ldc-hover-row:hover .ldc-hover-actions,
+.ldc-hover-row:focus-within .ldc-hover-actions,
+.ant-tree .ant-tree-treenode:hover .ldc-hover-actions,
+.ant-tree .ant-tree-treenode:focus-within .ldc-hover-actions {
+  opacity: 1;
+}
+
+/* 树行：antd Tree 的内容区圆角取全局 borderRadius，这里收到 6px，与行高 24px 匹配
+   Tree rows: antd Tree takes the content wrapper radius from the global
+   borderRadius; tightened to 6px to match the 24px row height. */
+.ant-tree .ant-tree-node-content-wrapper {
+  border-radius: var(--ldc-radius-sm);
+}
+
+/* 空状态：居中图标 + 主副文案
+   Empty state: a centred icon with a title and a hint. */
+.ldc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--ldc-text-muted);
+}
+
+.ldc-empty-icon {
+  font-size: 20px;
+  color: var(--ldc-text-faint);
+}
+
+/* 卡片：白底、淡描边、12px 圆角，不用投影
+   Card: solid fill, hairline border, 12px radius, no shadow. */
+.ldc-card {
+  background: var(--ldc-card-bg);
+  border: 1px solid var(--ldc-border);
+  border-radius: var(--ldc-radius-lg);
+}
+
+/* antd 浮层：统一描边 + 一层柔和投影，替代默认的宽扩散阴影
+   antd overlays: one hairline plus a single soft shadow instead of the wide default. */
+.ant-dropdown .ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-picker-dropdown .ant-picker-panel-container,
+.ant-modal .ant-modal-content,
+.ant-popover .ant-popover-inner {
+  box-shadow: var(--ldc-shadow-overlay) !important;
+}
+
+.ant-modal .ant-modal-content {
+  border: 1px solid var(--ldc-border);
+  border-radius: var(--ldc-radius-xl);
+}
+
+/* 弹窗遮罩：亮色下也用中性半透明，不用 antd 的纯黑。暗色由 --ldc-mask 加深
+   Modal mask: neutral translucency in light mode too, not antd's plain black; the
+   dark value of --ldc-mask is deeper so it still dims the background. */
+.ant-modal-mask {
+  background: var(--ldc-mask, rgba(9, 9, 11, 0.32));
+}
+
+/* 提示气泡：近黑底（亮）/近白底（暗），与主色同一口径
+   Tooltip: near-black on light, near-white on dark, the same rule as the primary colour. */
+.ant-tooltip .ant-tooltip-inner {
+  border-radius: var(--ldc-radius-sm);
+  font-size: 11px;
+}
+
+/* 表单标签：次级色，主文字留给已填内容
+   Form labels: secondary tone, the primary text tone is reserved for the values. */
+.ant-form-item-label > label {
+  color: var(--ldc-text-secondary);
+}
+
+/* 提示条与全局消息：与卡片同一套圆角与描边
+   Alerts and global messages: the same radii and hairline as cards. */
+.ant-alert {
+  border-radius: var(--ldc-radius);
+}
+
+.ant-message .ant-message-notice-content {
+  border: 1px solid var(--ldc-border);
+  border-radius: var(--ldc-radius);
+  box-shadow: var(--ldc-shadow-overlay);
+}
+
+/* 自定义可点击容器（行、卡片）的键盘焦点环
+   Keyboard focus ring for custom clickable containers (rows, cards). */
+.ldc-focus-ring:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ldc-info) 55%, transparent);
+  outline-offset: 1px;
+}

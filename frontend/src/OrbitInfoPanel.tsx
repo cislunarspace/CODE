@@ -12,11 +12,10 @@
 // list entries may be run products / candidate arcs with no record to fetch,
 // hence this separate lightweight view.
 
-import { Descriptions, Typography } from "antd";
+import { Descriptions } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
 import { useTranslation } from "./i18n";
 import type { OrbitInfoView } from "./orbitListItems";
-
-const { Text } = Typography;
 
 export interface OrbitInfoPanelProps {
   /** 选中轨道的详情；null = 未选中（显示操作指引） */
@@ -28,10 +27,9 @@ export function OrbitInfoPanel({ info }: OrbitInfoPanelProps) {
   const { t } = useTranslation();
   if (!info) {
     return (
-      <div data-testid="orbit-info-panel" style={{ padding: "8px 2px" }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          {t("orbit_info.empty")}
-        </Text>
+      <div data-testid="orbit-info-panel" className="ldc-empty">
+        <InfoCircleOutlined className="ldc-empty-icon" />
+        <span style={{ fontSize: 12 }}>{t("orbit_info.empty")}</span>
       </div>
     );
   }
@@ -46,12 +44,36 @@ export function OrbitInfoPanel({ info }: OrbitInfoPanelProps) {
     [t("orbit_info.source"), info.source],
   ];
   return (
-    <div data-testid="orbit-info-panel">
+    <div data-testid="orbit-info-panel" style={{ padding: 12 }}>
       <Descriptions
         size="small"
         column={1}
-        title={info.label}
-        styles={{ title: { fontSize: 13 } }}
+        // 键值行不加冒号：标签已经是 11px 的弱化元数据，冒号只会多出一处噪点
+        // No colon between label and value: the label is already a quiet 11px
+        // metadata line and a colon only adds noise.
+        colon={false}
+        title={<span style={{ fontSize: 13, fontWeight: 600 }}>{info.label}</span>}
+        styles={{
+          title: { marginBottom: 8 },
+          // 标签 11px 三级文字，值 12px 主文字，行间一条 hairline 分隔，与
+          // 记录详情面板同一读法
+          // 11px tertiary labels, 12px primary values, one hairline between rows,
+          // the same reading pattern as the record detail panel.
+          label: {
+            width: 96,
+            fontSize: 11,
+            color: "var(--ldc-text-muted)",
+            paddingBlock: 6,
+            borderTop: "1px solid var(--ldc-border)",
+          },
+          content: {
+            fontSize: 12,
+            color: "var(--ldc-text)",
+            fontVariantNumeric: "tabular-nums",
+            paddingBlock: 6,
+            borderTop: "1px solid var(--ldc-border)",
+          },
+        }}
         items={fields.map(([k, v]) => ({ key: k, label: k, children: v }))}
       />
     </div>

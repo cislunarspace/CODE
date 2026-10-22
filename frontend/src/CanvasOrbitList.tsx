@@ -8,11 +8,8 @@
 // previews, click focuses. Focus/preview state lives in App, so canvas
 // picking and list interactions stay consistent both ways.
 
-import { Typography } from "antd";
 import { useTranslation } from "./i18n";
 import type { OrbitListItem } from "./orbitListItems";
-
-const { Text } = Typography;
 
 export interface CanvasOrbitListProps {
   items: OrbitListItem[];
@@ -40,46 +37,96 @@ export function CanvasOrbitList({
   const { t } = useTranslation();
   if (items.length === 0) return null;
   return (
-    <div data-testid="canvas-orbit-list" style={{ padding: "4px 8px" }}>
-      <Text type="secondary" style={{ fontSize: 11 }}>
-        {t("canvas.orbit_list")}
-      </Text>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 2 }}>
-        {items.map((item, i) => (
-          <div
-            key={`${item.label}-${i}`}
-            data-orbit-item=""
-            data-focused={item.trajIndex === focusIndex ? "true" : "false"}
-            onMouseEnter={() => onPreviewChange(item.trajIndex)}
-            onMouseLeave={() => onPreviewChange(null)}
-            onClick={() => onFocusChange(item.trajIndex === focusIndex ? null : item.trajIndex)}
-            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}
-          >
-            <span
-              data-testid="orbit-swatch"
+    <div data-testid="canvas-orbit-list" style={{ padding: "2px 0" }}>
+      <span className="ldc-section-label">{t("canvas.orbit_list")}</span>
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 4 }}>
+        {items.map((item, i) => {
+          const focused = item.trajIndex === focusIndex;
+          return (
+            <div
+              key={`${item.label}-${i}`}
+              data-orbit-item=""
+              data-focused={focused ? "true" : "false"}
+              // 悬停底由 .ldc-hover-row 提供，选中行的底写在内联样式里（优先级
+              // 高于类规则），两者不会同时生效
+              // The hover fill comes from .ldc-hover-row, the selected row's fill
+              // is inline (higher priority than the class rule), so the two never
+              // fight over the same row.
+              className="ldc-hover-row"
+              onMouseEnter={() => onPreviewChange(item.trajIndex)}
+              onMouseLeave={() => onPreviewChange(null)}
+              onClick={() => onFocusChange(item.trajIndex === focusIndex ? null : item.trajIndex)}
               style={{
-                width: 14,
-                height: 2,
-                background: item.color,
-                display: "inline-block",
-                // 聚焦标记（#460）：色样 1px 描边（ADR 0020 平面化）
-                // Focus marker (#460): a 1px outline on the swatch (flat style per ADR 0020).
-                ...(item.trajIndex === focusIndex ? { outline: "1px solid currentColor" } : {}),
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                // 行高 24 与面板里的图标按钮同高，清单读起来是参数区的一节
+                // 24px rows match the panel's icon buttons, so the list reads as
+                // one section of the parameter area.
+                height: 24,
+                padding: "0 6px",
+                borderRadius: 6,
+                overflow: "hidden",
+                cursor: "pointer",
+                fontSize: 12,
+                // 选中行用中性 activeBg + activeText，不用彩色文字：彩色留给状态
+                // Selected rows take the neutral active fill and text; colour stays
+                // reserved for status.
+                ...(focused
+                  ? { background: "var(--ldc-active-bg)", color: "var(--ldc-active-text)" }
+                  : { color: item.grayed ? "var(--ldc-text-muted)" : "var(--ldc-text)" }),
               }}
-            />
-            <Text style={{ fontSize: 12 }}>{item.label}</Text>
-            {item.frame && (
-              <Text type="secondary" style={{ fontSize: 10, border: "1px solid rgba(128,128,128,0.4)", borderRadius: 3, padding: "0 3px" }}>
-                {item.frame}
-              </Text>
-            )}
-            {item.grayed && unavailableNote && (
-              <Text data-testid="orbit-unavailable" type="secondary" style={{ fontSize: 10 }}>
-                {unavailableNote}
-              </Text>
-            )}
-          </div>
-        ))}
+            >
+              <span
+                data-testid="orbit-swatch"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  background: item.color,
+                  display: "inline-block",
+                  flexShrink: 0,
+                  // 聚焦标记（#460，ADR 0037）：色样外沿加 1px 同色描边圈，
+                  // 色相仍是数据色，标记不引入第二种颜色
+                  // Focus marker (#460, ADR 0037): a 1px ring in the current text
+                  // colour around the swatch. The swatch keeps its data colour, so
+                  // the marker adds no second hue.
+                  ...(focused ? { outline: "1px solid currentColor", outlineOffset: 1 } : {}),
+                }}
+              />
+              <span
+                className="ldc-num"
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {item.label}
+              </span>
+              {item.frame && (
+                <span className="ldc-chip" style={{ flexShrink: 0 }}>{item.frame}</span>
+              )}
+              {item.grayed && unavailableNote && (
+                <span
+                  data-testid="orbit-unavailable"
+                  style={{
+                    marginLeft: "auto",
+                    minWidth: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontSize: 11,
+                    color: "var(--ldc-text-faint)",
+                  }}
+                >
+                  {unavailableNote}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

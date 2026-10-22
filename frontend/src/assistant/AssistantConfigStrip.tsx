@@ -41,6 +41,12 @@ export function AssistantConfigStrip({
             style={{
               minWidth: opt.id === "model" ? 150 : 96,
               maxWidth: opt.id === "model" ? 220 : undefined,
+              // 配置条是输入区的辅助控件：24px 高，圆角与字号跟 antd 控件 token
+              // 走，随用户的界面字号设置一起变
+              // The config strip is a helper above the input: 24px tall, with the
+              // radius and font size left to the antd control tokens so it follows
+              // the user's UI font-size setting.
+              height: 24,
             }}
             value={opt.currentValue ?? undefined}
             disabled={disabled}

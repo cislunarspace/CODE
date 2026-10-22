@@ -127,19 +127,23 @@ export function StationKeepingModal({
   return (
     <Modal
       title={
-        <Space orientation="horizontal">
-          <RocketOutlined style={{ color: "#0958d9" }} />
-          <span>轨道保持仿真评估 (Station Keeping)</span>
+        <Space orientation="horizontal" size={6}>
+          <RocketOutlined style={{ fontSize: 13, color: "var(--ldc-text-muted)" }} />
+          <span style={{ fontSize: 14, fontWeight: 600 }}>
+            轨道保持仿真评估 (Station Keeping)
+          </span>
         </Space>
       }
       open={open}
       onCancel={onClose}
+      styles={{ body: { paddingTop: 4 } }}
       footer={[
-        <Button key="cancel" onClick={onClose} disabled={running}>
+        <Button key="cancel" size="small" onClick={onClose} disabled={running}>
           取消
         </Button>,
         <Button
           key="submit"
+          size="small"
           type="primary"
           loading={running}
           disabled={!canRun}
@@ -155,11 +159,11 @@ export function StationKeepingModal({
           type="info"
           showIcon
           message={
-            <span>
+            <span style={{ fontSize: 12 }}>
               已绑定源星历轨道: <strong>{labelText}</strong> (ID: {idText})
             </span>
           }
-          style={{ marginBottom: 12 }}
+          style={{ marginBottom: 10 }}
         />
       )}
 
@@ -167,8 +171,8 @@ export function StationKeepingModal({
         <Alert
           type="info"
           showIcon
-          message="正在读取源记录的星历覆盖范围..."
-          style={{ marginBottom: 12 }}
+          message={<span style={{ fontSize: 12 }}>正在读取源记录的星历覆盖范围...</span>}
+          style={{ marginBottom: 10 }}
         />
       )}
 
@@ -176,9 +180,9 @@ export function StationKeepingModal({
         <Alert
           type="warning"
           showIcon
-          message="无法确定源星历覆盖范围，执行已禁用"
-          description={spanReason}
-          style={{ marginBottom: 12 }}
+          message={<span style={{ fontSize: 12 }}>无法确定源星历覆盖范围，执行已禁用</span>}
+          description={<span style={{ fontSize: 11 }}>{spanReason}</span>}
+          style={{ marginBottom: 10 }}
         />
       )}
 
@@ -186,14 +190,19 @@ export function StationKeepingModal({
         <Alert
           type="error"
           showIcon
-          message="仿真时长超出源星历覆盖范围"
-          description={`当前设置需要仿真时长约 ${requiredDurationDays.toFixed(2)} 天，超出源星历覆盖范围（约 ${(spanDays as number).toFixed(2)} 天）。请调小控制次数或缩小控制间隔。`}
-          style={{ marginBottom: 12 }}
+          message={<span style={{ fontSize: 12 }}>仿真时长超出源星历覆盖范围</span>}
+          description={
+            <span style={{ fontSize: 11 }}>
+              当前设置需要仿真时长约 {requiredDurationDays.toFixed(2)} 天，超出源星历覆盖范围（约{" "}
+              {(spanDays as number).toFixed(2)} 天）。请调小控制次数或缩小控制间隔。
+            </span>
+          }
+          style={{ marginBottom: 10 }}
         />
       )}
 
       <Form layout="vertical" size="small">
-        <Form.Item label="控制模式 (Control Mode)">
+        <Form.Item label="控制模式 (Control Mode)" style={{ marginBottom: 10 }}>
           <Select
             value={controlMode}
             onChange={setControlMode}
@@ -209,7 +218,7 @@ export function StationKeepingModal({
         </Form.Item>
 
         <Space orientation="horizontal" style={{ width: "100%" }} size={12}>
-          <Form.Item label="控制间隔 (天)" style={{ flex: 1 }}>
+          <Form.Item label="控制间隔 (天)" style={{ flex: 1, marginBottom: 10 }}>
             <InputNumber
               style={{ width: "100%" }}
               min={0.01}
@@ -218,7 +227,7 @@ export function StationKeepingModal({
               onChange={(v) => setControlInterval(v || 0.25)}
             />
           </Form.Item>
-          <Form.Item label="反馈弧段 (天)" style={{ flex: 1 }}>
+          <Form.Item label="反馈弧段 (天)" style={{ flex: 1, marginBottom: 10 }}>
             <InputNumber
               style={{ width: "100%" }}
               min={0.01}
@@ -230,7 +239,7 @@ export function StationKeepingModal({
         </Space>
 
         <Space orientation="horizontal" style={{ width: "100%" }} size={12}>
-          <Form.Item label="控制次数 (N)" style={{ flex: 1 }}>
+          <Form.Item label="控制次数 (N)" style={{ flex: 1, marginBottom: 10 }}>
             <InputNumber
               style={{ width: "100%" }}
               min={1}
@@ -239,7 +248,7 @@ export function StationKeepingModal({
               onChange={(v) => setNumControls(v || 120)}
             />
           </Form.Item>
-          <Form.Item label="蒙特卡洛样本数" style={{ flex: 1 }}>
+          <Form.Item label="蒙特卡洛样本数" style={{ flex: 1, marginBottom: 10 }}>
             <InputNumber
               style={{ width: "100%" }}
               min={1}

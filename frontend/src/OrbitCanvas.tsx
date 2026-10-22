@@ -991,10 +991,11 @@ export function OrbitCanvas({
 
   return (
     <div ref={mountRef} style={{ width: "100%", height: "100%", position: "relative" }}>
-      {/* 拾取提示（#452）：直角小标签跟随光标，无标签轨迹不显示；
-          平面化风格遵循 ADR 0020 */}
-      {/* The pick tooltip (#452): a square compact label trailing the cursor,
-          hidden for unlabeled trajectories; flat style per ADR 0020. */}
+      {/* 拾取提示（#452）：紧凑标签跟随光标，无标签轨迹不显示。
+          它浮在三维场景之上，用固定深色底，浅色与深色画布上都可读。 */}
+      {/* The pick tooltip (#452): a compact label trailing the cursor, hidden for
+          unlabeled trajectories. It floats above the 3D scene and keeps a fixed
+          dark fill so it stays legible on light and dark canvases alike. */}
       {hoverTip !== null && labels?.[hoverTip.index] && (
         <div
           data-testid="pick-tooltip"
@@ -1007,7 +1008,7 @@ export function OrbitCanvas({
             background: "rgba(20, 24, 30, 0.85)",
             color: "#e8eef4",
             border: "1px solid rgba(201, 211, 221, 0.35)",
-            borderRadius: 2,
+            borderRadius: 4,
             padding: "2px 6px",
             whiteSpace: "nowrap",
             zIndex: 5,
@@ -1039,6 +1040,7 @@ export function OrbitCanvas({
             pointerEvents: "none",
             fontSize: 11,
             color: "#c9d3dd",
+            fontVariantNumeric: "tabular-nums",
             textShadow: "0 1px 2px rgba(0,0,0,0.6)",
           }}
         >
@@ -1058,7 +1060,7 @@ export function OrbitCanvas({
             style={{
               width: 10,
               minHeight: 96,
-              borderRadius: 2,
+              borderRadius: 4,
               background: `linear-gradient(to top, ${COOLWARM_STOPS.join(", ")})`,
             }}
           />

@@ -11,7 +11,7 @@ import {
   type UpdateInfo,
 } from "./updater";
 
-const { Paragraph, Title } = Typography;
+const { Paragraph } = Typography;
 
 export interface AboutModalProps {
   open: boolean;
@@ -66,36 +66,45 @@ export const AboutModal: React.FC<AboutModalProps> = ({
   return (
     <Modal
       title={
-        <Space>
-          <InfoCircleOutlined />
-          <span>关于 CODE</span>
+        <Space size={6}>
+          <InfoCircleOutlined style={{ fontSize: 13, color: "var(--ldc-text-muted)" }} />
+          <span style={{ fontSize: 14, fontWeight: 600 }}>关于 CODE</span>
         </Space>
       }
       open={open}
       onCancel={onClose}
+      width={460}
+      styles={{ body: { paddingTop: 4 } }}
       footer={
-        <Space>
+        <Space size={8}>
           <Button
+            size="small"
             icon={<SyncOutlined spin={checking} />}
             loading={checking}
             onClick={handleCheckUpdate}
           >
             {t("updater.check_action")}
           </Button>
-          <Button type="primary" onClick={onClose}>
+          <Button size="small" type="primary" onClick={onClose}>
             确定
           </Button>
         </Space>
       }
     >
-      <div style={{ padding: "12px 0" }}>
-        <Title level={4} style={{ margin: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ldc-text)" }}>
           CODE - 地月转移轨道设计系统
-        </Title>
-        <Paragraph type="secondary" style={{ marginTop: 4 }}>
-          版本号：v{displayVersion}
-        </Paragraph>
-        <Paragraph>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* 版本号一行放同一文本节点：这段文字会被用户原文引用，拆成多个元素后
+              既难选中也难复制 */}
+          {/* The version stays one text node: users quote this line verbatim, and
+              splitting it across elements makes it hard to select or copy. */}
+          <span style={{ fontSize: 11, color: "var(--ldc-text-muted)" }}>
+            版本号：v{displayVersion}
+          </span>
+        </div>
+        <Paragraph type="secondary" style={{ margin: 0, fontSize: 12, lineHeight: 1.6 }}>
           基于 CR3BP 高精度动力学模型与星历转换算法，支持平动点轨道生成、转移轨道设计及轨道保持仿真。
         </Paragraph>
       </div>

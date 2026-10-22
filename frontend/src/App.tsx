@@ -28,7 +28,7 @@ import { AppTopBar, type TopMenuSpec } from "./AppTopBar";
 import { DocTabs } from "./DocTabs";
 import { SopBar } from "./SopBar";
 import { deriveSop, isEpochField, missingEpochFields, type SopFix, type SopStageKey } from "./sop";
-import { themeBehavior, themeTokens, themeCssVars, shellColors, themeComponents, flatSwitchStyles } from "./theme";
+import { themeBehavior, themeTokens, themeCssVars, shellColors, themeComponents } from "./theme";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { OrbitCanvas, type CanvasApi, type ProjectionMode, type CenterMode, type FrameMode } from "./OrbitCanvas";
 import { CanvasOrbitList } from "./CanvasOrbitList";
@@ -288,6 +288,22 @@ export default function App() {
   const [fontSize, setFontSize] = useState<number>(() => {
     return Number(localStorage.getItem("tod-font-size") || "12");
   });
+
+  // 主题变量同时挂到 documentElement：弹窗、下拉、提示都渲染在 body 下的
+  // Portal 里，拿不到应用根 div 上注入的变量，只能从文档根继承。根 div 上的
+  // 同一份变量保留，两处同值互不冲突。
+  // The theme variables also go on documentElement: modals, dropdowns and
+  // tooltips render into portals under body, which cannot see variables injected
+  // on the app root div and must inherit them from the document root. The same
+  // set stays on the root div, so both sites carry identical values.
+  useEffect(() => {
+    const rootEl = document.documentElement;
+    const vars = themeCssVars(themeMode);
+    for (const [name, value] of Object.entries(vars)) rootEl.style.setProperty(name, value);
+    return () => {
+      for (const name of Object.keys(vars)) rootEl.style.removeProperty(name);
+    };
+  }, [themeMode]);
 
   // 主页面文档标签（ADR 0034）：三维视图 / 轨道信息 / 轨道库三张标签，可开可关。
   // 标签内容常驻挂载、非激活标签 display:none。三维视图里的 WebGL 画布是全局
@@ -1986,7 +2002,7 @@ export default function App() {
         components: themeComponents,
         token: {
           fontSize: fontSize,
-          ...themeTokens,
+          ...themeTokens(themeMode),
         },
       }}
     >
@@ -2001,8 +2017,8 @@ export default function App() {
             width: "100vw",
             height: "100vh",
             overflow: "hidden",
-            background: themeMode === "dark" ? "#141414" : "#f0f2f5",
-            color: themeMode === "dark" ? "#fff" : "#000",
+            background: colors.pageBg,
+            color: colors.text,
             // --tod-* 主题变量随明暗注入（#450）：助手边栏/会话视图/工具卡片
             // 的 var(--tod-*) 引用在此获得定义，深色不再落到浅色 fallback
             // The --tod-* theme vars injected per theme (#450): the var(--tod-*)
@@ -2120,6 +2136,10 @@ export default function App() {
                   minHeight: 0,
                   display: "flex",
                   flexDirection: "column",
+                  // 标签内容落在页面底上，右侧停靠与助手边栏各比它深一档
+                  // Tab content sits on the page surface; the parameter dock and
+                  // the assistant sidebar sit one step deeper.
+                  background: colors.pageBg,
                 }}
               >
                 {/* 三维视图标签：画布工具栏 + 画布 */}
@@ -2135,6 +2155,7 @@ export default function App() {
                   {/* 画布工具栏：投影/中心选择 + 适配/导出/设置，停靠于画布上方 */}
                   <div
                     style={{
+                      flexShrink: 0,
                       background: colors.barBg,
                       borderBottom: `1px solid ${colors.border}`,
                     }}
@@ -2191,6 +2212,7 @@ export default function App() {
                 {/* Orbit info tab: orbit-list clicks and canvas picks land here. */}
                 <div
                   data-testid="doc-orbit-info"
+                  className="ldc-scroll"
                   style={{
                     display: activeTab === "orbitInfo" ? "block" : "none",
                     flex: 1,
@@ -2219,13 +2241,15 @@ export default function App() {
                   {/* 过滤条（#468）：结果回灌侧边栏项目树 */}
                   <div
                     style={{
-                      padding: "6px 8px",
+                      flexShrink: 0,
+                      padding: "6px 10px",
+                      background: colors.barBg,
                       borderBottom: `1px solid ${colors.border}`,
                     }}
                   >
                     <CatalogFilterBar onResults={(arts) => setArtifacts(arts)} />
                   </div>
-                  <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                  <div className="ldc-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                     <RecordDetailPanel
                       record={selectedRecordDetail}
                       transferCandidates={candidateViews}
@@ -2258,12 +2282,13 @@ export default function App() {
                   <Button
                     type="text"
                     size="small"
-                    icon={<MenuUnfoldOutlined />}
+                    icon={<MenuUnfoldOutlined style={{ fontSize: 14 }} />}
                     data-testid="params-expand"
                     onClick={() =>
                       setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, false, setPanelCollapsed)
                     }
                     title={t("panel.expand")}
+                    style={{ color: colors.textMuted }}
                   />
                 </div>
               ) : (
@@ -2287,24 +2312,32 @@ export default function App() {
                     onResize={setPanelWidth}
                     onResizeEnd={(w) => localStorage.setItem(WS_PANEL_WIDTH_KEY, String(w))}
                   />
-                  <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-                    <Text strong style={{ fontSize: 12 }}>
+                  {/* 停靠头复用面板头条（32px、hairline、12px/500），只补下边距，
+                      横向内边距由停靠容器自己给 */}
+                  {/* The dock head reuses the panel-head strip (32px, hairline,
+                      12px/500) and only adds its own bottom spacing; horizontal
+                      padding comes from the dock container. */}
+                  <div
+                    className="ldc-panel-head"
+                    style={{ height: "auto", padding: "0 0 8px", marginBottom: 8 }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: 500, color: colors.text }}>
                       {toolEntry(selectedTool).title}
                     </Text>
                     <Button
                       type="text"
                       size="small"
-                      icon={<MenuFoldOutlined />}
+                      icon={<MenuFoldOutlined style={{ fontSize: 14 }} />}
                       data-testid="params-collapse"
                       onClick={() =>
                         setPaneCollapsed(WS_PANEL_COLLAPSED_KEY, true, setPanelCollapsed)
                       }
                       title={t("panel.collapse")}
-                      style={{ marginLeft: "auto" }}
+                      style={{ marginLeft: "auto", color: colors.textMuted }}
                     />
                   </div>
 
-                  <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+                  <div className="ldc-scroll" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                     <ParamsPanel
                       toolName={selectedTool}
                       schema={toolEntry(selectedTool).schema}
@@ -2335,8 +2368,12 @@ export default function App() {
                     </Button>
                     {progressMsg && (
                       <Text
-                        type="secondary"
-                        style={{ fontSize: 11, display: "block", marginTop: 4 }}
+                        style={{
+                          display: "block",
+                          marginTop: 4,
+                          fontSize: 11,
+                          color: colors.textMuted,
+                        }}
                       >
                         {progressMsg}
                       </Text>
@@ -2353,11 +2390,13 @@ export default function App() {
                       stray divider is left behind. */}
                   {orbitItems.length > 0 && (
                     <div
+                      className="ldc-scroll"
                       style={{
                         borderTop: `1px solid ${colors.border}`,
                         maxHeight: 150,
                         overflowY: "auto",
                         marginTop: 8,
+                        paddingTop: 4,
                         flexShrink: 0,
                       }}
                     >
@@ -2379,7 +2418,7 @@ export default function App() {
                 (parameter dock included). */}
             <div
               style={{
-                padding: "4px 8px",
+                padding: "4px 10px",
                 flexShrink: 0,
                 background: colors.barBg,
                 borderTop: `1px solid ${colors.border}`,
@@ -2470,16 +2509,26 @@ export default function App() {
             — sliders/switches/selects — share a row) keeps the modal compact,
             avoiding the sparse single-column look full of dead space. */}
         <Modal
-          title={t("chart.title")}
+          title={<span style={{ fontSize: 14, fontWeight: 600 }}>{t("chart.title")}</span>}
           open={chartModalOpen}
           onCancel={() => setChartModalOpen(false)}
           footer={null}
           width={430}
+          styles={{ body: { paddingTop: 4 } }}
         >
-          <Form layout="vertical" size="small">
+          {/* 表单标签与控件都取小号：弹窗里一行两列，标签用次级色压低存在感，
+              控件高度与工具栏图标按钮一致 */}
+          {/* Small labels and controls: two fields per row, labels in the
+              secondary colour to stay quiet, control heights matching the
+              toolbar's icon buttons. */}
+          <Form
+            layout="vertical"
+            size="small"
+            styles={{ label: { fontSize: 11, color: colors.textSecondary } }}
+          >
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item label={t("chart.font_size")}>
+                <Form.Item label={t("chart.font_size")} style={{ marginBottom: 12 }}>
                   <Slider
                     min={8}
                     max={16}
@@ -2490,7 +2539,7 @@ export default function App() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("chart.linewidth")}>
+                <Form.Item label={t("chart.linewidth")} style={{ marginBottom: 12 }}>
                   <Slider
                     min={0.2}
                     max={3.0}
@@ -2501,7 +2550,7 @@ export default function App() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("chart.z_ratio")}>
+                <Form.Item label={t("chart.z_ratio")} style={{ marginBottom: 12 }}>
                   <Slider
                     min={0.1}
                     max={2.0}
@@ -2512,7 +2561,7 @@ export default function App() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("chart.grid_range")}>
+                <Form.Item label={t("chart.grid_range")} style={{ marginBottom: 12 }}>
                   <Slider
                     min={0.5}
                     max={3.0}
@@ -2524,27 +2573,25 @@ export default function App() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("chart.axes")}>
+                <Form.Item label={t("chart.axes")} style={{ marginBottom: 12 }}>
                   <Switch
                     size="small"
-                    styles={flatSwitchStyles}
                     checked={chart.axesVisible}
                     onChange={(v) => setChart({ ...chart, axesVisible: v })}
                   />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("chart.regions")}>
+                <Form.Item label={t("chart.regions")} style={{ marginBottom: 12 }}>
                   <Switch
                     size="small"
-                    styles={flatSwitchStyles}
                     checked={chart.regionsVisible}
                     onChange={(v) => setChart({ ...chart, regionsVisible: v })}
                   />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("chart.background")}>
+                <Form.Item label={t("chart.background")} style={{ marginBottom: 12 }}>
                   <Select
                     size="small"
                     value={chart.bgColor ?? "theme"}
@@ -2560,18 +2607,18 @@ export default function App() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("chart.ephemeris")}>
+                <Form.Item label={t("chart.ephemeris")} style={{ marginBottom: 12 }}>
                   {ephStatus === null ? (
-                    <Text type="secondary" style={{ fontSize: 12 }}>{t("chart.eph.checking")}</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t("chart.eph.checking")}</Text>
                   ) : ephStatus.usable ? (
-                    <Text type="success" style={{ fontSize: 12 }}>
+                    <Text style={{ fontSize: 12, color: colors.success }}>
                       {t("chart.eph.ready").replace(
                         "{n}",
                         String(ephStatus.files.filter((f) => f.endsWith(".bsp")).length),
                       )}
                     </Text>
                   ) : (
-                    <Text type="danger" style={{ fontSize: 12 }}>
+                    <Text style={{ fontSize: 12, color: colors.error }}>
                       {t("chart.eph.missing").replace(
                         "{missing}",
                         `${!ephStatus.ephemerisReady ? t("chart.eph.missing_eph") : ""}${!ephStatus.leapsecondReady ? t("chart.eph.missing_tls") : ""}`,
@@ -2584,10 +2631,8 @@ export default function App() {
 
             {/* AI 助手分区：pi 会话运行时入口状态与原生配置流程（模型
                 服务与凭据由 pi 管理，本应用不收集不展示） */}
-            <Divider titlePlacement="start" style={{ margin: "12px 0 8px" }}>
-              <Text strong style={{ fontSize: 13 }}>
-                {t("assistant.settings.section_title")}
-              </Text>
+            <Divider titlePlacement="start" style={{ margin: "8px 0" }}>
+              <span className="ldc-section-label">{t("assistant.settings.section_title")}</span>
             </Divider>
             <AssistantSettingsForm />
           </Form>
