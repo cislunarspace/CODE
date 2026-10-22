@@ -120,12 +120,17 @@ body {
 /* 悬停外壳：透明包裹层拿悬停底，内部 antd 按钮透出它。
    外观只有 display 与圆角，四处外壳共用这一条类
    Hover shell: a transparent wrapper takes the hover fill and the antd button
-   inside lets it show through. Only display and radius belong here, so the four
-   shells across the chrome share one class. */
+   inside lets it show through. Only display, radius and the hover feedback belong
+   here, so the shells across the chrome share one class. */
 .ldc-hover-shell {
   display: flex;
   flex-shrink: 0;
   border-radius: var(--ldc-radius);
+  transition: background-color 120ms ease;
+}
+
+.ldc-hover-shell:hover {
+  background: var(--ldc-hover-bg);
 }
 
 /* 表单字段标签：11px 次级色，参数停靠、库筛选栏、弹窗共用

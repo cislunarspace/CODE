@@ -24,9 +24,6 @@ export const themeBehavior = {
   wireframe: true,
 } as const;
 
-/** 界面色板与几何：一处定义，antd token、内联样式与 CSS 变量（--ldc-*）共用。
- *  One palette and geometry source shared by the antd tokens, the inline styles and
- *  the --ldc-* CSS variables. */
 /** 界面圆角分档：徽标与行 6px、控件 8px、卡片与面板 12px、模态弹层 16px。
  *  一处定义，色板与 antd token 共用，避免两套取值各自漂移。
  *  Radius scale: 6px for badges and rows, 8px for controls, 12px for cards and
@@ -40,6 +37,9 @@ const RADII = {
   radiusPill: 999,
 } as const;
 
+/** 界面色板与几何：一处定义，antd token、内联样式与 CSS 变量（--ldc-*）共用。
+ *  One palette and geometry source shared by the antd tokens, the inline styles and
+ *  the --ldc-* CSS variables. */
 export interface ShellColors {
   mode: "dark" | "light";
   /** 页面底（主页面、顶边栏、标签条同色，靠一条淡分隔线区分） */

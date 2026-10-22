@@ -2319,7 +2319,7 @@ export default function App() {
                       padding comes from the dock container. */}
                   <div
                     className="ldc-panel-head"
-                    style={{ padding: "0 0 8px", marginBottom: 8 }}
+                    style={{ height: "auto", padding: "0 0 8px", marginBottom: 8 }}
                   >
                     <Text style={{ fontSize: 12, fontWeight: 500, color: colors.text }}>
                       {toolEntry(selectedTool).title}

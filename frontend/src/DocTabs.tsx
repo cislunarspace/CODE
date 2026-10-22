@@ -130,14 +130,8 @@ export function DocTabs({
       })}
 
       <div
-        className="ldc-hover-row"
-        style={{
-          display: "flex",
-          alignSelf: "center",
-          marginLeft: 2,
-          flexShrink: 0,
-          borderRadius: colors.radiusSm,
-        }}
+        className="ldc-hover-shell"
+        style={{ alignSelf: "center", marginLeft: 2 }}
       >
         <Dropdown
           trigger={["click"]}
