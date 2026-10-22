@@ -60,7 +60,7 @@ export function AppSidebar({
           borderRight: `1px solid ${colors.border}`,
         }}
       >
-        <div className="ldc-hover-row" style={{ display: "flex", borderRadius: colors.radiusSm }}>
+        <div className="ldc-hover-shell">
           <Button
             type="text"
             size="small"
@@ -94,26 +94,12 @@ export function AppSidebar({
         minHeight: 0,
       }}
     >
-      {/* 侧栏头：32px，与面板头同高，标题 12px/500 */}
-      {/* Sidebar head: 32px, matching the panel heads, with a 12px/500 title. */}
-      <div
-        style={{
-          height: 32,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "0 6px 0 10px",
-          borderBottom: `1px solid ${colors.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontSize: 12, fontWeight: 500, color: colors.text }}>
-          {t("sider.title")}
-        </span>
-        <div
-          className="ldc-hover-row"
-          style={{ marginLeft: "auto", display: "flex", borderRadius: colors.radiusSm }}
-        >
+      {/* 侧栏头复用面板头条（32px、一条 hairline、12px/500 标题），只补左右内边距 */}
+      {/* The sidebar head reuses the panel-head strip (32px, one hairline, 12px/500
+          title) and only adds its own horizontal padding. */}
+      <div className="ldc-panel-head" style={{ padding: "0 6px 0 10px" }}>
+        <span>{t("sider.title")}</span>
+        <div className="ldc-hover-shell" style={{ marginLeft: "auto" }}>
           <Button
             type="text"
             size="small"

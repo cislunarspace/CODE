@@ -275,7 +275,10 @@ export function ParamsPanel({ toolName, schema, values, onChange, fieldErrors }:
             help={errorText ? <span style={{ fontSize: 11 }}>{errorText}</span> : undefined}
             label={
               <Space orientation="horizontal" size={4}>
-                <Text style={{ fontSize: 11, color: "var(--ldc-text-secondary)", fontWeight: isRequired ? 500 : 400 }}>
+                <Text
+                  className="ldc-field-label"
+                  style={{ fontWeight: isRequired ? 500 : 400 }}
+                >
                   {labelTitle}
                   {isRequired && <span style={{ color: "var(--ldc-error)", marginLeft: 2 }}>*</span>}
                 </Text>

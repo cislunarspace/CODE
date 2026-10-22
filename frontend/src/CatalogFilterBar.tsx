@@ -9,13 +9,9 @@ import { neutralTagStyle } from "./theme";
 import { useTranslation } from "./i18n";
 import type { ArtifactSummary } from "./projectApi";
 
-// 筛选栏字段标签：11px 次级色，与参数停靠、记录详情同档
-// Filter label: 11px in the secondary colour, the same step as the parameter dock
-// and the record detail panel.
-const FIELD_LABEL_STYLE = {
-  fontSize: 11,
-  color: "var(--ldc-text-secondary)",
-} as const;
+// 字段标签走 ldc.css 的 .ldc-field-label（11px 次级色），与参数停靠、弹窗共用一条规则
+// Field labels use .ldc-field-label from ldc.css (11px secondary), the same rule
+// shared by the parameter dock and the dialogs.
 
 export interface CatalogFilterBarProps {
   onResults: (artifacts: ArtifactSummary[], count: number, message: string) => void;
@@ -127,7 +123,7 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
   return (
     <div style={{ marginBottom: 12, flexShrink: 0 }}>
       <Form layout="vertical" size="small">
-        <Form.Item label={<span style={FIELD_LABEL_STYLE}>轨道族类型</span>} style={{ marginBottom: 6 }}>
+        <Form.Item label={<span className="ldc-field-label">轨道族类型</span>} style={{ marginBottom: 6 }}>
           <Select
             allowClear
             placeholder="不限族"
@@ -147,7 +143,7 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
           />
         </Form.Item>
 
-        <Form.Item label={<span style={FIELD_LABEL_STYLE}>平动点</span>} style={{ marginBottom: 6 }}>
+        <Form.Item label={<span className="ldc-field-label">平动点</span>} style={{ marginBottom: 6 }}>
           <Select
             allowClear
             placeholder="不限平动点"
@@ -163,12 +159,12 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
           />
         </Form.Item>
 
-        <Form.Item label={<span style={FIELD_LABEL_STYLE}>{t("catalog.star_only")}</span>} style={{ marginBottom: 6 }}>
+        <Form.Item label={<span className="ldc-field-label">{t("catalog.star_only")}</span>} style={{ marginBottom: 6 }}>
           <Switch size="small" checked={starOnly} onChange={setStarOnly} />
         </Form.Item>
 
         <Space orientation="horizontal" style={{ width: "100%", marginBottom: 8 }} size={6}>
-          <Form.Item label={<span style={FIELD_LABEL_STYLE}>Jacobi 下限</span>} style={{ marginBottom: 0, flex: 1 }}>
+          <Form.Item label={<span className="ldc-field-label">Jacobi 下限</span>} style={{ marginBottom: 0, flex: 1 }}>
             <InputNumber
               className="ldc-num"
               style={{ width: "100%" }}
@@ -178,7 +174,7 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
               onChange={(v) => setJacobiMin(v ?? undefined)}
             />
           </Form.Item>
-          <Form.Item label={<span style={FIELD_LABEL_STYLE}>Jacobi 上限</span>} style={{ marginBottom: 0, flex: 1 }}>
+          <Form.Item label={<span className="ldc-field-label">Jacobi 上限</span>} style={{ marginBottom: 0, flex: 1 }}>
             <InputNumber
               className="ldc-num"
               style={{ width: "100%" }}
@@ -244,17 +240,28 @@ export function CatalogFilterBar({ onResults }: CatalogFilterBarProps) {
         title={<span style={{ fontSize: 14, fontWeight: 600 }}>导出教学案例包 (Catalog Export)</span>}
         open={exportModalOpen}
         onCancel={() => setExportModalOpen(false)}
-        onOk={handleExportPackage}
-        confirmLoading={exporting}
-        okText="开始打包导出"
-        cancelText="取消"
+        styles={{ body: { paddingTop: 4 } }}
         width={450}
+        footer={[
+          <Button key="cancel" size="small" onClick={() => setExportModalOpen(false)}>
+            取消
+          </Button>,
+          <Button
+            key="export"
+            size="small"
+            type="primary"
+            loading={exporting}
+            onClick={handleExportPackage}
+          >
+            开始打包导出
+          </Button>,
+        ]}
       >
         <div style={{ marginBottom: 8, fontSize: 12, color: "var(--ldc-text-secondary)" }}>
           将根据当前过滤条件将匹配的轨道记录打包并导出到指定路径。
         </div>
         <Form layout="vertical" size="small">
-          <Form.Item label={<span style={FIELD_LABEL_STYLE}>目标保存路径 (zip 或目录)</span>}>
+          <Form.Item label={<span className="ldc-field-label">目标保存路径 (zip 或目录)</span>}>
             <Input
               value={exportDest}
               onChange={(e) => setExportDest(e.target.value)}

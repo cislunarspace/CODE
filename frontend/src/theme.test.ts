@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { neutralTagStyle, shellColors, themeBehavior, themeCssVars, themeTokens } from "./theme";
 
-describe("themeBehavior（ADR 0037）", () => {
+describe("themeBehavior（#544）", () => {
   it("motion 关闭——关闭 antd 的位移与缩放缓动", () => {
     expect(themeBehavior.motion).toBe(false);
   });
@@ -11,7 +11,7 @@ describe("themeBehavior（ADR 0037）", () => {
   });
 });
 
-describe("themeTokens（ADR 0037）", () => {
+describe("themeTokens（#544）", () => {
   it("圆角分档：按钮与输入框 8px、卡片与弹层 12px、小控件 6px", () => {
     expect(themeTokens("light").borderRadius).toBe(8);
     expect(themeTokens("light").borderRadiusLG).toBe(12);
@@ -67,7 +67,7 @@ describe("themeTokens（ADR 0037）", () => {
   });
 });
 
-describe("shellColors（ADR 0037）", () => {
+describe("shellColors（#544）", () => {
   it("页面、面板、卡片三档表面互不相同，明暗各一套", () => {
     for (const mode of ["light", "dark"] as const) {
       const c = shellColors(mode);
@@ -93,7 +93,7 @@ describe("shellColors（ADR 0037）", () => {
   });
 });
 
-describe("neutralTagStyle（元数据标签中性化，ADR 0034 与 0037）", () => {
+describe("neutralTagStyle（元数据标签中性化，#544）", () => {
   it("中性底与次级文字都取 CSS 变量，调用方不必知道明暗模式", () => {
     expect(neutralTagStyle.borderColor).toBe("transparent");
     expect(neutralTagStyle.background).toBe("var(--ldc-muted-bg)");
@@ -102,14 +102,14 @@ describe("neutralTagStyle（元数据标签中性化，ADR 0034 与 0037）", ()
   });
 });
 
-describe("themeCssVars（--ldc-* 与旧名 --tod-*）", () => {
+describe("themeCssVars（--ldc-* 与旧名 --tod-*，#544）", () => {
   it("两种模式暴露同一组键（App 注入不因模式缺变量）", () => {
     expect(Object.keys(themeCssVars("dark")).sort()).toEqual(
       Object.keys(themeCssVars("light")).sort(),
     );
   });
 
-  it("LDC 变量覆盖表面、文字、主色、语义色与圆角", () => {
+  it("LDC 变量覆盖表面、文字、主色、语义色、遮罩与圆角", () => {
     const vars = themeCssVars("light");
     const c = shellColors("light");
     expect(vars["--ldc-page-bg"]).toBe(c.pageBg);
@@ -118,8 +118,15 @@ describe("themeCssVars（--ldc-* 与旧名 --tod-*）", () => {
     expect(vars["--ldc-text"]).toBe(c.text);
     expect(vars["--ldc-primary"]).toBe(c.primary);
     expect(vars["--ldc-info"]).toBe(c.info);
+    expect(vars["--ldc-info-hover"]).toBe(c.infoHover);
+    expect(vars["--ldc-mask"]).toBe(c.mask);
     expect(vars["--ldc-radius"]).toBe("8px");
     expect(vars["--ldc-radius-lg"]).toBe("12px");
+    expect(vars["--ldc-radius-xl"]).toBe("16px");
+  });
+
+  it("弹窗遮罩暗色更深：亮色遮罩压不住近黑页面", () => {
+    expect(themeCssVars("dark")["--ldc-mask"]).not.toBe(themeCssVars("light")["--ldc-mask"]);
   });
 
   it("旧名 --tod-* 仍解析到同一色板：气泡、边框、强调色随明暗切换", () => {

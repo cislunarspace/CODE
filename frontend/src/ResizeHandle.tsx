@@ -32,11 +32,13 @@ export interface ResizeHandleProps {
 export function ResizeHandle({ edge, width, min, max, onResize, onResizeEnd }: ResizeHandleProps) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const lastWidthRef = useRef(width);
-  // 悬停与拖拽共用一条 4px 的命中区：平时完全透明，不做常驻分隔线——
-  // 面板之间已经有一条 hairline，再画一条会变成双线。反馈只改颜色
-  // Hover and drag share one 4px hit area that is fully transparent at rest: the
-  // panels already carry a hairline between them and a second line would read as
-  // a double border. The feedback is colour only.
+  // 悬停与拖拽共用一条 6px 的命中区：平时完全透明，不做常驻分隔线。
+  // 面板之间已经有一条 hairline，再画一条会变成双线。反馈只改颜色。
+  // 命中区保持改动前的宽度，拖拽手感不因换肤变差。
+  // Hover and drag share one 6px hit area that is fully transparent at rest: the
+  // panels already carry a hairline and a second line would read as a double
+  // border. Feedback is colour only. The hit area keeps its original width so the
+  // reskin never degrades the drag feel.
   const [hot, setHot] = useState(false);
 
   const onDragStart = (e: React.MouseEvent) => {
@@ -76,10 +78,10 @@ export function ResizeHandle({ edge, width, min, max, onResize, onResizeEnd }: R
       }}
       style={{
         position: "absolute",
-        [edge]: -2,
+        [edge]: -3,
         top: 0,
         bottom: 0,
-        width: 4,
+        width: 6,
         cursor: "col-resize",
         zIndex: 10,
         background: hot ? "var(--ldc-info-soft, rgba(37, 99, 235, 0.10))" : "transparent",

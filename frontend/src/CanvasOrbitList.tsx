@@ -47,9 +47,9 @@ export function CanvasOrbitList({
               key={`${item.label}-${i}`}
               data-orbit-item=""
               data-focused={focused ? "true" : "false"}
-              // 悬停底由 .ldc-hover-row 提供；选中行的底写在内联样式里（优先级
+              // 悬停底由 .ldc-hover-row 提供，选中行的底写在内联样式里（优先级
               // 高于类规则），两者不会同时生效
-              // The hover fill comes from .ldc-hover-row; the selected row's fill
+              // The hover fill comes from .ldc-hover-row, the selected row's fill
               // is inline (higher priority than the class rule), so the two never
               // fight over the same row.
               className="ldc-hover-row"

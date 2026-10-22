@@ -112,9 +112,12 @@ export function RecordDetailPanel({ record, transferCandidates, selectedLabel, o
         size="small"
         column={1}
         bordered={false}
-        // 键值行：标签 11px 三级文字，值 12px 主文字，行间一条 hairline
+        // 键值行：标签 11px 三级文字，值 12px 主文字，行间一条 hairline。
+        // 这里用三级文字而非表单字段的次级色：只读元数据的标签应比可编辑
+        // 表单的标签更弱（表单标签见 .ldc-field-label）
         // Key/value rows: 11px tertiary labels, 12px primary values, one hairline
-        // between rows.
+        // between rows. Tertiary rather than the form-label secondary tone: read-only
+        // metadata labels should sit below editable field labels (see .ldc-field-label).
         styles={{
           label: {
             fontSize: 11,

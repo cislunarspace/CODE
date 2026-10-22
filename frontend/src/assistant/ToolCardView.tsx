@@ -102,9 +102,10 @@ export function ToolCardView({
       style={{
         padding: 8,
         margin: "0 0 10px",
-        // 工具卡片是对话流里的独立块，圆角取卡片档 10
-        // A tool card is a discrete block in the stream: 10px, the card step.
-        borderRadius: 10,
+        // 圆角走卡片档 12px（--ldc-radius-lg），与记录详情的卡片同一档
+        // Radius follows the card step, 12px (--ldc-radius-lg), the same step as
+        // the record detail cards.
+        borderRadius: "var(--ldc-radius-lg)",
         fontSize: 12,
       }}
     >

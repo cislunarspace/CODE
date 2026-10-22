@@ -55,10 +55,10 @@ export function OrbitInfoPanel({ info }: OrbitInfoPanelProps) {
         title={<span style={{ fontSize: 13, fontWeight: 600 }}>{info.label}</span>}
         styles={{
           title: { marginBottom: 8 },
-          // 标签 11px 三级文字，值 12px 主文字；行间一条 hairline 分隔，与
+          // 标签 11px 三级文字，值 12px 主文字，行间一条 hairline 分隔，与
           // 记录详情面板同一读法
-          // 11px tertiary labels, 12px primary values, one hairline between rows
-          // — the same reading pattern as the record detail panel.
+          // 11px tertiary labels, 12px primary values, one hairline between rows,
+          // the same reading pattern as the record detail panel.
           label: {
             width: 96,
             fontSize: 11,

@@ -8,7 +8,6 @@
 // unmount would drop the camera and scene. The "+" control restores a hidden
 // tab. At least one tab always stays open.
 
-import { useState } from "react";
 import { Button, Dropdown } from "antd";
 import type { MenuProps } from "antd";
 import { CloseOutlined, PlusOutlined } from "@ant-design/icons";
@@ -47,12 +46,6 @@ export function DocTabs({
   const colors = shellColors(mode);
   const closed = available.filter((a) => !tabs.some((tab) => tab.key === a.key));
   const menuItems: MenuProps["items"] = closed.map((c) => ({ key: c.key, label: c.label }));
-  // 关闭按钮只在指针停靠或标签激活时现身：标签条要读起来像标签，不像一排
-  // 按钮。纯呈现状态，不参与外壳的开合与持久化
-  // The close button appears only under the pointer or on the active tab, so the
-  // strip reads as tabs rather than a row of buttons. Presentation state only —
-  // it never touches the shell's open/close state or persistence.
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   return (
     <div
@@ -72,19 +65,15 @@ export function DocTabs({
     >
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
-        const hovered = hoveredKey === tab.key;
         return (
           // 指针停靠或键盘聚焦都现出关闭按钮：透明但仍可聚焦的按钮不该是
-          // 唯一的关闭入口
+          // 唯一的关闭入口。显隐交给 .ldc-hover-actions，激活标签直接常显
           // Pointer hover and keyboard focus both reveal the close button: an
-          // invisible but focusable button must never be the only way out.
+          // invisible but focusable button must never be the only way out. The
+          // reveal is .ldc-hover-actions, overridden to always-on for the active tab.
           <div
             key={tab.key}
             className="ldc-hover-row"
-            onMouseEnter={() => setHoveredKey(tab.key)}
-            onMouseLeave={() => setHoveredKey((key) => (key === tab.key ? null : key))}
-            onFocus={() => setHoveredKey(tab.key)}
-            onBlur={() => setHoveredKey((key) => (key === tab.key ? null : key))}
             style={{
               display: "flex",
               alignItems: "center",
@@ -117,24 +106,24 @@ export function DocTabs({
               {tab.label}
             </Button>
             {tabs.length > 1 && (
-              <Button
-                type="text"
-                size="small"
-                icon={<CloseOutlined style={{ fontSize: 10 }} />}
-                data-testid={`doc-tab-close-${tab.key}`}
-                onClick={() => onClose(tab.key)}
-                title={t("doc.tabs.close").replace("{label}", tab.label)}
-                style={{
-                  width: 18,
-                  height: 18,
-                  marginRight: 4,
-                  borderRadius: colors.radiusSm,
-                  background: "transparent",
-                  color: colors.textFaint,
-                  opacity: hovered || active ? 1 : 0,
-                  transition: "opacity 120ms ease, color 120ms ease",
-                }}
-              />
+              <span className="ldc-hover-actions" style={active ? { opacity: 1 } : undefined}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CloseOutlined style={{ fontSize: 10 }} />}
+                  data-testid={`doc-tab-close-${tab.key}`}
+                  onClick={() => onClose(tab.key)}
+                  title={t("doc.tabs.close").replace("{label}", tab.label)}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    marginRight: 4,
+                    borderRadius: colors.radiusSm,
+                    background: "transparent",
+                    color: colors.textFaint,
+                  }}
+                />
+              </span>
             )}
           </div>
         );

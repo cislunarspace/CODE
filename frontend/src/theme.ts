@@ -1,5 +1,5 @@
 // LDC 视觉语言（linux-do/cdk）：shadcn/ui new-york + Tailwind v4 的 zinc 中性灰阶。
-// 亮色为主、暗色可切；扁平，无渐变、无霓虹、无多层投影；圆角 8–12px，卡片与弹层更大。
+// 亮色为主、暗色可切。扁平，无渐变、无霓虹、无多层投影，圆角 8–12px，卡片与弹层更大。
 // 中性色承担全部控件与选中态，彩色只用于状态（成功、失败、警告）与数据面强调（画布选中、
 // 时间轴游标、链接）。取代 ADR 0020 的直角线框口径，见 docs/adr/0037-ui-ldc-visual-language.md。
 // LDC visual language (linux-do/cdk): shadcn/ui new-york on Tailwind v4's zinc neutral
@@ -27,6 +27,19 @@ export const themeBehavior = {
 /** 界面色板与几何：一处定义，antd token、内联样式与 CSS 变量（--ldc-*）共用。
  *  One palette and geometry source shared by the antd tokens, the inline styles and
  *  the --ldc-* CSS variables. */
+/** 界面圆角分档：徽标与行 6px、控件 8px、卡片与面板 12px、模态弹层 16px。
+ *  一处定义，色板与 antd token 共用，避免两套取值各自漂移。
+ *  Radius scale: 6px for badges and rows, 8px for controls, 12px for cards and
+ *  panels, 16px for modal overlays. Defined once and shared by the palette and
+ *  the antd tokens so the two cannot drift apart. */
+const RADII = {
+  radiusSm: 6,
+  radius: 8,
+  radiusLg: 12,
+  radiusXl: 16,
+  radiusPill: 999,
+} as const;
+
 export interface ShellColors {
   mode: "dark" | "light";
   /** 页面底（主页面、顶边栏、标签条同色，靠一条淡分隔线区分） */
@@ -73,6 +86,10 @@ export interface ShellColors {
   /** 数据面强调色：画布选中、时间轴游标、链接 */
   info: string;
   infoSoft: string;
+  /** 链接悬停：比 info 亮/深一档 */
+  infoHover: string;
+  /** 弹窗遮罩：暗色下要比亮色更深，否则压不住背景 */
+  mask: string;
   /** 阴影：卡片几乎不用，浮层一层柔和投影 */
   shadow: string;
   shadowOverlay: string;
@@ -114,13 +131,11 @@ export function shellColors(mode: "dark" | "light"): ShellColors {
       errorSoft: "rgba(248, 113, 113, 0.12)",
       info: "#60a5fa",
       infoSoft: "rgba(96, 165, 250, 0.14)",
+      infoHover: "#93c5fd",
+      mask: "rgba(0, 0, 0, 0.60)",
       shadow: "0 1px 2px rgba(0, 0, 0, 0.45)",
       shadowOverlay: "0 16px 40px rgba(0, 0, 0, 0.55)",
-      radiusSm: 6,
-      radius: 8,
-      radiusLg: 12,
-      radiusXl: 16,
-      radiusPill: 999,
+      ...RADII,
     };
   }
   return {
@@ -151,33 +166,32 @@ export function shellColors(mode: "dark" | "light"): ShellColors {
     errorSoft: "rgba(239, 68, 68, 0.10)",
     info: "#2563eb",
     infoSoft: "rgba(37, 99, 235, 0.10)",
+    infoHover: "#1d4ed8",
+    mask: "rgba(9, 9, 11, 0.32)",
     shadow: "0 1px 2px rgba(24, 24, 27, 0.06)",
     shadowOverlay: "0 16px 40px rgba(24, 24, 27, 0.12)",
-    radiusSm: 6,
-    radius: 8,
-    radiusLg: 12,
-    radiusXl: 16,
-    radiusPill: 999,
+    ...RADII,
   };
 }
 
 /** 与主题无关的几何与字体：圆角、控件高度、字体栈。
  *  Theme-independent geometry and typography: radii, control heights, font stack. */
 export const themeShape = {
-  // 圆角：shadcn 的 radius 10 → md 8（按钮、输入框）、lg 12（卡片、弹层）
-  // Radii: shadcn's radius 10 → md 8 (buttons, inputs), lg 12 (cards, overlays).
-  borderRadius: 8,
-  borderRadiusSM: 6,
+  // 圆角取 RADII：控件 8、行与徽标 6、卡片与浮层 12、模态弹层 16（在 ldc.css 消费）
+  // Radii come from RADII: 8 for controls, 6 for rows and badges, 12 for cards and
+  // popovers, 16 for modal overlays (consumed in ldc.css).
+  borderRadius: RADII.radius,
+  borderRadiusSM: RADII.radiusSm,
   borderRadiusXS: 4,
-  borderRadiusLG: 12,
-  borderRadiusOuter: 16,
+  borderRadiusLG: RADII.radiusLg,
+  borderRadiusOuter: RADII.radiusXl,
   // 密度：桌面工具量级，比 antd 默认略紧，比上一版直角口径略松
   // Density: desktop-tool scale. A little tighter than antd's default, a little
   // looser than the previous square-cornered pass.
   controlHeight: 28,
   controlHeightSM: 24,
   controlHeightLG: 32,
-  // 字体：拉丁走 Inter，中文走系统黑体；不随安装包分发 Web 字体
+  // 字体：拉丁走 Inter，中文走系统黑体。不随安装包分发 Web 字体
   // Fonts: Inter for Latin, the system sans for Chinese; no web font is shipped
   // with the installer.
   fontFamily:
@@ -198,14 +212,14 @@ export function themeTokens(mode: "dark" | "light") {
     colorWarning: c.warning,
     colorError: c.error,
     colorLink: c.info,
-    colorLinkHover: mode === "dark" ? "#93c5fd" : "#1d4ed8",
+    colorLinkHover: c.infoHover,
     // 表面
     // Surfaces
     colorBgLayout: c.pageBg,
     colorBgContainer: c.cardBg,
     colorBgElevated: c.cardBg,
-    colorBgSpotlight: mode === "dark" ? "#fafafa" : "#18181b",
-    colorTextLightSolid: mode === "dark" ? "#18181b" : "#fafafa",
+    colorBgSpotlight: c.primary,
+    colorTextLightSolid: c.onPrimary,
     // 描边
     // Borders
     colorBorder: c.border,
@@ -240,8 +254,8 @@ export const themeComponents = {
   Button: { primaryShadow: "none", fontWeight: 500 },
 } as const;
 
-/** 元数据标签：彩色只留给状态；族名、平动点这类描述性信息是中性徽标。
- *  取 CSS 变量而非色板对象，调用方不必持有明暗模式；变量挂在文档根元素上，
+/** 元数据标签：彩色只留给状态。族名、平动点这类描述性信息是中性徽标。
+ *  取 CSS 变量而非色板对象，调用方不必持有明暗模式。变量挂在文档根元素上，
  *  弹层里的标签同样解析得到（App 注入）。
  *  Metadata tags: colour is reserved for status; descriptive facts (family name,
  *  libration point) are neutral badges. The style reads CSS variables instead of a
@@ -291,6 +305,8 @@ export function themeCssVars(mode: "dark" | "light"): Record<string, string> {
     "--ldc-error-soft": c.errorSoft,
     "--ldc-info": c.info,
     "--ldc-info-soft": c.infoSoft,
+    "--ldc-info-hover": c.infoHover,
+    "--ldc-mask": c.mask,
     "--ldc-shadow": c.shadow,
     "--ldc-shadow-overlay": c.shadowOverlay,
     "--ldc-radius-sm": `${c.radiusSm}px`,

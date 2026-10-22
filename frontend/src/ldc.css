@@ -32,7 +32,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 细滚动条：浏览器默认滚动条偏宽、带轨道，嵌在面板里显得突兀；颜色跟随令牌
+/* 细滚动条：浏览器默认滚动条偏宽、带轨道，嵌在面板里显得突兀。颜色跟随令牌
    Slim scrollbars: the browser default is wide and draws a track that looks heavy
    inside panels; colours follow the tokens. */
 .ldc-scroll {
@@ -117,6 +117,25 @@ body {
   background: var(--ldc-hover-bg);
 }
 
+/* 悬停外壳：透明包裹层拿悬停底，内部 antd 按钮透出它。
+   外观只有 display 与圆角，四处外壳共用这一条类
+   Hover shell: a transparent wrapper takes the hover fill and the antd button
+   inside lets it show through. Only display and radius belong here, so the four
+   shells across the chrome share one class. */
+.ldc-hover-shell {
+  display: flex;
+  flex-shrink: 0;
+  border-radius: var(--ldc-radius);
+}
+
+/* 表单字段标签：11px 次级色，参数停靠、库筛选栏、弹窗共用
+   Form field label: 11px in the secondary tone, shared by the parameter dock,
+   the catalog filter bar and the dialogs. */
+.ldc-field-label {
+  font-size: 11px;
+  color: var(--ldc-text-secondary);
+}
+
 /* 行内操作图标：默认淡显，指针或键盘进入该行时浮现，避免一屏图标抢注意力
    In-row action icons: faint by default and revealed when the pointer or keyboard
    enters the row, so a screenful of icons does not compete with the content. */
@@ -180,10 +199,11 @@ body {
   border-radius: var(--ldc-radius-xl);
 }
 
-/* 弹窗遮罩：亮色下也用中性半透明，不用 antd 的纯黑
-   Modal mask: neutral translucency in light mode too, not antd's plain black. */
+/* 弹窗遮罩：亮色下也用中性半透明，不用 antd 的纯黑。暗色由 --ldc-mask 加深
+   Modal mask: neutral translucency in light mode too, not antd's plain black; the
+   dark value of --ldc-mask is deeper so it still dims the background. */
 .ant-modal-mask {
-  background: rgba(9, 9, 11, 0.32);
+  background: var(--ldc-mask, rgba(9, 9, 11, 0.32));
 }
 
 /* 提示气泡：近黑底（亮）/近白底（暗），与主色同一口径

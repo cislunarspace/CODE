@@ -57,7 +57,7 @@ export function SopBar({ mode, stages, values, blockers, onStageClick, onFix }: 
         {stages.map((stage, index) => {
           const value = values[stage.key];
           return (
-            // 当前阶段是实心主色胶囊，已完成与未完成都只是文字与勾的差别；
+            // 当前阶段是实心主色胶囊，已完成与未完成都只是文字与勾的差别。
             // 非当前阶段的行由外层胶囊提供悬停底，内部按钮透明透出它
             // The current stage is a solid primary pill; finished and pending
             // stages differ only in text and the check mark. A non-current

@@ -103,9 +103,6 @@ export const AboutModal: React.FC<AboutModalProps> = ({
           <span style={{ fontSize: 11, color: "var(--ldc-text-muted)" }}>
             版本号：v{displayVersion}
           </span>
-          <span style={{ fontSize: 11, color: "var(--ldc-text-faint)" }}>
-            Cislunar Orbit DesignEr
-          </span>
         </div>
         <Paragraph type="secondary" style={{ margin: 0, fontSize: 12, lineHeight: 1.6 }}>
           基于 CR3BP 高精度动力学模型与星历转换算法，支持平动点轨道生成、转移轨道设计及轨道保持仿真。

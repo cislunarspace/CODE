@@ -236,7 +236,7 @@ export function TimelineBar({
           // Tight slider: the strip is one row tall, so spacing belongs to the
           // strip's padding rather than to the control.
           style={{ flex: 1, margin: "4px 6px" }}
-          // 已走过的一段用信息蓝，即“当前时刻”的强调色；滑钮保持中性（白底
+          // 已走过的一段用信息蓝，即“当前时刻”的强调色。滑钮保持中性（白底
           // 加中性描边），不在同一控件上再引入第三种颜色
           // The travelled part takes the info blue that marks "the current
           // moment"; the knob stays neutral (light fill, neutral ring) so one

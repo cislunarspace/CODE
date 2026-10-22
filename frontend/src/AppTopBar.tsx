@@ -45,36 +45,7 @@ export interface AppTopBarProps {
   onOpenAbout: () => void;
 }
 
-/** 可点区域的悬停底：外层透明容器挂 .ldc-hover-row 拿 colors.hoverBg，
- *  内部按钮自身透明透出它。antd 文本按钮自带的悬停底色不来自本仓库令牌，
- *  直接内联透明又会连它一起压掉，所以悬停底放在外层。
- *  Hover fill for a clickable area: the transparent wrapper carries
- *  .ldc-hover-row for colors.hoverBg and the inner button stays transparent so
- *  it shows through. antd's own text-button hover fill is not one of our tokens,
- *  and an inline transparent background would suppress it anyway, so the fill
- *  lives on the wrapper. */
-function HoverShell({
-  children,
-  radius,
-}: {
-  children: ReactNode;
-  radius: number | "pill";
-}) {
-  return (
-    <div
-      className="ldc-hover-row"
-      style={{
-        display: "flex",
-        flexShrink: 0,
-        borderRadius: radius === "pill" ? 999 : radius,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** 顶栏图标按钮：28px 见方、圆角 8；激活态用 primarySoft 底配 primary 前景。
+/** 顶栏图标按钮：28px 见方、圆角 8。激活态用 primarySoft 底配 primary 前景。
  *  Top-bar icon button: a 28px square with an 8px radius; the active state uses
  *  the primarySoft fill with a primary foreground. */
 function TopBarIconButton({
@@ -93,7 +64,9 @@ function TopBarIconButton({
   onClick: () => void;
 }) {
   return (
-    <HoverShell radius={colors.radius}>
+    // 悬停底由 .ldc-hover-shell 的外壳提供，按钮自身保持透明
+    // The hover fill comes from the .ldc-hover-shell wrapper; the button stays transparent.
+    <div className="ldc-hover-shell">
       <Button
         type="text"
         size="small"
@@ -109,7 +82,7 @@ function TopBarIconButton({
           color: active ? colors.primary : colors.textSecondary,
         }}
       />
-    </HoverShell>
+    </div>
   );
 }
 
@@ -175,7 +148,7 @@ export function AppTopBar({
       </div>
 
       {menus.map((menu) => (
-        <HoverShell key={menu.key} radius={colors.radius}>
+        <div key={menu.key} className="ldc-hover-shell">
           <Dropdown
             trigger={["click"]}
             menu={{
@@ -206,7 +179,7 @@ export function AppTopBar({
               {menu.label}
             </Button>
           </Dropdown>
-        </HoverShell>
+        </div>
       ))}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>

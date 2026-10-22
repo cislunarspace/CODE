@@ -2312,16 +2312,14 @@ export default function App() {
                     onResize={setPanelWidth}
                     onResizeEnd={(w) => localStorage.setItem(WS_PANEL_WIDTH_KEY, String(w))}
                   />
+                  {/* 停靠头复用面板头条（32px、hairline、12px/500），只补下边距，
+                      横向内边距由停靠容器自己给 */}
+                  {/* The dock head reuses the panel-head strip (32px, hairline,
+                      12px/500) and only adds its own bottom spacing; horizontal
+                      padding comes from the dock container. */}
                   <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      flexShrink: 0,
-                      paddingBottom: 8,
-                      marginBottom: 8,
-                      borderBottom: `1px solid ${colors.border}`,
-                    }}
+                    className="ldc-panel-head"
+                    style={{ padding: "0 0 8px", marginBottom: 8 }}
                   >
                     <Text style={{ fontSize: 12, fontWeight: 500, color: colors.text }}>
                       {toolEntry(selectedTool).title}

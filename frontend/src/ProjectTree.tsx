@@ -21,8 +21,8 @@ import { useTranslation } from "./i18n";
 // 备注摘要截断长度（Tooltip 悬停显示）
 const NOTE_PREVIEW_LEN = 80;
 
-// 分组文案：纯文字，不用 emoji；计数走徽标（扁平克制，见 ADR 0037）
-// Group labels: plain text, no emoji; counts live in a badge (flat and restrained,
+// 分组文案：纯文字，不用 emoji。计数走徽标（扁平克制，见 ADR 0037）
+// Group labels: plain text, no emoji. Counts live in a badge (flat and restrained,
 // per ADR 0037).
 const GROUP_LABELS: Record<string, string> = {
   orbit: "轨道",
@@ -245,8 +245,8 @@ export function ProjectTree({
           }}
           titleRender={(node: any) => {
             if (!node.data) {
-              // 分组头（#468）：分区标签 + 计数徽标；空组整头褪到最弱的文字档
-              // Group header (#468): a section label plus a count badge; an empty
+              // 分组头（#468）：分区标签加计数徽标。空组整头褪到最弱的文字档
+              // Group header (#468): a section label plus a count badge. An empty
               // group fades the whole header to the faintest text step.
               const empty = node.count === 0;
               return (
@@ -261,8 +261,8 @@ export function ProjectTree({
                     count={node.count}
                     showZero
                     overflowCount={99999}
-                    // 计数徽标：中性浅底、6px 圆角、11px 次级文字；空组褪成透明底
-                    // Count badge: neutral fill, 6px radius, 11px secondary text; an
+                    // 计数徽标：中性浅底、6px 圆角、11px 次级文字。空组褪成透明底
+                    // Count badge: neutral fill, 6px radius, 11px secondary text. An
                     // empty group drops the fill altogether.
                     style={{
                       backgroundColor: empty ? "transparent" : "var(--ldc-muted-bg)",
@@ -279,7 +279,7 @@ export function ProjectTree({
             const item = node.data as ArtifactSummary;
             const starred = isStarred(item);
             const pinned = !!item.recordId && (pinnedRecordIds ?? []).includes(item.recordId);
-            // 第二行结构化摘要（#468）：成员序号 / L 点 / Jacobi，缺字段的部分不拼；
+            // 第二行结构化摘要（#468）：成员序号 / L 点 / Jacobi，缺字段的部分不拼。
             // 全缺（会话产物行）不渲染第二行
             const summaryParts: string[] = [];
             if (item.memberIndex !== undefined && item.memberIndex !== null) {
