@@ -5,7 +5,7 @@
 // 故无改参入口；参数全文展示供审阅。
 
 import { useEffect, useState } from "react";
-import { Button, Typography, Tag } from "antd";
+import { Button, Typography } from "antd";
 import {
   CaretDownOutlined,
   CaretRightOutlined,
@@ -18,6 +18,16 @@ import { assistantConfirmTool } from "./api";
 import { useTranslation } from "../i18n";
 
 const { Text } = Typography;
+
+/** 状态徽标的浅底与前景：彩色只用于状态，四态各取一组语义色（ADR 0037）。
+ *  Soft fill and foreground per status: colour is reserved for status, one
+ *  semantic pair for each of the four states (ADR 0037). */
+const STATUS_CHIP_STYLE = {
+  proposed: { background: "var(--ldc-warning-soft)", color: "var(--ldc-warning)" },
+  running: { background: "var(--ldc-info-soft)", color: "var(--ldc-info)" },
+  done: { background: "var(--ldc-success-soft)", color: "var(--ldc-success)" },
+  error: { background: "var(--ldc-error-soft)", color: "var(--ldc-error)" },
+} as const;
 
 export interface ToolCardData {
   callId: string;
@@ -65,30 +75,51 @@ export function ToolCardView({
   const [expanded, setExpanded] = useState(false);
   const showDetail = !collapsible || expanded;
 
-  const statusTag = {
-    proposed: <Tag color="gold">{t("assistant.card.proposed")}</Tag>,
-    running: (
-      <Tag icon={<LoadingOutlined />} color="processing">
-        {t("assistant.card.running")} {elapsed}s
-      </Tag>
-    ),
-    done: <Tag color="success">{t("assistant.card.done")}</Tag>,
-    error: <Tag color="error">{t("assistant.card.failed")}</Tag>,
+  const statusText = {
+    proposed: t("assistant.card.proposed"),
+    running: `${t("assistant.card.running")} ${elapsed}s`,
+    done: t("assistant.card.done"),
+    error: t("assistant.card.failed"),
   }[card.status];
+
+  // 状态徽标复用 ldc.css 的 .ldc-chip（20px 高、6px 圆角、11px 等宽数字），
+  // 只把中性底换成语义浅底与对应前景色。运行中带不定态图标，耗时是不定态
+  // 进度的唯一指示。
+  // The status chip reuses .ldc-chip from ldc.css (20px tall, 6px radius, 11px
+  // tabular figures) and only swaps the neutral fill for a semantic soft fill with
+  // its matching foreground. Running carries the spinner icon; elapsed time is the
+  // only indeterminate progress hint.
+  const statusChip = (
+    <span className="ldc-chip" style={STATUS_CHIP_STYLE[card.status]}>
+      {card.status === "running" && <LoadingOutlined />}
+      {statusText}
+    </span>
+  );
 
   return (
     <div
+      className="ldc-card"
       style={{
-        border: "1px solid var(--tod-border, #d9d9d9)",
-        borderRadius: 6,
-        padding: "6px 8px",
-        margin: "4px 0",
+        padding: 8,
+        margin: "0 0 10px",
+        // 圆角走卡片档 12px（--ldc-radius-lg），与记录详情的卡片同一档
+        // Radius follows the card step, 12px (--ldc-radius-lg), the same step as
+        // the record detail cards.
+        borderRadius: "var(--ldc-radius-lg)",
         fontSize: 12,
-        background: "var(--tod-card-bg, rgba(128,128,128,0.06))",
       }}
     >
       <div
-        style={{ display: "flex", alignItems: "center", gap: 6, cursor: collapsible ? "pointer" : undefined }}
+        className={collapsible ? "ldc-hover-row" : undefined}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          margin: "0 -4px",
+          padding: "2px 4px",
+          borderRadius: "var(--ldc-radius-sm)",
+          cursor: collapsible ? "pointer" : undefined,
+        }}
         onClick={collapsible ? () => setExpanded((e) => !e) : undefined}
       >
         {collapsible ? (
@@ -97,9 +128,17 @@ export function ToolCardView({
           <RocketOutlined />
         )}
         <Text code style={{ fontSize: 12 }}>{card.tool}</Text>
-        {statusTag}
+        {statusChip}
         {!showDetail && (card.summary?.recordId || card.summary?.familyId) && (
-          <Text type="secondary" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <Text
+            style={{
+              fontSize: 11,
+              color: "var(--ldc-text-muted)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {card.summary.recordId ?? `族 ${card.summary.familyId}`}
           </Text>
         )}
@@ -116,8 +155,8 @@ export function ToolCardView({
             overflow: "auto",
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
-            background: "var(--tod-code-bg, rgba(128,128,128,0.1))",
-            borderRadius: 4,
+            background: "var(--ldc-muted-bg)",
+            borderRadius: 6,
           }}
         >
           {argsText}

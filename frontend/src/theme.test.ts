@@ -1,90 +1,141 @@
 import { describe, expect, it } from "vitest";
-import { themeBehavior, themeCssVars, themeTokens } from "./theme";
+import { neutralTagStyle, shellColors, themeBehavior, themeCssVars, themeTokens } from "./theme";
 
-describe("themeBehavior（#409）", () => {
-  it("motion 关闭——全部过渡动画停用（去卡通感）", () => {
+describe("themeBehavior（#544）", () => {
+  it("motion 关闭——关闭 antd 的位移与缩放缓动", () => {
     expect(themeBehavior.motion).toBe(false);
   });
 
-  it("wireframe 开启——组件平面化，去渐变、阴影改边框式", () => {
+  it("wireframe 开启——组件平面化，阴影改描边", () => {
     expect(themeBehavior.wireframe).toBe(true);
   });
 });
 
-describe("themeTokens（#409）", () => {
-  it("圆角全系列统一为 2px（严肃直角风格，偏离 antd 默认 6-8px）", () => {
-    expect(themeTokens.borderRadius).toBe(2);
-    expect(themeTokens.borderRadiusLG).toBe(2);
-    expect(themeTokens.borderRadiusSM).toBe(2);
-    expect(themeTokens.borderRadiusXS).toBe(2);
-    expect(themeTokens.borderRadiusOuter).toBe(2);
+describe("themeTokens（#544）", () => {
+  it("圆角分档：按钮与输入框 8px、卡片与弹层 12px、小控件 6px", () => {
+    expect(themeTokens("light").borderRadius).toBe(8);
+    expect(themeTokens("light").borderRadiusLG).toBe(12);
+    expect(themeTokens("light").borderRadiusSM).toBe(6);
   });
 
-  it("控件高度收紧为桌面工具密度（antd 默认 32/24/40）", () => {
-    expect(themeTokens.controlHeight).toBe(26);
-    expect(themeTokens.controlHeightSM).toBe(22);
-    expect(themeTokens.controlHeightLG).toBe(30);
+  it("控件高度按桌面工具密度：28 / 24 / 32", () => {
+    const token = themeTokens("light");
+    expect(token.controlHeight).toBe(28);
+    expect(token.controlHeightSM).toBe(24);
+    expect(token.controlHeightLG).toBe(32);
   });
 
-  it("阴影收平为一层浅投影（替换 antd 默认多层大扩散阴影）", () => {
-    expect(themeTokens.boxShadow).toBe("0 1px 2px rgba(0, 0, 0, 0.10)");
-    expect(themeTokens.boxShadowSecondary).toBe("0 2px 6px rgba(0, 0, 0, 0.12)");
+  it("主色是中性色：亮色近黑、暗色近白，且与主文字/页面底互为反差", () => {
+    const light = themeTokens("light");
+    const dark = themeTokens("dark");
+    expect(light.colorPrimary).toBe("#18181b");
+    expect(dark.colorPrimary).toBe("#fafafa");
+    expect(light.colorPrimary).toBe(light.colorText);
+    expect(dark.colorPrimary).toBe(dark.colorText);
+    expect(dark.colorPrimary).not.toBe(light.colorPrimary);
   });
 
-  it("字体为桌面系统 UI 栈（Windows 上 Segoe UI + 雅黑）", () => {
-    expect(themeTokens.fontFamily).toContain("Segoe UI");
-    expect(themeTokens.fontFamily).toContain("Microsoft YaHei UI");
+  it("语义色保持色相：信息、成功、警告、错误不等同主色，且明暗各一套", () => {
+    const light = themeTokens("light");
+    const dark = themeTokens("dark");
+    for (const key of ["colorInfo", "colorSuccess", "colorWarning", "colorError"] as const) {
+      expect(light[key]).not.toBe(light.colorPrimary);
+      expect(dark[key]).not.toBe(dark.colorPrimary);
+      expect(dark[key]).not.toBe(light[key]);
+    }
   });
 
-  it("主色与信息色为收敛深蓝 #0958d9（替换 antd 默认亮蓝）", () => {
-    expect(themeTokens.colorPrimary).toBe("#0958d9");
-    expect(themeTokens.colorInfo).toBe("#0958d9");
+  it("表面分档：次级面与页面底分开，暗色整体压暗", () => {
+    const light = themeTokens("light");
+    const dark = themeTokens("dark");
+    expect(light.colorBgLayout).not.toBe(light.colorFillSecondary);
+    expect(dark.colorBgLayout).not.toBe(dark.colorBgContainer);
+    expect(dark.colorBgLayout).not.toBe(light.colorBgLayout);
   });
 
-  it("语义色沿用 antd 默认：绿=成功、橙=警告、红=错误", () => {
-    expect(themeTokens.colorSuccess).toBe("#52c41a");
-    expect(themeTokens.colorWarning).toBe("#faad14");
-    expect(themeTokens.colorError).toBe("#ff4d4f");
+  it("投影收敛：控件一层浅投影，浮层一层柔和投影", () => {
+    const token = themeTokens("light");
+    expect(token.boxShadow).toContain("0 1px 2px");
+    expect(token.boxShadowSecondary).not.toBe(token.boxShadow);
+  });
+
+  it("字体栈以 Inter 为首选，中文回落系统黑体", () => {
+    const { fontFamily } = themeTokens("light");
+    expect(fontFamily).toContain("Inter");
+    expect(fontFamily).toContain("Segoe UI");
+    expect(fontFamily).toContain("Microsoft YaHei UI");
   });
 });
 
-describe("themeCssVars（--tod-* 主题变量，修复助手边栏深色缺失，#450）", () => {
-  it("浅色值 = 各消费端 var(--tod-*, fallback) 的既有 fallback，浅色零回归", () => {
-    expect(themeCssVars("light")).toEqual({
-      "--tod-border": "#e8e8e8",
-      "--tod-panel-bg": "transparent",
-      "--tod-user-bubble": "#0958d9",
-      "--tod-assistant-bubble": "rgba(128,128,128,0.10)",
-      "--tod-text-secondary": "#8c8c8c",
-      "--tod-accent": "#0958d9",
-      "--tod-card-bg": "rgba(128,128,128,0.06)",
-      "--tod-code-bg": "rgba(128,128,128,0.1)",
-    });
+describe("shellColors（#544）", () => {
+  it("页面、面板、卡片三档表面互不相同，明暗各一套", () => {
+    for (const mode of ["light", "dark"] as const) {
+      const c = shellColors(mode);
+      expect(c.pageBg).not.toBe(c.panelBg);
+      expect(c.panelBg).not.toBe(c.mutedBg);
+      expect(c.cardBg).toBeTruthy();
+    }
+    expect(shellColors("dark").pageBg).not.toBe(shellColors("light").pageBg);
   });
 
-  it("深色值：边框/气泡/卡片底随主题变深，主色与次要文字保持不变", () => {
-    const dark = themeCssVars("dark");
-    const light = themeCssVars("light");
-    expect(dark["--tod-border"]).not.toBe(light["--tod-border"]);
-    expect(dark["--tod-panel-bg"]).not.toBe(light["--tod-panel-bg"]);
-    expect(dark["--tod-assistant-bubble"]).not.toBe(light["--tod-assistant-bubble"]);
-    expect(dark["--tod-card-bg"]).not.toBe(light["--tod-card-bg"]);
-    expect(dark["--tod-code-bg"]).not.toBe(light["--tod-code-bg"]);
-    // 与 App 深色界面同源：边框 #303030、面板 #1a1a1a
-    expect(dark["--tod-border"]).toBe("#303030");
-    expect(dark["--tod-panel-bg"]).toBe("#1a1a1a");
-    expect(dark["--tod-user-bubble"]).toBe("#0958d9");
-    expect(dark["--tod-text-secondary"]).toBe("#8c8c8c");
-    // 强调色反过来：深色底上必须提亮（时间轴等随主题着色的控件用它）
-    // The accent goes the other way: it must brighten on dark surfaces (used by
-    // theme-aware controls such as the timeline).
-    expect(dark["--tod-accent"]).toBe("#4096ff");
-    expect(light["--tod-accent"]).toBe("#0958d9");
+  it("圆角令牌与 antd token 同源", () => {
+    const c = shellColors("light");
+    expect(c.radius).toBe(8);
+    expect(c.radiusLg).toBe(12);
+    expect(c.radiusXl).toBe(16);
+    expect(c.radiusSm).toBe(6);
   });
 
+  it("选中态用中性底与主文字，不引入彩色", () => {
+    const c = shellColors("light");
+    expect(c.activeBg).toBe(c.mutedBg);
+    expect(c.activeText).toBe(c.text);
+  });
+});
+
+describe("neutralTagStyle（元数据标签中性化，#544）", () => {
+  it("中性底与次级文字都取 CSS 变量，调用方不必知道明暗模式", () => {
+    expect(neutralTagStyle.borderColor).toBe("transparent");
+    expect(neutralTagStyle.background).toBe("var(--ldc-muted-bg)");
+    expect(neutralTagStyle.color).toBe("var(--ldc-text-secondary)");
+    expect(neutralTagStyle.fontSize).toBe(11);
+  });
+});
+
+describe("themeCssVars（--ldc-* 与旧名 --tod-*，#544）", () => {
   it("两种模式暴露同一组键（App 注入不因模式缺变量）", () => {
     expect(Object.keys(themeCssVars("dark")).sort()).toEqual(
       Object.keys(themeCssVars("light")).sort(),
     );
+  });
+
+  it("LDC 变量覆盖表面、文字、主色、语义色、遮罩与圆角", () => {
+    const vars = themeCssVars("light");
+    const c = shellColors("light");
+    expect(vars["--ldc-page-bg"]).toBe(c.pageBg);
+    expect(vars["--ldc-panel-bg"]).toBe(c.panelBg);
+    expect(vars["--ldc-border"]).toBe(c.border);
+    expect(vars["--ldc-text"]).toBe(c.text);
+    expect(vars["--ldc-primary"]).toBe(c.primary);
+    expect(vars["--ldc-info"]).toBe(c.info);
+    expect(vars["--ldc-info-hover"]).toBe(c.infoHover);
+    expect(vars["--ldc-mask"]).toBe(c.mask);
+    expect(vars["--ldc-radius"]).toBe("8px");
+    expect(vars["--ldc-radius-lg"]).toBe("12px");
+    expect(vars["--ldc-radius-xl"]).toBe("16px");
+  });
+
+  it("弹窗遮罩暗色更深：亮色遮罩压不住近黑页面", () => {
+    expect(themeCssVars("dark")["--ldc-mask"]).not.toBe(themeCssVars("light")["--ldc-mask"]);
+  });
+
+  it("旧名 --tod-* 仍解析到同一色板：气泡、边框、强调色随明暗切换", () => {
+    const light = themeCssVars("light");
+    const dark = themeCssVars("dark");
+    expect(light["--tod-user-bubble"]).toBe(shellColors("light").primary);
+    expect(light["--tod-user-bubble-text"]).toBe(shellColors("light").onPrimary);
+    expect(dark["--tod-border"]).toBe(shellColors("dark").border);
+    expect(dark["--tod-accent"]).toBe(shellColors("dark").info);
+    expect(light["--tod-accent"]).not.toBe(dark["--tod-accent"]);
   });
 });

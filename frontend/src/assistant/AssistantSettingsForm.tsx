@@ -68,7 +68,7 @@ export function AssistantSettingsForm() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.6 }}>
           {t("assistant.settings.pi_managed")}
         </Text>
       </div>
@@ -78,7 +78,7 @@ export function AssistantSettingsForm() {
         </Text>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <Text strong style={{ fontSize: 12 }}>
+        <Text strong style={{ fontSize: 11 }}>
           pi：
         </Text>
         {piPath ? (
@@ -88,7 +88,7 @@ export function AssistantSettingsForm() {
             </Text>
             <Text
               type={connected ? "success" : "secondary"}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 11 }}
             >
               {connected
                 ? t("assistant.settings.rpc_connected")
@@ -96,7 +96,7 @@ export function AssistantSettingsForm() {
             </Text>
           </>
         ) : (
-          <Text type="danger" style={{ fontSize: 12 }}>
+          <Text type="danger" style={{ fontSize: 11 }}>
             {t("assistant.settings.pi_missing")}
           </Text>
         )}

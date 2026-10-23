@@ -37,6 +37,13 @@ export function SessionSwitcher({
   onNew: () => void;
 }) {
   const { t } = useTranslation();
+  // 下拉浮层虽然挂在 body 下，但 --ldc-* 变量同时写到了 documentElement，
+  // 浮层里的样式照样解析得到。当前会话底与悬停底由 ConfigProvider 的
+  // controlItemBgActive / controlItemBgHover 给出，与页面选中态同色。
+  // The dropdown portal lives under body, but the --ldc-* variables are also set
+  // on documentElement, so styles inside the portal still resolve them. The
+  // selected and hover fills come from controlItemBgActive / controlItemBgHover
+  // in the ConfigProvider, matching the app's selected state.
 
   // 首次使用（列表为空）时下拉也要能显示当前会话本体
   const options = sessions.some((s) => s.id === currentId)
@@ -59,7 +66,11 @@ export function SessionSwitcher({
       <div style={{ display: "flex", flex: 1, gap: 4, minWidth: 0 }}>
         <Select
           size="small"
-          style={{ flex: 1, minWidth: 0 }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: 24,
+          }}
           value={currentId ?? undefined}
           disabled={disabled}
           onChange={(id) => onSwitch(id)}
@@ -68,13 +79,22 @@ export function SessionSwitcher({
             const s = options.find((x) => x.id === option.value);
             if (!s) return option.label;
             return (
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <span
                   style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                 >
                   {label(s)}
                 </span>
-                <span style={{ opacity: 0.55, fontSize: 11, flexShrink: 0 }}>{meta(s)}</span>
+                {/* 行内元数据（消息数 · 相对时间）压到最弱一级文字色，
+                    标题仍是行内主角 */}
+                {/* Inline metadata (message count · relative time) drops to the
+                    weakest text colour so the title stays the row's subject. */}
+                <span
+                  className="ldc-num"
+                  style={{ color: "var(--ldc-text-faint)", flexShrink: 0 }}
+                >
+                  {meta(s)}
+                </span>
               </div>
             );
           }}

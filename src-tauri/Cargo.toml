@@ -1,6 +1,6 @@
 [package]
 name = "cislunar-code"
-version = "5.1.0"
+version = "5.1.1"
 edition = "2021"
 description = "CODE（Cislunar Orbit DesignEr）Tauri 桌面应用（Rust 壳 + React 前端 + e2m2e sidecar）"
 

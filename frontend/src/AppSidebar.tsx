@@ -7,12 +7,10 @@
 // component owns the chrome only.
 
 import type { ReactNode } from "react";
-import { Button, Typography } from "antd";
+import { Button } from "antd";
 import { MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
 import { shellColors } from "./theme";
 import { useTranslation } from "./i18n";
-
-const { Text } = Typography;
 
 export interface SidebarToolSpec {
   key: string;
@@ -44,6 +42,11 @@ export function AppSidebar({
 
   if (collapsed) {
     return (
+      // 折叠态只留一条 24px 的窄轨：宽度被 App.shell 测试与持久化口径钉住，
+      // 里面的展开按钮再窄一档，避免贴边时被裁掉
+      // The collapsed state leaves a 24px rail — the width is pinned by the
+      // App.shell test and the persisted layout, so the expand button inside is
+      // one step narrower to stay clear of the edge.
       <div
         data-testid="app-sider"
         style={{
@@ -52,19 +55,28 @@ export function AppSidebar({
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          paddingTop: 8,
+          paddingTop: 6,
           background: colors.panelBg,
           borderRight: `1px solid ${colors.border}`,
         }}
       >
-        <Button
-          type="text"
-          size="small"
-          icon={<MenuUnfoldOutlined />}
-          data-testid="sider-expand"
-          onClick={onToggleCollapse}
-          title={t("sider.expand")}
-        />
+        <div className="ldc-hover-shell">
+          <Button
+            type="text"
+            size="small"
+            icon={<MenuUnfoldOutlined style={{ fontSize: 13 }} />}
+            data-testid="sider-expand"
+            onClick={onToggleCollapse}
+            title={t("sider.expand")}
+            style={{
+              width: 20,
+              height: 24,
+              borderRadius: colors.radiusSm,
+              background: "transparent",
+              color: colors.textMuted,
+            }}
+          />
+        </div>
       </div>
     );
   }
@@ -82,33 +94,35 @@ export function AppSidebar({
         minHeight: 0,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "4px 4px 4px 10px",
-          borderBottom: `1px solid ${colors.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <Text strong style={{ fontSize: 12 }}>
-          {t("sider.title")}
-        </Text>
-        <Button
-          type="text"
-          size="small"
-          icon={<MenuFoldOutlined />}
-          data-testid="sider-collapse"
-          onClick={onToggleCollapse}
-          title={t("sider.collapse")}
-          style={{ marginLeft: "auto" }}
-        />
+      {/* 侧栏头复用面板头条（32px、一条 hairline、12px/500 标题），只补左右内边距 */}
+      {/* The sidebar head reuses the panel-head strip (32px, one hairline, 12px/500
+          title) and only adds its own horizontal padding. */}
+      <div className="ldc-panel-head" style={{ padding: "0 6px 0 10px" }}>
+        <span>{t("sider.title")}</span>
+        <div className="ldc-hover-shell" style={{ marginLeft: "auto" }}>
+          <Button
+            type="text"
+            size="small"
+            icon={<MenuFoldOutlined style={{ fontSize: 13 }} />}
+            data-testid="sider-collapse"
+            onClick={onToggleCollapse}
+            title={t("sider.collapse")}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: colors.radiusSm,
+              background: "transparent",
+              color: colors.textMuted,
+            }}
+          />
+        </div>
       </div>
 
       {/* 项目树占满剩余高度（滚动由树内部虚拟滚动与容器共同承担） */}
       {/* The project tree fills the rest (scrolling shared by the tree's virtual
           scroll and this container). */}
       <div
+        className="ldc-scroll"
         style={{
           flex: 1,
           minHeight: 0,
@@ -121,6 +135,7 @@ export function AppSidebar({
       </div>
 
       <div
+        className="ldc-scroll"
         style={{
           borderTop: `1px solid ${colors.border}`,
           flexShrink: 0,
@@ -129,49 +144,67 @@ export function AppSidebar({
           padding: "6px 6px 8px",
         }}
       >
-        <Text type="secondary" style={{ fontSize: 11, paddingLeft: 4 }}>
+        <div className="ldc-section-label" style={{ padding: "0 4px 4px" }}>
           {t("sider.tools")}
-        </Text>
-        <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 4 }}>
+        </div>
+        {/* 工具行 26px、圆角 6：行本身作为命中区拿悬停底与选中底，内部按钮
+            透明并左对齐，长工具名在 240px 侧栏里省略号收尾
+            Tool rows are 26px with a 6px radius: the row itself is the hit area
+            carrying the hover and active fills, the inner button stays
+            transparent and left-aligned, and long tool names ellipsize inside
+            the 240px sidebar. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
           {tools.map((tool) => {
             const active = tool.key === selectedTool;
             return (
-              <Button
+              <div
                 key={tool.key}
-                type="text"
-                size="small"
-                data-testid={`sider-tool-${tool.key}`}
-                onClick={() => onSelectTool(tool.key)}
-                title={tool.label}
+                className="ldc-hover-row"
                 style={{
-                  height: 24,
-                  width: "100%",
-                  minWidth: 0,
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  background: active ? colors.activeBg : "transparent",
-                  color: active ? colors.activeText : "inherit",
-                  fontWeight: active ? 500 : 400,
+                  borderRadius: colors.radiusSm,
+                  background: active ? colors.activeBg : undefined,
                 }}
               >
-                {/* 长工具名（如“参数空间扫描 (Sweep)”）在 240px 侧栏里必须
-                    省略号收尾，否则文字会越过面板边界压到画布上 */}
-                {/* Long tool names must ellipsize inside the 240px sidebar —
-                    otherwise the text spills over the panel edge onto the canvas. */}
-                <span
+                <Button
+                  type="text"
+                  size="small"
+                  data-testid={`sider-tool-${tool.key}`}
+                  onClick={() => onSelectTool(tool.key)}
+                  title={tool.label}
                   style={{
-                    display: "block",
+                    height: 26,
                     width: "100%",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    textAlign: "left",
+                    minWidth: 0,
+                    padding: "0 8px",
+                    borderRadius: colors.radiusSm,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    background: "transparent",
+                    color: active ? colors.activeText : colors.textSecondary,
+                    fontWeight: active ? 500 : 400,
+                    fontSize: 12,
                   }}
                 >
-                  {tool.label}
-                </span>
-              </Button>
+                  {/* 长工具名（如“参数空间扫描 (Sweep)”）在 240px 侧栏里必须
+                      省略号收尾，否则文字会越过面板边界压到画布上 */}
+                  {/* Long tool names must ellipsize inside the 240px sidebar —
+                      otherwise the text spills over the panel edge onto the canvas. */}
+                  <span
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      textAlign: "left",
+                    }}
+                  >
+                    {tool.label}
+                  </span>
+                </Button>
+              </div>
             );
           })}
         </div>

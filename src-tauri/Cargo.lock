@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "cislunar-code"
-version = "5.1.0"
+version = "5.1.1"
 dependencies = [
  "anyhow",
  "parking_lot",

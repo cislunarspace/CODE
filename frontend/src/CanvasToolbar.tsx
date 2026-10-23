@@ -7,6 +7,7 @@
 // vertical dividers (#450); on narrow windows whole groups wrap without splitting.
 
 import { Button, Divider, Radio, Tooltip } from "antd";
+import type { CSSProperties } from "react";
 import {
   CompressOutlined,
   FileImageOutlined,
@@ -64,14 +65,26 @@ export function CanvasToolbar({
 }: CanvasToolbarProps) {
   const { t } = useTranslation();
   const inertial = frame === "inertial";
+  // 分组竖线：宽 1px、高 14（约控件高度的六成），颜色取结构描边令牌，不抢控件
+  // Group rule: 1px wide and 14 tall (about six tenths of the control height),
+  // coloured with the structural border token so it never competes with controls.
+  const groupSeparator: CSSProperties = {
+    height: 14,
+    margin: 0,
+    borderInlineStartColor: "var(--ldc-border)",
+  };
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
+        // 一行 32px：控件 24px + 上下各 4px 内边距
+        // A 32px row: 24px controls plus 4px padding above and below.
+        minHeight: 32,
         gap: 6,
         padding: "4px 8px",
         flexWrap: "wrap",
+        rowGap: 6,
       }}
     >
       <Radio.Group
@@ -86,7 +99,7 @@ export function CanvasToolbar({
         <Radio.Button value="yz">YZ</Radio.Button>
       </Radio.Group>
 
-      <Divider orientation="vertical" />
+      <Divider orientation="vertical" style={groupSeparator} />
 
       {/* 视图系切换（#428，ADR 0013：会合系 ⇄ 惯性 GCRS）：显示选择，
           不改任何数据与时刻语义 */}
@@ -102,7 +115,7 @@ export function CanvasToolbar({
         <Radio.Button value="inertial">{t("toolbar.frame.inertial")}</Radio.Button>
       </Radio.Group>
 
-      <Divider orientation="vertical" />
+      <Divider orientation="vertical" style={groupSeparator} />
 
       {/* 绘制内容切换（eph-fig）：双段并存的产物（CR3BP 参考段 + 星历段）
           画哪段；无段语义的产物（转移弧、预报、族成员）不受影响 */}
@@ -121,7 +134,7 @@ export function CanvasToolbar({
         <Radio.Button value="ephemeris">{t("toolbar.content.ephemeris")}</Radio.Button>
       </Radio.Group>
 
-      <Divider orientation="vertical" />
+      <Divider orientation="vertical" style={groupSeparator} />
 
       <Radio.Group
         size="small"

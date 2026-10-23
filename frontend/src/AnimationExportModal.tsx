@@ -1,10 +1,10 @@
 // 导出动画设置弹窗（#455）：模式（自转/时间轴播放）与时长（2–30 秒）。
 // 确认携带参数回调、取消无副作用；量程不可用时时间轴模式禁用并注明原因。
-// 视觉遵循 ADR 0020（直角、紧凑、平面化）。
+// 视觉遵循 ADR 0037（LDC 令牌：中性主色、8px 圆角、平面化）。
 // Export-animation settings modal (#455): mode (spin / timeline playback) and
 // duration (2–30 s). Confirm reports the options, cancel has no side effects;
 // with no timeline range the timeline mode is disabled with a reason.
-// Visuals follow ADR 0020 (square, compact, flat).
+// Visuals follow ADR 0037 (LDC tokens: neutral primary, 8px radii, flat).
 
 import { useState } from "react";
 import { Button, Form, Modal, Radio, Slider, Typography } from "antd";
@@ -40,21 +40,22 @@ export function AnimationExportModal({ open, timeRange, onClose, onExport }: Ani
 
   return (
     <Modal
-      title={t("anim.title")}
+      title={<span style={{ fontSize: 14, fontWeight: 600 }}>{t("anim.title")}</span>}
       open={open}
       onCancel={onClose}
       width={430}
+      styles={{ body: { paddingTop: 4 } }}
       footer={[
-        <Button key="cancel" onClick={onClose}>
+        <Button key="cancel" size="small" onClick={onClose}>
           {t("action.cancel")}
         </Button>,
-        <Button key="export" type="primary" onClick={() => onExport({ mode, durationSec })}>
+        <Button key="export" size="small" type="primary" onClick={() => onExport({ mode, durationSec })}>
           {t("anim.export")}
         </Button>,
       ]}
     >
       <Form layout="vertical" size="small">
-        <Form.Item label={t("anim.mode")}>
+        <Form.Item label={t("anim.mode")} style={{ marginBottom: 10 }}>
           <Radio.Group
             value={mode}
             onChange={(e) => setMode(e.target.value as AnimationExportMode)}
@@ -66,11 +67,11 @@ export function AnimationExportModal({ open, timeRange, onClose, onExport }: Ani
           </Radio.Group>
         </Form.Item>
         {!timelineAvailable && (
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text style={{ fontSize: 11, color: "var(--ldc-text-muted)" }}>
             {t("anim.timeline_unavailable")}
           </Text>
         )}
-        <Form.Item label={t("anim.duration")}>
+        <Form.Item label={t("anim.duration")} style={{ marginBottom: 10 }}>
           <Slider
             min={2}
             max={30}

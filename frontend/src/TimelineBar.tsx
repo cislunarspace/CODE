@@ -143,18 +143,14 @@ export function TimelineBar({
   return (
     <div
       style={{
-        padding: "4px 12px",
-        // 配色随主题（ADR 0034）：过去写死深色底，浅色界面里是一条跳出来的暗带。
-        // 用 --tod-* 变量，浅色取透明继承上方条带、深色取面板暗面。
-        // Theme-aware (ADR 0034): the background used to be a hardcoded dark
-        // fill that jumped out of a light UI. The --tod-* variables resolve to
-        // transparent (inheriting the strip above) in light and the dark panel
-        // surface in dark mode.
-        background: "var(--tod-panel-bg, transparent)",
-        borderRadius: 2,
+        // 底色与顶部描边由所在条带（App 的时间轴行）提供，本组件只排布控件，
+        // 免得同一层再叠一块比条带更深的底
+        // The strip that hosts this bar (the timeline row in App) supplies the
+        // background and the top hairline; this component only lays out its
+        // controls, so no second, darker surface is stacked on the strip.
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        gap: 10,
       }}
     >
       <Button
@@ -162,7 +158,23 @@ export function TimelineBar({
         size="small"
         title={playing ? t("timeline.pause") : t("timeline.play")}
         disabled={disabled}
-        icon={playing ? <PauseCircleOutlined style={{ fontSize: 16 }} /> : <PlayCircleOutlined style={{ fontSize: 16 }} />}
+        // 播放中的图标走主色：主色是中性近黑/近白，不与信息蓝的游标抢注意力。
+        // 禁用态不写内联色，交给 antd 的禁用样式压暗
+        // While playing the icon takes the primary colour — neutral near-black on
+        // light, near-white on dark — so it never competes with the info-blue
+        // cursor. The disabled state sets no inline colour and lets antd dim it.
+        icon={
+          playing ? (
+            <PauseCircleOutlined style={{ fontSize: 14 }} />
+          ) : (
+            <PlayCircleOutlined style={{ fontSize: 14 }} />
+          )
+        }
+        style={
+          disabled
+            ? undefined
+            : { color: playing ? "var(--ldc-primary)" : "var(--ldc-text-secondary)" }
+        }
         onClick={() => setPlaying(!playing)}
       />
       {/* 播放配置（#429 情景素材）：速率档位 + 循环开关 */}
@@ -174,16 +186,35 @@ export function TimelineBar({
         options={rateOptions}
         disabled={disabled}
         onChange={(v) => setConfig({ rate: v })}
-        style={{ width: 92 }}
+        style={{ width: 84 }}
         title={t("timeline.rate_title")}
       />
       <Button
         size="small"
+        type="text"
         disabled={disabled}
         icon={
           <RetweetOutlined
-            style={{ fontSize: 14, color: doLoop ? undefined : "var(--tod-text-secondary, #595959)" }}
+            style={{
+              fontSize: 14,
+              color: disabled
+                ? undefined
+                : doLoop
+                  ? "var(--ldc-primary)"
+                  : "var(--ldc-text-faint)",
+            }}
           />
+        }
+        // 开启循环用主色浅底 + 主色前景表示激活，关闭时回到中性文字色
+        // Looping on shows the primary-soft fill with the primary foreground;
+        // off falls back to the neutral text colour.
+        style={
+          disabled
+            ? undefined
+            : {
+                background: doLoop ? "var(--ldc-primary-soft)" : "transparent",
+                color: doLoop ? "var(--ldc-primary)" : "var(--ldc-text-muted)",
+              }
         }
         onClick={() => setConfig({ loop: !doLoop })}
         title={doLoop ? t("timeline.loop_on_title") : t("timeline.loop_off_title")}
@@ -191,13 +222,26 @@ export function TimelineBar({
       <Space orientation="horizontal" style={{ flex: 1 }} size={8}>
         <FieldTimeOutlined
           style={{
-            color: disabled
-              ? "var(--tod-text-secondary, #595959)"
-              : "var(--tod-accent, #0958d9)",
+            fontSize: 12,
+            // 当前时刻在图表与时间轴上用信息蓝（ADR 0037）：中性主色在星图
+            // 与浅色图表上都读成禁用态，撑不起“当前”这一强调
+            // The current moment is info-blue on the timeline and the chart
+            // (ADR 0037): the neutral primary reads as disabled over both the
+            // star chart and a light plot, so it cannot carry "current".
+            color: disabled ? "var(--ldc-text-faint)" : "var(--tod-accent, var(--ldc-info))",
           }}
         />
         <Slider
-          style={{ flex: 1, margin: "6px 0" }}
+          // 滑块压紧：条带本身只有一行高，留白交给条带内边距
+          // Tight slider: the strip is one row tall, so spacing belongs to the
+          // strip's padding rather than to the control.
+          style={{ flex: 1, margin: "4px 6px" }}
+          // 已走过的一段用信息蓝，即“当前时刻”的强调色。滑钮保持中性（白底
+          // 加中性描边），不在同一控件上再引入第三种颜色
+          // The travelled part takes the info blue that marks "the current
+          // moment"; the knob stays neutral (light fill, neutral ring) so one
+          // control never introduces a third colour.
+          styles={{ track: { background: "var(--tod-accent, var(--ldc-info))" } }}
           min={minEt}
           max={maxEt}
           step={(maxEt - minEt) / 1000}
@@ -212,9 +256,18 @@ export function TimelineBar({
           {visibleEvents.map((e, i) => (
             <Tooltip key={`${e.label}-${i}`} title={e.dv ? `${e.label}：${e.dv}` : e.label}>
               <Button
+                className="ldc-num"
                 size="small"
                 type="dashed"
-                style={{ padding: "0 6px", fontSize: 11, lineHeight: "18px", height: 20 }}
+                style={{
+                  height: 20,
+                  padding: "0 7px",
+                  fontSize: 11,
+                  lineHeight: "18px",
+                  borderRadius: 6,
+                  borderColor: "var(--ldc-border)",
+                  color: "var(--ldc-text-secondary)",
+                }}
                 onClick={() => onTimeChange(e.et)}
               >
                 {e.dv ? `${e.label} ${e.dv}` : e.label}
@@ -224,15 +277,15 @@ export function TimelineBar({
         </Space>
       )}
       <Text
+        className="ldc-num"
         style={{
           fontSize: 11,
           minWidth: 140,
           textAlign: "right",
-          // 禁用态靠透明度压低，读数仍走同一条主题变量
-          // The disabled state dims by opacity; the readout keeps the same
-          // theme variable.
+          // 禁用态靠透明度压低，读数仍走同一条令牌
+          // The disabled state dims by opacity; the readout keeps the same token.
           opacity: disabled ? 0.55 : 1,
-          color: "var(--tod-text-secondary, #8c8c8c)",
+          color: "var(--ldc-text-muted)",
         }}
       >
         {formatEt(val)}

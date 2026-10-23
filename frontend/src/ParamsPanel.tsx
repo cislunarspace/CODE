@@ -165,6 +165,7 @@ export function ParamsPanel({ toolName, schema, values, onChange, fieldErrors }:
       return (
         <InputNumber
           size="small"
+          className="ldc-num"
           style={{ width: "100%" }}
           value={typeof displayVal === "number" ? displayVal : null}
           min={minVal}
@@ -261,22 +262,29 @@ export function ParamsPanel({ toolName, schema, values, onChange, fieldErrors }:
         const isRequired = schema.required?.includes(f);
         const tooltipText = FIELD_TOOLTIPS[f] || prop.description;
         const labelTitle = prop.title || f;
+        const errorText = fieldErrors?.[f];
 
         return (
           <Form.Item
             key={f}
             style={{ marginBottom: 8 }}
-            validateStatus={fieldErrors?.[f] ? "error" : undefined}
-            help={fieldErrors?.[f] || undefined}
+            validateStatus={errorText ? "error" : undefined}
+            // 校验提示与标签同档字号：antd 默认跟着表单尺寸走到 12px，这里收到 11px
+            // Validation hint matches the label size: antd follows the form size (12px),
+            // narrowed to 11px here.
+            help={errorText ? <span style={{ fontSize: 11 }}>{errorText}</span> : undefined}
             label={
               <Space orientation="horizontal" size={4}>
-                <Text style={{ fontSize: 12, fontWeight: isRequired ? 600 : 400 }}>
+                <Text
+                  className="ldc-field-label"
+                  style={{ fontWeight: isRequired ? 500 : 400 }}
+                >
                   {labelTitle}
-                  {isRequired && <span style={{ color: "#ff4d4f", marginLeft: 2 }}>*</span>}
+                  {isRequired && <span style={{ color: "var(--ldc-error)", marginLeft: 2 }}>*</span>}
                 </Text>
                 {tooltipText && (
                   <Tooltip title={tooltipText} placement="right">
-                    <InfoCircleOutlined style={{ color: "#8c8c8c", fontSize: 11, cursor: "help" }} />
+                    <InfoCircleOutlined style={{ color: "var(--ldc-text-faint)", fontSize: 11, cursor: "help" }} />
                   </Tooltip>
                 )}
               </Space>

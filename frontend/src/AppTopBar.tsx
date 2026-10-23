@@ -5,7 +5,8 @@
 // settings, about). Every menu item drives an action the app really has — no
 // placeholder entries.
 
-import { Button, Dropdown, Typography } from "antd";
+import { Button, Dropdown } from "antd";
+import type { ReactNode } from "react";
 import {
   InfoCircleOutlined,
   MoonOutlined,
@@ -13,10 +14,9 @@ import {
   SettingOutlined,
   SunOutlined,
 } from "@ant-design/icons";
-import { shellColors } from "./theme";
+import cislunarLogo from "./assets/cislunar_logo.png";
+import { shellColors, type ShellColors } from "./theme";
 import { useTranslation } from "./i18n";
-
-const { Text } = Typography;
 
 /** 一个菜单项（type: "divider" 时只画分隔线，标签为空） */
 /** One menu entry; type: "divider" draws a separator and leaves the label empty. */
@@ -45,6 +45,47 @@ export interface AppTopBarProps {
   onOpenAbout: () => void;
 }
 
+/** 顶栏图标按钮：28px 见方、圆角 8。激活态用 primarySoft 底配 primary 前景。
+ *  Top-bar icon button: a 28px square with an 8px radius; the active state uses
+ *  the primarySoft fill with a primary foreground. */
+function TopBarIconButton({
+  colors,
+  testId,
+  title,
+  icon,
+  active = false,
+  onClick,
+}: {
+  colors: ShellColors;
+  testId: string;
+  title: string;
+  icon: ReactNode;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    // 悬停底由 .ldc-hover-shell 的外壳提供，按钮自身保持透明
+    // The hover fill comes from the .ldc-hover-shell wrapper; the button stays transparent.
+    <div className="ldc-hover-shell">
+      <Button
+        type="text"
+        size="small"
+        icon={icon}
+        data-testid={testId}
+        onClick={onClick}
+        title={title}
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: colors.radius,
+          background: active ? colors.primarySoft : "transparent",
+          color: active ? colors.primary : colors.textSecondary,
+        }}
+      />
+    </div>
+  );
+}
+
 export function AppTopBar({
   mode,
   epochLabel,
@@ -64,81 +105,121 @@ export function AppTopBar({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 4,
-        padding: "4px 10px",
+        gap: 2,
+        height: 40,
+        padding: "0 10px",
         flexShrink: 0,
         borderBottom: `1px solid ${colors.border}`,
         background: colors.barBg,
       }}
     >
-      <Text strong style={{ fontSize: 14, letterSpacing: 0.5, marginRight: 10 }}>
-        CODE
-      </Text>
+      {/* 品牌标记：cislunar space 标志（tools/assets/logo.png 的 128px 副本），
+          产品名是紧邻的文字。标志本体是深藏青描边配银灰球体、透明底，缩小后描边
+          会变淡，所以统一垫一块白色圆角底衬，浅色下再补一条描边把边界交代清楚。 */}
+      {/* Brand mark: the cislunar space logo (a 128px copy of tools/assets/logo.png)
+          with the product name as adjacent text. The mark is navy linework over a
+          silver sphere on a transparent ground, which fades once scaled down, so it
+          always sits on a white rounded plate; light mode adds a hairline so the
+          plate still has an edge against the white bar. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 10 }}>
+        <span
+          style={{
+            width: 32,
+            height: 32,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 2,
+            borderRadius: colors.radius,
+            background: "#ffffff",
+            border: mode === "dark" ? "none" : `1px solid ${colors.border}`,
+          }}
+        >
+          <img
+            src={cislunarLogo}
+            alt="cislunar space"
+            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+          />
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: colors.text, letterSpacing: 0.4 }}>
+          CODE
+        </span>
+      </div>
 
       {menus.map((menu) => (
-        <Dropdown
-          key={menu.key}
-          trigger={["click"]}
-          menu={{
-            items: menu.items.map((item) =>
-              item.type === "divider"
-                ? { type: "divider" as const, key: item.key }
-                : { key: item.key, label: item.label, disabled: !item.onClick },
-            ),
-            onClick: ({ key }) => {
-              const item = menu.items.find((i) => i.key === key);
-              item?.onClick?.();
-            },
-          }}
-        >
-          <Button type="text" size="small" data-testid={`menu-${menu.key}`}>
-            {menu.label}
-          </Button>
-        </Dropdown>
+        <div key={menu.key} className="ldc-hover-shell">
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: menu.items.map((item) =>
+                item.type === "divider"
+                  ? { type: "divider" as const, key: item.key }
+                  : { key: item.key, label: item.label, disabled: !item.onClick },
+              ),
+              onClick: ({ key }) => {
+                const item = menu.items.find((i) => i.key === key);
+                item?.onClick?.();
+              },
+            }}
+          >
+            <Button
+              type="text"
+              size="small"
+              data-testid={`menu-${menu.key}`}
+              style={{
+                height: 26,
+                padding: "0 8px",
+                borderRadius: colors.radius,
+                background: "transparent",
+                color: colors.textSecondary,
+                fontSize: 12,
+              }}
+            >
+              {menu.label}
+            </Button>
+          </Dropdown>
+        </div>
       ))}
 
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-        <Text
-          data-testid="header-epoch"
-          style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}
-        >
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
+        <span className="ldc-chip" data-testid="header-epoch">
           {epochLabel}
-        </Text>
-        <Button
-          type="text"
-          size="small"
-          icon={<RobotOutlined />}
-          data-testid="header-assistant-toggle"
-          onClick={onToggleAssistant}
+        </span>
+        <TopBarIconButton
+          colors={colors}
+          testId="header-assistant-toggle"
           title={t("assistant.title")}
-          style={{
-            background: assistantOpen ? colors.activeBg : "transparent",
-            color: assistantOpen ? colors.activeText : "inherit",
-          }}
+          icon={<RobotOutlined style={{ fontSize: 14 }} />}
+          active={assistantOpen}
+          onClick={onToggleAssistant}
         />
-        <Button
-          type="text"
-          size="small"
-          icon={mode === "dark" ? <SunOutlined /> : <MoonOutlined />}
-          data-testid="header-theme"
-          onClick={onToggleTheme}
+        <TopBarIconButton
+          colors={colors}
+          testId="header-theme"
           title={t("app.theme_toggle_title")}
+          icon={
+            mode === "dark" ? (
+              <SunOutlined style={{ fontSize: 14 }} />
+            ) : (
+              <MoonOutlined style={{ fontSize: 14 }} />
+            )
+          }
+          onClick={onToggleTheme}
         />
-        <Button
-          type="text"
-          size="small"
-          icon={<SettingOutlined />}
-          data-testid="header-settings"
-          onClick={onOpenSettings}
+        <TopBarIconButton
+          colors={colors}
+          testId="header-settings"
           title={t("app.settings_title")}
+          icon={<SettingOutlined style={{ fontSize: 14 }} />}
+          onClick={onOpenSettings}
         />
-        <Button
-          type="text"
-          size="small"
-          icon={<InfoCircleOutlined />}
-          data-testid="header-about"
-          onClick={onOpenAbout}
+        <TopBarIconButton
+          colors={colors}
+          testId="header-about"
           title={t("app.about_title")}
+          icon={<InfoCircleOutlined style={{ fontSize: 14 }} />}
+          onClick={onOpenAbout}
         />
       </div>
     </div>

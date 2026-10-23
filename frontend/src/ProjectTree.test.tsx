@@ -168,9 +168,9 @@ describe("ProjectTree 分组头与结构化摘要（#468）", () => {
   });
 
   it("受控展开：初始全展开，点分组头折叠后子行消失", () => {
-    // Tree 本体已按 ADR 0020 传 motion={false}，jsdom 里无收起动画卡滞
-    // The Tree itself passes motion={false} per ADR 0020, so jsdom has no
-    // stuck collapse motion.
+    // Tree 本体已传 motion={false}（ADR 0037 关闭位移动效），jsdom 里无收起动画卡滞
+    // The Tree itself passes motion={false} (ADR 0037 disables movement effects), so
+    // jsdom has no stuck collapse motion.
     const props = {
       artifacts: ITEMS,
       selectedId: null,

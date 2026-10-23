@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CODE</title>
     <style>
+      /* 挂载前的基础底：字体与配色由 ldc.css 从 --ldc-* 令牌取，这里只防止首帧白闪 */
+      /* Pre-mount baseline: fonts and colours come from the --ldc-* tokens in ldc.css;
+         this only keeps the first frame from flashing. */
       html, body, #root { height: 100%; margin: 0; }
-      body { font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+      body { background: #ffffff; }
     </style>
   </head>
   <body>

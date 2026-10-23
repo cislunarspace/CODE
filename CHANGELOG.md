@@ -4,6 +4,23 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 5.1.1 (2026-10-22)
+
+### 界面
+
+- **视觉语言改为 LDC 风格（ADR 0037）**：令牌层重写为 zinc 中性灰阶，亮色为主、暗色可切。主色改为中性色（亮色近黑、暗色近白），蓝、绿、橙、红只承担状态与数据面强调。圆角分档为按钮 8px、卡片与面板 12px、模态弹层 16px，开关恢复胶囊。控件无投影，浮层一层柔和投影。外壳、画布区、参数停靠、项目树、记录详情、助手边栏与全部弹窗按同一套令牌改写。公共构件（面板头、分区标题、徽标、可交互行、悬浮外壳、表单字段标签、空状态、细滚动条）收敛到 `frontend/src/ldc.css`。顶栏品牌位换成 cislunar space 标志，图标取自 `tools/assets/logo.png` 的缩小副本。布局与操作位置不变（仍按 ADR 0034）。
+
+### 修复
+
+- **Windows 上助手进程与测试服务端的两处修复（#543）**：pi.rs 的 job 句柄改为随 PiState 存活，函数返回不再终结整棵子树，应用内助手首次拉起即被终止的问题一并修好。fake_pi_rpc.py 的 stdio 显式钉死 UTF-8，中文 prompt 在 Windows 管道下不再解码成非法 JSON。
+
+### 工程
+
+- **calcephpy 升 5.0.1，e2m2e 随之到 5.9.11（#515）**：Windows wheel 源指向 CODE-core 的 calcephpy-v1，uv.lock 重锁到 revision 5，其余包不动。
+- **Actions setup-node 升到 v7（#518）**：发布工作流与 Windows 打包各一处。
+- **README 文案打磨（#540）**。
+- **pyproject 中 calcephpy 说明修正（#541）**：仓库归属与非 Windows 回落到 PyPI sdist 的表述改回事实。
+
 ## 5.1.0 (2026-10-13)
 
 ### 界面

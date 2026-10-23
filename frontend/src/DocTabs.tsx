@@ -8,13 +8,11 @@
 // unmount would drop the camera and scene. The "+" control restores a hidden
 // tab. At least one tab always stays open.
 
-import { Button, Dropdown, Typography } from "antd";
+import { Button, Dropdown } from "antd";
 import type { MenuProps } from "antd";
 import { CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { shellColors } from "./theme";
 import { useTranslation } from "./i18n";
-
-const { Text } = Typography;
 
 /** 一个文档标签：key 是稳定标识，label 是显示名 */
 /** A document tab: a stable key plus its display label. */
@@ -52,12 +50,13 @@ export function DocTabs({
   return (
     <div
       data-testid="doc-tabs"
+      className="ldc-scroll"
       style={{
         display: "flex",
         alignItems: "stretch",
         gap: 2,
-        paddingLeft: 6,
-        paddingRight: 6,
+        height: 36,
+        padding: "0 8px",
         flexShrink: 0,
         background: colors.barBg,
         borderBottom: `1px solid ${colors.border}`,
@@ -67,16 +66,26 @@ export function DocTabs({
       {tabs.map((tab) => {
         const active = tab.key === activeKey;
         return (
+          // 指针停靠或键盘聚焦都现出关闭按钮：透明但仍可聚焦的按钮不该是
+          // 唯一的关闭入口。显隐交给 .ldc-hover-actions，激活标签直接常显
+          // Pointer hover and keyboard focus both reveal the close button: an
+          // invisible but focusable button must never be the only way out. The
+          // reveal is .ldc-hover-actions, overridden to always-on for the active tab.
           <div
             key={tab.key}
+            className="ldc-hover-row"
             style={{
               display: "flex",
               alignItems: "center",
               gap: 2,
               flexShrink: 0,
+              // 激活标签用 2px 主色下边线压住标签条自己的分隔线，形成连着
+              // 内容区的“当前页”指示
+              // The active tab draws a 2px primary underline over the strip's own
+              // hairline, marking the page that the content below belongs to.
               marginBottom: -1,
-              borderBottom: `2px solid ${active ? colors.activeText : "transparent"}`,
-              background: active ? colors.activeBg : "transparent",
+              borderBottom: `2px solid ${active ? colors.primary : "transparent"}`,
+              borderRadius: `${colors.radiusSm}px ${colors.radiusSm}px 0 0`,
             }}
           >
             <Button
@@ -85,50 +94,75 @@ export function DocTabs({
               data-testid={`doc-tab-${tab.key}`}
               onClick={() => onActivate(tab.key)}
               style={{
-                padding: "4px 2px 6px 8px",
+                height: 32,
+                padding: "0 8px",
                 borderRadius: 0,
-                color: active ? colors.activeText : "inherit",
+                background: "transparent",
+                color: active ? colors.text : colors.textSecondary,
+                fontSize: 12,
                 fontWeight: active ? 500 : 400,
               }}
             >
               {tab.label}
             </Button>
             {tabs.length > 1 && (
-              <Button
-                type="text"
-                size="small"
-                icon={<CloseOutlined style={{ fontSize: 9 }} />}
-                data-testid={`doc-tab-close-${tab.key}`}
-                onClick={() => onClose(tab.key)}
-                title={t("doc.tabs.close").replace("{label}", tab.label)}
-                style={{ marginRight: 4 }}
-              />
+              <span className="ldc-hover-actions" style={active ? { opacity: 1 } : undefined}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CloseOutlined style={{ fontSize: 10 }} />}
+                  data-testid={`doc-tab-close-${tab.key}`}
+                  onClick={() => onClose(tab.key)}
+                  title={t("doc.tabs.close").replace("{label}", tab.label)}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    marginRight: 4,
+                    borderRadius: colors.radiusSm,
+                    background: "transparent",
+                    color: colors.textFaint,
+                  }}
+                />
+              </span>
             )}
           </div>
         );
       })}
 
-      <Dropdown
-        trigger={["click"]}
-        disabled={closed.length === 0}
-        menu={{ items: menuItems, onClick: ({ key }) => onOpen(key) }}
+      <div
+        className="ldc-hover-shell"
+        style={{ alignSelf: "center", marginLeft: 2 }}
       >
-        <Button
-          type="text"
-          size="small"
-          icon={<PlusOutlined />}
-          data-testid="doc-tab-open"
-          title={t("doc.tabs.add")}
-          style={{ marginTop: 2, flexShrink: 0 }}
-        />
-      </Dropdown>
+        <Dropdown
+          trigger={["click"]}
+          disabled={closed.length === 0}
+          menu={{ items: menuItems, onClick: ({ key }) => onOpen(key) }}
+        >
+          <Button
+            type="text"
+            size="small"
+            icon={<PlusOutlined style={{ fontSize: 12 }} />}
+            data-testid="doc-tab-open"
+            title={t("doc.tabs.add")}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: colors.radiusSm,
+              background: "transparent",
+              color: colors.textMuted,
+            }}
+          />
+        </Dropdown>
+      </div>
 
       {closed.length === 0 && (
-        <Text type="secondary" style={{ fontSize: 11, alignSelf: "center", marginLeft: 6 }}>
+        <span
+          style={{ fontSize: 11, color: colors.textMuted, alignSelf: "center", marginLeft: 8 }}
+        >
           {/* 全部标签已打开：占位说明，避免“+”看起来是坏的 */}
           {/* Every tab is open: a hint so the "+" does not look broken. */}
           {t("doc.tabs.all_open")}
-        </Text>
+        </span>
       )}
     </div>
   );
