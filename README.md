@@ -85,7 +85,7 @@ uv run sphinx-build -b html -D language=zh docs/source docs/build/html
 - [docs/architecture/architecture.md](docs/architecture/architecture.md)：分层与依赖规则。
 - [CHANGELOG.md](CHANGELOG.md)：版本历史。
 
-## 测试与代码规范
+## 测试与代码标准
 
 ```bash
 uv run pytest tests/ -m "not spice"                # Python 领域层
