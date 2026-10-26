@@ -19,7 +19,7 @@
 | `perilune_height_max_km` | NRHO | 近月点高度上限（km） |
 | `amplitude_in_km`、`amplitude_out_km` | LISSAJOUS | 面内与面外振幅上限（km） |
 | `phase_in`、`phase_out` | LISSAJOUS | 面内与面外初始相位（0 到 1） |
-| `continuation_direction` | SPO、LPO、HORSESHOE、NRHO | SPO、LPO、Horseshoe 取 `decrease-x0` 或 `increase-x0`。NRHO 由模型固定为 `toward-moon`。AXIAL 由模型固定为 `increase-amplitude`，界面不提供该项 |
+| `continuation_direction` | SPO、LPO、HORSESHOE、NRHO | SPO、LPO、Horseshoe 取 `decrease-x0` 或 `increase-x0`。NRHO 由模型固定为 `toward-moon`，界面保持默认即可，不要改该项。AXIAL 由模型固定为 `increase-amplitude`，界面不提供该项 |
 | `match_tolerance_km` | SPO、LPO、HORSESHOE | 振幅匹配容差（km） |
 
 结果入轨道库，族成员轨迹逐条渲染到画布，可在轨道库标签查询刚生成的记录。
