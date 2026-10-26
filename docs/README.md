@@ -17,7 +17,7 @@ uv sync --extra docs
 构建中文文档：
 
 ```bash
-uv run sphinx-build -b html -D language=zh docs/source docs/build/html
+uv run sphinx-build -b html -D language=zh docs/source docs/build/html/zh
 ```
 
-构建完成后打开 `docs/build/html/index.html`。`docs/build/` 和 `.mo` 文件均为构建产物，不提交到仓库。
+构建完成后打开 `docs/build/html/zh/index.html`。`docs/build/` 和 `.mo` 文件均为构建产物，不提交到仓库。

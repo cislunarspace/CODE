@@ -2,11 +2,11 @@
 
 ## 轨道库目录
 
-界面计算产物统一持久化到 e2m2e 轨道库（catalog），不按工具分目录落 JSON 或 NPZ 文件。桌面端的库目录固定在用户配置目录下的 `catalog/`。Windows 为 `%APPDATA%/cislunar-code/catalog`，Linux 为 `$XDG_CONFIG_HOME`（通常 `~/.config`）下的 `cislunar-code/catalog`，与情景文件、助手会话同级。目录由 Rust 壳启动时显式注入，不随工作目录漂移。用户在环境里预设 `E2M2E_CATALOG_DIR` 时以预设为准。
+轨道族生成、任务轨道设计、参数空间扫描、轨道保持、转移轨道设计的结果持久化到 e2m2e 轨道库（catalog），不按工具分目录落 JSON 或 NPZ 文件。轨道预报与时空坐标转换只进结果层，重启不保留。桌面端的库目录固定在用户配置目录下的 `catalog/`。Windows 为 `%APPDATA%/cislunar-code/catalog`，Linux 为 `$XDG_CONFIG_HOME`（通常 `~/.config`）下的 `cislunar-code/catalog`，与情景文件、助手会话同级。目录由 Rust 壳启动时显式注入，不随工作目录漂移。用户在环境里预设 `E2M2E_CATALOG_DIR` 时以预设为准。
 
 ## 自动入库与谱系
 
-计算成功后产物自动入库。一条记录带多维分类，包括族类型、平动点、Jacobi 区间与振幅区间，也带谱系指针、标签与备注。重启后项目树经 `catalog_query` 恢复清单，单条记录经 `catalog_get` 懒加载轨迹。下游记录用 `source_record_id` 指向上游，谱系跨重启保持。上游记录被删时谱系断链，产物本身仍可用，界面显示降级标记。
+支持入库的工具计算成功后，产物自动入库。一条记录带多维分类，包括族类型、平动点、Jacobi、振幅区间，也带谱系指针、标签、备注。重启后项目树经 `catalog_query` 恢复清单，单条记录经 `catalog_get` 懒加载轨迹。下游记录用 `source_record_id` 指向上游，谱系跨重启保持。上游记录被删时谱系断链，产物本身仍可用。
 
 ## 基线数据集
 

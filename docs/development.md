@@ -67,14 +67,14 @@ parser.add_argument(
 
 ### 国际化
 
-界面语言固定为简体中文（ADR 0031），不提供切换。词典在 `frontend/src/i18n.tsx`，只有一份中文 `Record<string, string>`，组件一律经 `t(key)` 取用。`t` 对缺失键返回键名本身，让漏配在开发期直接暴露。新增界面文本时只向这一份词典加键值，不新增英文条目或语种分支。`<html lang>` 恒为 `zh-CN`。专业名词、工具名、字段名与科学缩写按领域惯例保留原文，不算翻译对象。
+界面语言固定为简体中文（ADR 0031），不提供切换。词典在 `frontend/src/i18n.tsx`，只有一份中文 `Record<string, string>`。新增界面文本应经 `t(key)` 取用，存量硬编码逐步迁移。`t` 对缺失键返回键名本身，让漏配在开发期直接暴露。新增界面文本时只向这一份词典加键值，不新增英文条目或语种分支。`<html lang>` 恒为 `zh-CN`。专业名词、工具名、字段名与科学缩写按领域惯例保留原文，不算翻译对象。
 
 ### Sphinx 文档
 
 Sphinx 源文件位于 `docs/source/`，叙事文档通过 MyST Markdown 接入。
 
 ```bash
-uv run --extra docs python -m sphinx -b html docs/source docs/build/html
+uv run --extra docs python -m sphinx -b html docs/source docs/build/html/zh
 ```
 
 提交前应至少确认构建无 ERROR，并尽量清理 WARNING。若新增/删除叙事页面，请在 `docs/source/index.rst` 的对应 toctree 中增删条目。
@@ -131,7 +131,7 @@ logger = logging.getLogger(__name__)
 - 跨 IPC 的 struct 用 `#[serde(rename_all = "camelCase")]`，例外是 `EphemerisSegment`，它故意保持 snake_case，与 e2m2e 的 `EphemerisTable` 同形以便共用解析。发给 sidecar 的 `arguments` 保持 snake_case，用 e2m2e request 的字段原名。
 - 错误处理。Python 统一用 `OrbitError(code, message, cause)`，`translate_exception` 把 e2m2e 异常翻成 `CORRECTION_DIVERGED`、`PROPAGATION_FAILED`、`BACKEND_UNAVAILABLE`、`KERNEL_NOT_FOUND`、`INVALID_PARAMS` 等错误码。Rust 内部用 `anyhow`，跨 IPC 返回 `Result<T, String>`。前端用 `formatToolError` 配合 antd toast 与表单内联标红。原则是不伪造成功，坏文件明确报错（`scenario.ts:parseScenario`），可选数据可以软失败降级（如 `moonTrackFromResponse` 返回 null）。
 - 异步。Python 纯同步，不用 asyncio。Rust 用 tokio，配合 mpsc 与 oneshot，sidecar 单任务串行，MCP 按 id 多路复用并发，进程级配置经 `OnceLock` 在 app setup 注入。前端用 async/await，Tauri API 动态 import，在 effect 里处理竞态取消。
-- 依赖注入与状态。Rust 用 Tauri managed state（`SidecarState`、`ProjectState`、`AssistantState`）加 `State<'_>`。Python 用构造器注入（`FacadeBridge(kernel_dir, catalog_dir)`、`CatalogService(bridge)`）。前端没有 store 库，`App.tsx` 用单组件 `useState` 集中管理状态，持久化走 `localStorage` 的 `tod-*` 键。
+- 依赖注入与状态。Rust 用 Tauri 托管状态（`SidecarState`、`ProjectState`、`AssistantState`）加 `State<'_>`。Python 用构造器注入（`FacadeBridge(kernel_dir, catalog_dir)`、`CatalogService(bridge)`）。前端没有 store 库，`App.tsx` 用单组件 `useState` 集中管理状态，持久化走 `localStorage` 的 `tod-*` 键。
 
 ## 测试标准
 
