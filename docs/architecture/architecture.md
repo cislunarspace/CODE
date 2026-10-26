@@ -1,317 +1,198 @@
 # CODE 架构设计
 
-> 本文描述 CODE（Cislunar Orbit DesignEr，系统名 cislunar-code；4.9.0 及以前发布名 transfer-orbit-design）的**最终形态**架构。逐项架构决策见 `docs/adr/`。
+本文描述 CODE（Cislunar Orbit DesignEr，系统名 cislunar-code）的当前架构。逐项架构决策见 `docs/adr/`。4.9.0 及以前的发布名 transfer-orbit-design 只在历史记录与旧配置迁移中使用。
 
 ## 总体定位
 
-tod 是 **e2m2e 的 GUI 前端**。它不实现任何轨道力学算法，只做三件事：
+CODE 是 e2m2e 的桌面前端。它不实现轨道力学算法，只做三件事：
 
-1. **调用**：通过 e2m2e Facade API 发起计算任务（任务轨道设计、轨道族生成、轨道保持、轨道预报、转移轨道设计、稳定性分析、时空坐标转换）。
-2. **管理**：追踪用户工作会话中的全部计算产物（轨道、轨道族、转移结果），提供结构化的数据导航和管线串联。
-3. **呈现**：将计算结果以内嵌可视化的方式展示在主窗口中，支持 3D/2D 轨道图、多轨道叠加、地月系统标注。
+1. 调用：把用户的工具选择与参数交给 e2m2e，发起任务轨道设计、轨道族生成、轨道保持、轨道预报、转移轨道设计、时空坐标转换与分区边界计算。
+2. 管理：把计算产物写入轨道库，维护多维分类与谱系指针，让后续工具能引用上游记录。
+3. 呈现：在三维画布上叠加结果层与固定层，提供时间轴、区域图层与轨道信息。
 
-用户不需要知道 e2m2e 的内部结构，也不需要手动管理文件路径。tod 把 e2m2e 的能力封装为选工件 → 选操作 → 看结果的三步交互。
+用户不需要了解 e2m2e 的内部结构，也不需要手动管理文件路径。界面把一次工作组织为选工具、填参数、求解、校核、入库、情景。
 
-## 总体分层
+## 分层与进程边界
 
-自 ADR-0014 起，GUI 为 Tauri 架构（Rust 壳 + React 前端），e2m2e 经
-sidecar 子进程驱动（协议 = e2m2e ADR 0035：信封 JSON 行 + 二进制帧）。
-原 PyQt 四层中的表现层/入口层已被替换，数据层与执行层的纯 Python 部分
-保留为领域资产。
-
-```
-React 前端（frontend/） ←Tauri IPC→ Rust 壳（src-tauri/）
-                                        ↕ stdio 协议（两条独立链路）
-                                   e2m2e serve-stdio（开发期 uv 拉起；分发期为打包进安装器的
-                                   cislunar-code-sidecar，见分发节）
-                                   e2m2e mcp-serve（标准 MCP，仅 AI 助手链路使用）
-```
+界面链路为 React 前端经 Tauri IPC 调 Rust 壳，Rust 壳经 stdio 与 e2m2e 进程通信。计算链路走 `serve-stdio`，AI 助手链路走标准 MCP 的 `mcp-serve`，两条链路相互独立。
 
 | 层 | 位置 | 职责 |
-|:---|:---|:---|
-| 前端 | `frontend/src/` | React 组件：项目树、参数面板（schema 自动表单）、Three.js 画布、助手边栏、i18n、图表设置 |
-| Rust 壳 | `src-tauri/src/` | sidecar 进程管理（拉起/重试/进度事件）、Tauri command、agent loop（LLM 流式 + 最小 MCP client）、项目状态（内存 Artifact 容器） |
-| sidecar 协议 | e2m2e 侧 | `serve-stdio`：信封 JSON 行 + f32/f64 二进制帧（大数组），见 e2m2e ADR 0035；`mcp-serve`：标准 MCP stdio（同步计算在线程池，可并发） |
-| 领域层（Python） | `src/engine/`、`src/commons/`、`src/model/` | facade_bridge / catalog_service / 单位换算 / 内核管理，e2m2e 语义的 Python 侧资产，工具脚本与测试继续使用 |
+|---|---|---|
+| 前端 | `frontend/src/` | 文档标签、三维画布、参数停靠、项目树、助手边栏、i18n 与图表设置 |
+| Rust 壳 | `src-tauri/src/` | sidecar 进程管理、Tauri command、pi RPC 适配、MCP 桥接、项目状态与更新检查 |
+| sidecar 协议 | e2m2e 侧 | `serve-stdio` 用信封 JSON 行描述结构、二进制帧传大数组。`mcp-serve` 提供标准 MCP stdio 工具接口 |
+| 领域层 | `src/engine/`、`src/commons/`、`src/model/` | facade_bridge、catalog_service、单位换算与内核管理，供脚本与测试使用 |
 
-**关键机制**：
+关键机制有三条。
 
-- **schema 驱动表单**：工具入参 schema 构建期导出（`tools/export_tool_schemas.py` → `frontend/src/toolSchemas/`），参数面板自动生成；升级 e2m2e 后重跑导出。`toolSchemas/*.json` 由上游导出管线生成，其中提及的 ADR 编号均指 **e2m2e 侧编号空间**，与本仓 `docs/adr/` 编号无关（不改导出产物，改了会被下次导出覆盖）。
-- **帧即渲染**：sidecar 二进制帧由 Rust 壳转成 JSON 数字数组过 IPC，前端重建为
-  `Float32Array` 直进 Three.js `BufferAttribute`，无中间文件格式；族成员初态 +
-  period 由前端 CR3BP 传播器重采样整条轨迹（方程对齐 e2m2e，有回归测试）。
-- **视图保持**：布局不变的重绘不重置相机；每批新轨迹数据到达做一次视图适配
-  （按包围盒复位相机，5% 余量），此后重绘保持用户视角（CONTEXT.md 领域语义）。
+- schema 驱动表单：工具入参 schema 在构建期由 `tools/export_tool_schemas.py` 导出到 `frontend/src/toolSchemas/`，参数停靠按 schema 生成表单。升级 e2m2e 后重跑导出。导出产物中的 ADR 编号指 e2m2e 的编号空间，与本仓 `docs/adr/` 无关。
+- 帧即渲染：sidecar 二进制帧由 Rust 壳转成 JSON 数字数组过 IPC，前端重建为 `Float32Array` 交给 Three.js 的 `BufferAttribute`，不落中间文件。族成员初态与周期由前端 CR3BP 传播器按周期重采样整条轨迹，方程与 e2m2e 对齐并有回归测试。
+- 视图保持：布局不变的重绘不重置相机。每批新轨迹到达时按包围盒适配一次，留 5% 余量，此后重绘保持用户视角。
 
-## AI 助手链路（ADR 0022/0023/0025/0027/0032）
+## AI 助手链路
 
-会话运行时是随应用分发的 pi（`pi --mode rpc`，JSONL over stdio）：模型
-配置与凭据由 pi 原生配置管理（本应用不保存），会话 JSONL 落在应用配置
-目录 `pi-sessions/`（`PI_CODING_AGENT_SESSION_DIR`，与终端 pi 会话
-隔离）。Rust 后端（`src-tauri/src/assistant/`：rpc 传输 / pi 进程管理 /
-事件转换）持有 RPC 连接与门禁，pi 会话事件单一转换为 `assistant-event`
-推前端；引导走 pi 原生 steer（排队续跑，上下文保留），停止走 abort。
-工具链路：pi 进程加载桥接扩展（`resources/assistant/tod-bridge.ts`），
-扩展注册 tod MCP 服务器并拉起本二进制 `--assistant-mcp-bridge` 模式
-（mcp.rs 最小 JSON-RPC stdio client 连 `e2m2e mcp-serve` + 宿主情景工
-具），工具名形如 `mcp__tod__<工具名>`。审批闸在扩展的 tool_call 拦截：
-只读白名单免确认，其余经 extension_ui_request 子协议出工具卡片分级确
-认。会话索引由 Rust 扫描会话目录（RPC 无列表命令）；切换会话经
-switch_session + get_messages 折成回放事件流重建 UI。
+会话运行时是随应用分发的 pi，以 `pi --mode rpc` 启动，协议为 stdin/stdout JSONL。模型服务、凭据、思考档位与 provider 登录由 pi 原生配置管理，应用不保存这些内容。会话文件落在应用配置目录的 `pi-sessions/`，由 `PI_CODING_AGENT_SESSION_DIR` 指定，与终端 pi 会话隔离。Rust 后端在 `src-tauri/src/assistant/`，负责 RPC 传输、pi 进程管理、事件转换与审批请求转发。pi 会话事件统一转换为 `assistant-event` 推给前端。引导走 pi 原生 steer，停止走 abort。
 
-## 顶层结构（最终形态）
+工具链路从桥接扩展开始。pi 进程加载 `src-tauri/resources/assistant/tod-bridge.ts`，扩展注册名为 tod 的 MCP 服务器，并拉起本二进制的 `--assistant-mcp-bridge` 模式。该模式由 `mcp.rs` 的最小 JSON-RPC stdio 客户端连接 `e2m2e mcp-serve`，同时暴露宿主情景工具。工具名形如 `mcp__tod__<工具名>`。
+
+审批闸在扩展的 `tool_call` 拦截中。只读白名单（`catalog_query`、`catalog_get`、`scenario_list`、`valid_ranges`）免确认直接执行，其余工具经 `extension_ui_request` 子协议生成工具卡片，用户批准或拒绝。审批协议不携带改后参数。应用取消时对话框按 undefined 解析，扩展视为拒绝，保持 fail-closed。会话切换由 Rust 扫描会话目录，经 `switch_session` 与 `get_messages` 重建对话流。
+
+## 顶层结构
 
 ```
 CODE/
-├── frontend/              # React 前端（Vite + TS + Three.js）
-│   └── src/               # 组件、schema 驱动表单、i18n、画布、助手边栏、录制导出
+├── frontend/              # React 前端（Vite + TypeScript + Three.js）
+│   └── src/               # 文档标签、schema 表单、画布、助手边栏、i18n、图表设置
 ├── src-tauri/             # Rust 壳（Tauri 2）
-│   ├── src/sidecar/       # 帧解析（frames）+ 子进程管理（process）
-│   ├── src/assistant/     # pi RPC 适配（rpc / pi 进程 / 事件转换 / 桥接）
-│   ├── src/mcp.rs         # 最小 MCP stdio client（连 mcp-serve）
-│   ├── src/cmd.rs         # Tauri command（工具执行/目录查询/项目状态）
-│   └── tests/             # 协议夹具测试 + 真实子进程集成测试
-├── src/                   # Python 领域层（纯 Python，无 Qt）
-│   ├── model/             # Project/Artifact（数据类）
-│   ├── engine/            # facade_bridge / catalog_service
-│   ├── commons/           # 跨层常量与共享工具
-│   │   ├── constants.py   # DU/TU/物理常量
-│   │   ├── units.py       # 单位换算（年/月/日/TU、km/DU）
-│   │   ├── kernels.py     # 内核下载/可用性判断（CLI 与 GUI 共用）
-│   │   └── paths.py       # 内核/库目录探测
-│   └── __init__.py
-├── docs/                  # 文档
-│   ├── adr/               # 架构决策记录
-│   ├── architecture/      # 架构说明
-│   └── source/            # Sphinx 源（docs/README.md 说明维护流程）
-├── tests/                 # Python 领域层测试（commons/engine/model 分层）
-├── scripts/               # 独立工具脚本（download_kernels.py / smoke_mcp_serve.py）
-├── catalog/               # 轨道库（e2m2e catalog；GUI 落用户配置目录，见本文分发节 #491；此目录供脚本与测试）
+│   ├── src/sidecar/       # 帧解析与子进程管理
+│   ├── src/assistant/     # pi RPC 适配、事件转换、宿主情景工具
+│   ├── src/mcp.rs         # 最小 MCP stdio 客户端
+│   ├── src/cmd.rs         # Tauri command
+│   ├── src/state.rs       # managed state
+│   ├── src/project.rs     # 项目状态
+│   ├── src/stats.rs       # 系统性能采样
+│   └── tests/             # 协议夹具与真实子进程集成测试
+├── src/                   # Python 领域层
+│   ├── model/             # Artifact 与 Project 数据类
+│   ├── engine/            # facade_bridge、catalog_service、异常翻译、viz adapter
+│   └── commons/           # 常量、单位换算、内核与路径探测
+├── docs/                  # 架构说明、ADR 与 Sphinx 源
+├── tests/                 # Python 领域层测试
+├── scripts/               # 内核下载、基线导入与发布冒烟脚本
+├── catalog/               # 脚本与测试使用的轨道库，GUI 使用用户配置目录
 └── pyproject.toml
 ```
 
-**删除的旧代码**（大爆炸替换）：
+## 数据模型
 
-| 旧目录 | 原因 |
-|---|---|
-| `tod/gui/` | 被 `src/view/` + `src/app/` 替代 |
-| `tod/generates/` | 被 e2m2e Facade API 直调替代 |
-| `tod/transfers/` | 被 e2m2e Facade API 直调替代 |
-| `tod/scripting/` | SCRIPT_ENTRY 机制废弃 |
-| `tod/commons/e2m2e_compat.py` | 不再需要旧路径兼容 |
-| `plot/`（顶层） | v3.2.1 起 e2m2e 删除 `tools/viz`；本仓曾收编为 `src/commons/viz/` 自维护，随 #415 删除（包外零使用零覆盖） |
-| `src/engine/persistence.py` + `src/model/discovery.py` | catalog 之外的产物落盘/扫描链路，只被测试消费（#415） |
-
-## 第1层 数据层 `src/model/`
-
-### Artifact
-
-一次计算的产出物。纯数据类，不依赖 Qt 或 e2m2e。
+`Artifact` 是一次计算的产物，纯数据类，不依赖 e2m2e 对象。
 
 ```python
 @dataclass
 class Artifact:
-    artifact_id: str        # catalog 产物取 record_id；非 catalog 产物为 UUID 前 8 位
-    artifact_type: str      # "orbit" | "family" | "transfer" | "ephemeris"
-    label: str              # 用户可见名称
-    orbit_type: str         # DRO/Halo/NRHO/...
-    source_tool: str        # 产生此 Artifact 的 Facade 方法名（catalog_promote 为提升成员）
-    record_id: str | None   # 轨道库记录 id（e2m2e catalog，issue #375）
-    state_data: ndarray     # 状态矩阵 (n, 6)，用于可视化（catalog_get 懒加载填充）
-    times: ndarray          # 时间向量 (n,)
-    output_path: Path | None # 遗留字段（transfer 遗留分区扫描使用，扫描已随 #415 删除）
-    extra: dict             # 元数据（分类、谱系指针、tags/note、星历四件套等）
-    created_at: datetime    # 创建时间
+    artifact_id: str         # catalog 记录 id，非 catalog 产物取 UUID 前 8 位
+    artifact_type: str       # "orbit" | "family" | "transfer" | "ephemeris"
+    label: str               # 用户可见名称
+    orbit_type: str          # DRO/HALO/NRHO/...
+    source_tool: str         # 产生此产物的工具名
+    record_id: str | None    # 轨道库记录 id
+    state_data: ndarray      # 状态矩阵 (n, 6)，catalog_get 懒加载填充
+    times: ndarray           # 时间向量 (n,)
+    output_path: Path | None # 遗留字段，仅供转移遗留分区
+    extra: dict              # 分类、谱系指针、标签、备注、星历元数据
+    created_at: datetime     # 创建时间
 ```
 
-### Project
+`Project` 管理一次会话中已加载的 Artifact，提供按 id、类型与轨道类型查询，以及沿 `extra["source_record_id"]` 追溯上游。项目本身不持久化，清单由轨道库承担，重启后经 `catalog_query` 恢复。
 
-管理一次工作会话的全部 Artifact。**Project 不做持久化**，清单由轨道库 catalog 承担（`catalog_query` 供数）。
-
-```python
-class Project:
-    name: str
-    artifacts: list[Artifact]
-
-    def add(artifact) -> None
-    def remove(artifact_id) -> bool
-    def get_by_id(artifact_id) -> Artifact | None
-    def get_by_type(type) -> list[Artifact]
-    def get_by_orbit_type(orbit_type) -> list[Artifact]
-    def find_upstream(artifact) -> Artifact | None  # 读 extra["source_record_id"] 谱系追溯
-    def has_broken_lineage(artifact) -> bool        # 上游已删（断链降级标记）
-```
-
-### Discovery（遗留分区扫描，已删）
-
-转移轨道是 catalog 分类体系之外的产物（上游入库另行立项），曾过渡期沿用 `output/transfer/` 目录扫描（`engine.persistence` 落盘 + `model.discovery` 恢复）；链路只被测试消费、facade 未接线，已随 #415 删除，复活场景的正确载体是上游 record 化（e2m2e#574）。轨道 / 族 / 星历的文件名分类正则更早已随 catalog 接入删除（ADR 0008 修订 2026-08-19）。
-
-## 第2层 执行层 `src/engine/`
+## 执行层
 
 ### FacadeBridge
 
-e2m2e Facade API 的薄封装。处理配置注入（kernel_dir / catalog_dir 经 `Config`）、异常翻译、catalog 读写转发。
+e2m2e Facade API 的薄封装，负责配置注入、异常翻译与 catalog 读写转发。全部计算工具统一走 Facade 门面，不绕过门面直调算法层。结果 DTO 是可跨线程传递的纯数据类，含 numpy 数组、标量元数据与 `record_id` 入库回执。
 
-```python
-class FacadeBridge:
-    def __init__(self, kernel_dir=None, catalog_dir=None, facade=None): ...
-
-    def design_orbit(self, **params) -> OrbitDesignResultData:
-        """经 Facade 调用 design_orbit，返回可跨线程传递的结果 DTO；
-        产物自动入轨道库（record_id 回执）。"""
-
-    def generate_family(self, **params) -> FamilyResultData: ...
-    def control_orbit(self, ephemeris_data, source_mu, **params) -> ControlResultData:
-        """input_record_id 直连库中记录（Facade 解析星历段并写谱系），
-        无记录时回退内存星历重建 EphemerisTable。"""
-
-    # catalog 薄封装：catalog_query / catalog_get / catalog_tag /
-    # catalog_delete / catalog_export
-```
-
-**关键设计**：
-
-- **各计算工具统一走 Facade 门面**（issue #375，完成 ADR 0011 缓解措施 3 的既定清理）：#312 起 Facade 响应携带完整几何字段（states/times/mu/ephemeris），#475（e2m2e 5.8.0）起产物自动入轨道库、`control_orbit` 支持 `input_record_id` 谱系输入。GUI 不再绕过门面直调算法层。
-- **周期族成员只携带初态与周期**，桥接层按周期重采样供画布渲染（catalog 族记录懒加载复用同一辅助函数）。
-- **e2m2e 5.6.5 起 `design_orbit` 首参为 `DesignOrbitRequest`**（散字段不再支持），Facade 校验请求；`duration` 由面板年单位换算为秒，Lissajous 固定注入 segmented 修正。
-- **结果 DTO（Data Transfer Object）**：可跨线程边界传递的纯数据类，不持有 e2m2e 对象引用。包含 numpy 数组（状态矩阵、时间向量）、标量元数据与 `record_id`（入库回执）。
-- **异常翻译**：e2m2e 异常 → 结构化错误码 + 用户友好消息（`src/engine/exceptions.py`）；Facade 接缝的 `e2m2e.api.OrbitError` 透传错误码。
+- 周期族成员只携带初态与周期，桥接层按周期重采样供画布渲染，catalog 族记录复用同一辅助函数。
+- e2m2e 5.6.5 起 `design_orbit` 首参为 `DesignOrbitRequest`。`duration` 由面板的年单位换算为秒，Lissajous 固定注入分段修正。
+- 异常统一翻成结构化错误码与用户消息，例如 `CORRECTION_DIVERGED`、`PROPAGATION_FAILED`、`BACKEND_UNAVAILABLE`、`KERNEL_NOT_FOUND`、`INVALID_PARAMS`。原则是不伪造成功。
 
 ### CatalogService
 
-轨道库的 GUI 语义层（`catalog_service.py`）：摘要 → Artifact 映射（清单）、`catalog_get` 懒加载填充（design 双段 / family 成员堆叠与重采样 / control 星历减 μ）、标注 / 提升 / 导出 / 删除转发。GUI 测试用桩 bridge 或小型真实库，不重测上游。
+轨道库的 GUI 语义层，负责摘要到 Artifact 的映射、`catalog_get` 懒加载填充、标注、提升、导出与删除转发。design 记录按双段填充，family 记录按成员堆叠并重采样，control 记录减去 μ。GUI 测试用桩 bridge 或小型真实库，不重测上游。
 
-### Workers
-
-（原 QThread Worker 机制已随 PyQt UI 一并移除：计算任务经 Tauri command →
-sidecar 子进程完成，线程管理由 Rust tokio 承担。）
 ## 前端与 Rust 壳
 
-组件级说明见源码：`frontend/src/`（App 三栏布局、ParamsPanel schema 表单、
-OrbitCanvas Three.js 画布、CatalogFilterBar、助手边栏（assistant/：
-AssistantSidebar、ChatView、SessionSwitcher、ToolCardView）、i18n、
-chartSettings）与 `src-tauri/src/`（sidecar 模块、assistant 模块、mcp.rs、
-cmd.rs、state.rs、project.rs）。
+前端组件说明见源码。`App.tsx` 组织顶栏、SOP 步骤带、侧边栏、文档标签、参数停靠、助手边栏与时间轴。`ParamsPanel` 按 schema 生成表单，`OrbitCanvas` 负责 Three.js 画布，`CatalogFilterBar` 与 `RecordDetailPanel` 服务轨道库，`assistant/` 下是助手边栏、对话流、会话切换与工具卡片。界面语言固定为简体中文，词典只有一份中文 `Record<string, string>`（ADR 0031）。
 
-i18n 机制保留、覆盖随缘——新 UI 文案不强制过 `t()`（双语覆盖面拍板见
-#415：不承诺组件文案全量双语）。
+Rust 壳的模块划分见顶层结构。`sidecar/` 管帧与进程，`assistant/` 管 pi RPC，`mcp.rs` 是 MCP 客户端，`cmd.rs` 暴露 Tauri command，`state.rs` 持有 managed state，`update.rs` 管更新检查。
 
-## 依赖方向规则
+## 依赖方向
 
-界面链路（单向，无环）：
+界面链路单向，无环。
 
-```
-frontend/    →  @tauri-apps/api（IPC）   # 前端不直接 import e2m2e，不碰进程
-src-tauri/   →  tokio 子进程 + stdio 协议 # Rust 壳只做编排，不做轨道力学
-sidecar      →  e2m2e Facade              # 算法只进 sidecar
-```
+| 调用方 | 被调用方 | 约束 |
+|---|---|---|
+| `frontend/` | `@tauri-apps/api` | 前端不直接 import e2m2e，不碰进程 |
+| `src-tauri/` | sidecar stdio 协议 | Rust 壳只做编排，不做轨道力学 |
+| sidecar | e2m2e Facade | 算法只进 sidecar |
 
-Python 领域层（供脚本与测试使用，不在界面链路上；唯一例外：
-`scripts/download_kernels.py` 使用 commons.kernels）：
+Python 领域层供脚本与测试使用，不在界面链路上。唯一例外是 `scripts/download_kernels.py` 使用 `src/commons/kernels.py`。
 
-```
-src/engine/  →  src/model/（仅 Artifact/Project 类型）+ src/commons/ + e2m2e
-src/model/   →  numpy（纯数据）
-src/commons/ → 无内部依赖（commons 是叶子，只被上层引用）
-```
+| 模块 | 允许依赖 |
+|---|---|
+| `src/engine/` | `src/model/` 的 Artifact 与 Project 类型、`src/commons/`、e2m2e |
+| `src/model/` | numpy |
+| `src/commons/` | 无内部依赖，是叶子 |
 
-**硬规则**：
+硬规则：
 
 1. `src/model/` 不 import `src/engine/`。
-2. `src/engine/` 不 import 任何 GUI 框架（Qt 依赖已随 PyQt UI 移除）。
-3. `src/commons/` 是叶子：只被上层引用，自身不引用 `src/model/`、`src/engine/`。
-4. 前端与 Rust 壳不 import e2m2e 或 `src/`：界面要算的东西一律走 sidecar 协议。
+2. `src/engine/` 不 import 任何 GUI 框架。
+3. `src/commons/` 只被上层引用，自身不引用 `src/model/` 或 `src/engine/`。
+4. 前端与 Rust 壳不 import e2m2e 或 `src/`。界面需要的计算一律走 sidecar 协议。
 
 ## 跨层硬契约
 
-以下五条跨层不变量违反即坏，改动前先看对应的实现或注释：
+以下五条跨层不变量违反即坏，改动前先看对应实现或注释。
 
-1. `import e2m2e` 之前必须把内核目录写入 `SPICE_KERNEL_DIR`（见 `src-tauri/src/lib.rs` 的 setup 与 `tests/conftest.py`）。
-2. 单位换算的唯一来源是 `src/commons/units.py`（`DU_KM=384400`，`TU_SECONDS≈375190.26`，由 e2m2e 模板常量导出），不得另立换算常量。前端的 TU 有两种口径，见 `frontend/src/paramOverlay/index.ts` 的注释。
+1. `import e2m2e` 之前必须把内核目录写入 `SPICE_KERNEL_DIR`，见 `src-tauri/src/lib.rs` 的 setup 与 `tests/conftest.py`。
+2. 单位换算的唯一来源是 `src/commons/units.py`。`DU_KM=384400`，`TU_SECONDS≈375190.26`（约 4.3425 天），由 e2m2e 模板常量导出。不得另立换算常量。前端的 TU 有两种口径，见 `frontend/src/paramOverlay/index.ts` 的注释。
 3. 时间的唯一绝对基准是 et 秒（J2000 TDB），`frontend/src/timeBasis.ts` 是换算的唯一出口（ADR 0021）。
-4. 质心归一（画布）与地心归一（算法层）的换算点是 `centroid_normalized_states`（减 μ）。理想化会合系到惯性系的旋转在 `viz_adapter` 与 `trajectoryParsing` 两处必须同口径（#477、#521，`cr3bp` 已不含旋转实现）。
-5. `serde_json` 的 `preserve_order` 不能关，二进制帧的帧序依赖它（见 `src-tauri/Cargo.toml` 的注释）。
+4. 质心归一（画布）与地心归一（算法层）的换算点是 `centroid_normalized_states`（减 μ）。理想化会合系到惯性系的旋转在 `viz_adapter` 与 `trajectoryParsing` 两处必须同口径。
+5. `serde_json` 的 `preserve_order` 不能关，二进制帧的帧序依赖它，见 `src-tauri/Cargo.toml` 的注释。
 
 ## 可视化架构
 
-画布为 Three.js（`frontend/src/OrbitCanvas.tsx`），单一坐标系：会合系（质心
-归一化），物理单位（km）数据经单位归一入画。内容分**结果层**与**固定层**
-双层（CONTEXT.md 领域语义）：
+画布是 Three.js 单一坐标系视图，数据以会合系质心归一化坐标入画。画布内容分结果层与固定层，另有不参与取景适配的参照层。
 
 ```
-WebGLRenderer + OrbitControls（旋转/缩放/平移）
-└── Scene
-    ├── 参照层（不参与取景适配）：坐标轴与网格、地月空间分区图层
-    │   （regionLayer.ts，e2m2e spatiography_boundaries 几何）
-    └── content Group（固定层在前、结果层在后）
-        ├── 轨迹线（THREE.Line + BufferAttribute，按数据源直达或重采样）
-        ├── 地球 / 月球（NASA 贴图 + Phong 光照与晨昏线，真实半径比例）
-        └── L1 / L2 平动点（Sphere + 文字 Sprite）
+Scene
+├── 参照层：坐标轴与网格、地月空间分区图层
+└── content Group
+    ├── 固定层轨迹
+    ├── 结果层轨迹
+    ├── 地球与月球（NASA 贴图、Phong 光照、真实半径比例）
+    └── L1、L2 平动点
 ```
 
-渲染数据多条来路：族生成响应的成员初态经前端 CR3BP 传播器
-（`frontend/src/cr3bp.ts`，方程对齐 e2m2e，有回归测试）按 period 重采样整条
-轨迹；轨道库记录经 `catalog_get` 取成员 xyz 进固定层；工具结果的轨迹数组
-（含转移弧、星历段）经 `trajectoryParsing.ts` 按响应结构解析，位置按「et 秒 /
-历元 UTC」两级时刻基准（timeBasis.ts）对齐时间轴。新轨迹数据到达时自动
-适配一次（按包围盒复位相机，5% 余量），此后重绘与设置变更保持用户视角
-（视图保持）。
+轨迹数据有多条来路。族生成响应的成员初态经前端 CR3BP 传播器按周期重采样整条轨迹。轨道库记录经 `catalog_get` 取成员数据进固定层。工具结果含转移弧与星历段，由 `trajectoryParsing.ts` 按响应结构解析，物理 km 数据除以 `DU_KM` 归一后入画，时刻按 et 秒或历元 UTC 两级基准对齐时间轴。新轨迹到达时自动适配一次，此后重绘与设置变更保持用户视角。
 
-配色：携带 Jacobi 常数的轨迹按当前取值范围归一后 coolwarm 着色（附颜色条），
-无值轨迹回退颜色循环（seaborn muted，chartSettings 可改）；图例逐条标注轨迹
-数据系（会合无量纲 / 会合物理 km / 地心惯性 km，随轨迹解析层携带）。动画导出
-经 captureStream + MediaRecorder 编码 webm（画布自转 8 秒），不引入编码依赖。
+配色上，携带 Jacobi 常数的轨迹按当前取值范围归一后以 coolwarm 色带着色，附图例与颜色条。无值轨迹回退颜色循环。图例逐条标注数据系（会合无量纲、会合物理 km、地心惯性 km），数据系由解析层携带，不随视图选择改变。动画导出经 captureStream 与 MediaRecorder 编码 webm，不引入编码依赖。
 
 ## 管线串联
 
-产物间的因果关系经轨道库谱系指针持久化（重启不断）：下游产物记录
-`source_record_id`，重启后由 `catalog_query` + `catalog_get` 恢复清单与轨迹。
-全部任务工具的界面已接通（issue #398 已关闭；轨道稳定性后因上游 placeholder 状态移出注册表，#416）：族生成 → 入库 → 浏览叠加的链路可用，选中产物 → 发起下游工具的输入引用经谱系记录衔接。
+产物间的因果关系经轨道库谱系指针持久化。下游产物记录 `source_record_id`，重启后由 `catalog_query` 与 `catalog_get` 恢复清单与轨迹。族生成、入库、浏览叠加的链路可用，选中产物可以发起下游工具，输入引用经谱系记录衔接。上游记录被删时谱系断链，产物本身仍可用，界面显示降级标记。
 
-## 工具范围（当前）
+## 工具范围
 
-中栏工具面板接通 8 个工具：轨道族生成、任务轨道设计、参数空间扫描（catalog_sweep）、轨道保持、轨道预报、转移轨道设计、时空坐标转换、分区边界（spatiography_boundaries，产出进画布区域图层；前端 `TOOL_REGISTRY` 注册，经通用 `run_tool` 通道下发；轨道稳定性已随上游整体移除，5.9.8 起算法层模块 `e2m2e.algorithm.stability` 整体删除）。21 个工具 schema（6 个 catalog 操作、5 个分区解析工具、6 个核心计算工具、2 个无参查询工具 valid_ranges / catalog_terminology，以及 5.9.8 新增的任务级工具 low_thrust_preliminary / mission_architecture_search，不进 GUI 表单）已全部导出，catalog 操作的界面分布：query/get 服务目录浏览与轨迹叠加，sweep 在工具面板，delete 在项目树右键菜单，export 在筛选栏“导出包”，tag 在记录详情面板（catalog_promote 已随一轨一记录移除）。AI 助手经 mcp-serve 调用同一套 e2m2e 工具，不受注册表限制。
-原则不变：不承诺 GUI 承载 e2m2e 全部算法能力，需要脚本化工作流时直接使用
-[e2m2e CLI](https://github.com/cislunarspace/CODE-core)。
+左侧工具列表接通八个工具：轨道族生成、任务轨道设计、参数空间扫描、轨道保持、轨道预报、转移轨道设计、时空坐标转换、分区边界。前七个工具的结果入轨道库，分区边界产出进画布区域图层，不入库。工具由前端 `TOOL_REGISTRY` 注册，经通用 `run_tool` 通道下发 sidecar。
+
+21 个工具 schema 已全部导出，包括 6 个 catalog 操作、5 个分区解析工具、6 个核心计算工具、2 个无参查询工具与 2 个任务级工具。任务级工具 `low_thrust_preliminary` 与 `mission_architecture_search` 不进 GUI 表单，留档供 AI 助手链路。catalog 操作的界面分布是：query 与 get 服务轨道库浏览与轨迹叠加，sweep 在左侧工具列表，delete 在项目树右键菜单，export 在过滤栏，tag 在记录详情面板。AI 助手经 mcp-serve 调用同一套 e2m2e 工具，不受注册表限制。
+
+GUI 不承诺承载 e2m2e 的全部算法能力。需要脚本化工作流时直接使用 [e2m2e CLI](https://github.com/cislunarspace/CODE-core)。
 
 ## 分发
 
-发行版为 Windows NSIS 安装器（currentUser 免管理员）与 MSI，以及 Linux
-（amd64/aarch64）AppImage/deb/rpm：
-Tauri 主程序 + `cislunar-code-sidecar`（PyInstaller onefile 打包的
-e2m2e serve-stdio，`packaging/cislunar_code_sidecar.spec`）+ SPICE
-内核（含行星历，随 Git LFS 入库），三者经 resources 映射进安装目录。分发期
-Rust 壳从 resource 目录拉起 sidecar（`packaged_sidecar_command`），cwd 指向
-resource 根，e2m2e Config 的 `kernels/` 按 cwd 相对解析（可用
-`SPICE_KERNEL_DIR` 覆盖）；轨道库目录不看 cwd，启动时由壳显式注入用户配置
-目录（`configure_catalog_env`，#491），预设 `E2M2E_CATALOG_DIR` 时以预设为准。
-桌面端自动更新经
-`@tauri-apps/plugin-updater` 基于 GitHub Releases 的 latest.json（ADR 0018）。
-发布管线见 `.github/workflows/release.yml`（tag `v*` 触发：元数据校验 →
-lint → 测试 → Windows NSIS+MSI 与 Linux（amd64/aarch64）AppImage/deb/rpm
-构建，各构建作业直传 GitHub Release → 收尾作业核对产物数量、生成
-`checksums.txt` 与签名更新清单 latest.json 后回传）。版本 bump 时
-`pyproject.toml`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`（
-AboutModal 读运行时版本）与 `frontend/package.json` 四处及 CHANGELOG 小节
-同步修改，`packaging/scripts/validate-release.sh` 在发布期把关一致。
+发行版包括 Windows NSIS 安装器（currentUser 免管理员）与 MSI，以及 Linux amd64、aarch64 的 AppImage、deb 与 rpm。安装目录包含 Tauri 主程序、`cislunar-code-sidecar` 与 SPICE 内核。sidecar 由 PyInstaller onefile 打包，spec 为 `packaging/cislunar_code_sidecar.spec`，datas 逐包收 e2m2e 与 R2S2 星历。内核随 Git LFS 入库，安装包也随带。
 
-## 依赖
+分发期 Rust 壳从 resource 目录拉起 sidecar，cwd 指向 resource 根，e2m2e Config 的 `kernels/` 按 cwd 相对解析，可用 `SPICE_KERNEL_DIR` 覆盖。轨道库目录不看 cwd，启动时由 `configure_catalog_env` 注入用户配置目录，预设 `E2M2E_CATALOG_DIR` 时以预设为准。
 
-- **运行时**：numpy, scipy（Python 领域层）；Rust/Tauri 2 + Node/Vite（前端与壳，各自锁文件管理）
-- **e2m2e**：PyPI 依赖（`e2m2e[mcp]>=5.9.0`：#522/#525/#526 sidecar 契约、
-  5.8.10 state_frame 数据系标注、5.9.0 分区解析三工具；`[mcp]` extra 供 mcp-serve，
-  ADR 0023）；界面链路经 serve-stdio 直连 Facade，`src/engine/facade_bridge.py` 供脚本与测试
-- **calcephpy**：经 e2m2e→r2s2 传递依赖（Windows 用预编译 wheel，见 `pyproject.toml` 的 `[tool.uv.sources]`）
-- **打包**：PyInstaller（sidecar onefile）+ cargo-tauri（NSIS 安装器）
+桌面端自动更新经 `@tauri-apps/plugin-updater` 基于 GitHub Releases 的 `latest-code.json`（ADR 0018，文件名断代见 ADR 0033）。发布管线在 `.github/workflows/release.yml`，由 `v*` tag 触发，依次做元数据校验、lint、测试、三平台构建、资产直传、产物数量核对、`checksums.txt` 与更新清单生成。版本 bump 时同步修改 `pyproject.toml`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`、`frontend/package.json` 四处与 CHANGELOG 小节，`packaging/scripts/validate-release.sh` 在发布期把关一致。
 
 ## 测试策略
 
 | 层级 | 测试类型 | 覆盖目标 |
 |---|---|---|
-| model/ | 单元测试 | Artifact CRUD、Project 查询、Discovery 扫描 |
-| engine/ | 集成测试 | FacadeBridge → e2m2e（真实参数模型签名）、持久化落盘、异常翻译 |
-| commons/ | 单元测试 | 单位换算、内核下载/可用性判断、路径探测 |
-| frontend/ | 单元测试（vitest） | CR3BP 传播器（对齐 e2m2e 方程的回归）、轨迹解析/时刻基准、助手会话模型、区域图层、Jacobi 色标等 |
-| src-tauri/ | 单元 + 集成（cargo test） | 帧解析、sidecar 拉起/崩溃自愈、真实子进程协议往返 |
+| `src/model/` | 单元测试 | Artifact CRUD、Project 查询 |
+| `src/engine/` | 集成测试 | FacadeBridge 到 e2m2e、catalog 读写、异常翻译 |
+| `src/commons/` | 单元测试 | 单位换算、内核下载与可用性判断、路径探测 |
+| `frontend/` | 单元测试（vitest） | CR3BP 传播器、轨迹解析与时刻基准、助手会话模型、区域图层、Jacobi 色标 |
+| `src-tauri/` | 单元与集成测试（cargo test） | 帧解析、sidecar 拉起与崩溃自愈、真实子进程协议往返 |
 
-e2m2e 本身已通过其自身测试套件验证，tod 不重复测试 e2m2e 的计算正确性。tod 的测试关注界面行为、协议与数据流。
+CI 只跑 Python 测试与静态检查。Rust 与前端测试需要在本地跑。e2m2e 自身已通过其测试套件验证，CODE 不重复测试 e2m2e 的计算正确性。CODE 的测试关注界面行为、协议与数据流。
+
+## 依赖
+
+- 运行时：numpy、scipy 供 Python 领域层使用。Rust 侧为 Tauri 2，前端为 Node、Vite 与 Three.js，各自用锁文件管理。
+- e2m2e：`e2m2e[mcp]>=5.9.8`。`[mcp]` extra 供 mcp-serve 使用（ADR 0023）。界面链路经 serve-stdio 直连 Facade，`src/engine/facade_bridge.py` 供脚本与测试使用。
+- calcephpy：经 e2m2e 到 r2s2 的传递依赖。Windows 使用预编译 wheel，见 `pyproject.toml` 的 `[tool.uv.sources]`。
+- 打包：PyInstaller 产 sidecar onefile，cargo-tauri 产 NSIS 安装器。pi 固定版本随包分发，版本号在 `release.yml` 的 env 中维护。
