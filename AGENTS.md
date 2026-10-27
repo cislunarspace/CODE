@@ -2,7 +2,7 @@
 
 本文件只放写作要求、编码准则与工程技能配置。仓库的技术与流程细节在下列文件里，动手前按需读：
 
-- README.md：安装、开发环境、SPICE 内核、测试与代码标准。
+- README.md：安装与更新、快速开始、能力、数据与产物、开发与测试。
 - CONTRIBUTING.md：提 issue 与 PR 的流程、评审与评论纪律、正文写作约定、标签体系、Project 面板。
 - docs/architecture/architecture.md：分层、数据流、顶层结构、依赖方向规则、跨层硬契约。
 - docs/development.md：文档标准、日志、代码与测试标准、工具链约束。

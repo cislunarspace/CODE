@@ -20,4 +20,4 @@ uv sync --extra docs
 uv run sphinx-build -b html -D language=zh docs/source docs/build/html/zh
 ```
 
-`docs/build/` 和 `.mo` 文件均为构建产物，不提交到仓库。
+构建完成后打开 `docs/build/html/zh/index.html`。`docs/build/` 和 `.mo` 文件均为构建产物，不提交到仓库。

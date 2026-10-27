@@ -47,7 +47,7 @@ def load_orbit(path: Path) -> dict:
     """
 ```
 
-`main()` 和 `parse_args()` 也需要 docstring：`parse_args()` 说明返回解析后的命名空间；`main()` 说明执行完整脚本流程且通常不返回值。私有 helper 可以使用较短 docstring，但仍应说明单位、边界或失败条件。
+`main()` 和 `parse_args()` 也需要 docstring。`parse_args()` 说明返回解析后的命名空间。`main()` 说明执行完整脚本流程且通常不返回值。私有 helper 可以使用较短 docstring，但仍应说明单位、边界或失败条件。
 
 ### CLI help 文本（工具脚本）
 
@@ -63,28 +63,25 @@ parser.add_argument(
 )
 ```
 
-无量纲 CR3BP 参数应注明为无量纲；角度单位写 rad 或度；时间单位写 TU、天或秒。布尔开关说明开启后的行为。
+无量纲 CR3BP 参数应注明为无量纲。角度单位写 rad 或度。时间单位写 TU、天或秒。布尔开关说明开启后的行为。
 
 ### 国际化
 
-界面 i18n 在前端 `frontend/src/i18n.ts`：中英两份字符串字典，`t(key)` 取用，
-语言选择存 localStorage、重启保留。新增界面文本时同步向两个字典各加一条键值；
-新增语种则追加一份字典。（PyQt 时代的 `tools/update_i18n.py` 与 `src/app/i18n/`
-已随旧 UI 删除。）
+界面语言固定为简体中文（ADR 0031），不提供切换。词典在 `frontend/src/i18n.tsx`，只有一份中文 `Record<string, string>`。新增界面文本应经 `t(key)` 取用，存量硬编码逐步迁移。`t` 对缺失键返回键名本身，让漏配在开发期直接暴露。新增界面文本时只向这一份词典加键值，不新增英文条目或语种分支。`<html lang>` 恒为 `zh-CN`。专业名词、工具名、字段名与科学缩写按领域惯例保留原文，不算翻译对象。
 
 ### Sphinx 文档
 
 Sphinx 源文件位于 `docs/source/`，叙事文档通过 MyST Markdown 接入。
 
 ```bash
-uv run --extra docs python -m sphinx -b html docs/source docs/build/html
+uv run --extra docs python -m sphinx -b html docs/source docs/build/html/zh
 ```
 
 提交前应至少确认构建无 ERROR，并尽量清理 WARNING。若新增/删除叙事页面，请在 `docs/source/index.rst` 的对应 toctree 中增删条目。
 
 ### README
 
-- `README.md` 为中文主文档（双语机制已撤销）。
+- `README.md` 为中文主文档，不维护双语版本。
 - 代码块、命令、路径、模块名一律不翻译。
 
 ## 日志与打印
@@ -101,7 +98,7 @@ uv run --extra docs python -m sphinx -b html docs/source docs/build/html
 | `ERROR` | 40 | 错误 |
 | `CRITICAL` | 50 | 严重错误 |
 
-默认日志级别为 `WARNING`，只有更高级别的日志会输出。
+默认日志级别为 `WARNING`，只输出 `WARNING` 及以上的日志。脚本入口常按上节示例设为 `INFO`。
 
 ### 使用标准
 
@@ -124,31 +121,23 @@ logger = logging.getLogger(__name__)
 
 ### 调试模式
 
-运行脚本时设置环境变量可临时调整日志级别：
-
-```bash
-# 显示 INFO 及以上
-set PYTHONLOGLEVEL=INFO
-
-# 显示所有日志（包括 DEBUG）
-set PYTHONLOGLEVEL=DEBUG
-```
+日志级别由入口模块的 `logging.basicConfig(level=...)` 决定。临时排查时把该行改为 `logging.DEBUG`，排查完还原。库代码不自行配置 root logger，级别由调用方决定。
 
 ## 代码标准
 
-- 语言。文档、注释、docstring 用中文，命令、路径、代码标识符不翻译，项目文档不使用「」这类直角引号。`src/` 的每个生产模块必须有模块级 docstring，函数与类的 docstring 用 Google style。脚本的输出走 `logging` 不走 `print`，CLI help 要回答参数控制什么、默认值、单位三问。
+- 语言。文档、注释、docstring 用中文，命令、路径、代码标识符不翻译，项目文档不使用直角引号。`src/` 的每个生产模块必须有模块级 docstring，函数与类的 docstring 用 Google style。脚本的输出走 `logging` 不走 `print`，CLI help 要回答参数控制什么、默认值、单位三问。
 - 格式。行尾与缩进由 `.editorconfig` 给定（Python 4 空格，YAML/JSON/TOML 2 空格，LF）。ruff 行长 100，`tests/`、`docs/`、`scripts/`、`tools/` 不做行长检查。TypeScript 走 strict 模式（`tsc -b`）。前端没有 prettier 与 eslint，Rust 没有 rustfmt 与 clippy 配置，不要引入格式化重排制造噪音 diff。
 - 命名。Python 模块与函数用 `snake_case`，类用 `PascalCase`，结果 DTO 带 `…ResultData` 后缀，常量用 `UPPER_SNAKE`。Rust 类型用 `PascalCase`，常量用 `SCREAMING_SNAKE`，文件头的 `//!` 重在讲为什么。TypeScript 组件是 `PascalCase.tsx`，逻辑模块是 `camelCase.ts`。
 - 跨 IPC 的 struct 用 `#[serde(rename_all = "camelCase")]`，例外是 `EphemerisSegment`，它故意保持 snake_case，与 e2m2e 的 `EphemerisTable` 同形以便共用解析。发给 sidecar 的 `arguments` 保持 snake_case，用 e2m2e request 的字段原名。
 - 错误处理。Python 统一用 `OrbitError(code, message, cause)`，`translate_exception` 把 e2m2e 异常翻成 `CORRECTION_DIVERGED`、`PROPAGATION_FAILED`、`BACKEND_UNAVAILABLE`、`KERNEL_NOT_FOUND`、`INVALID_PARAMS` 等错误码。Rust 内部用 `anyhow`，跨 IPC 返回 `Result<T, String>`。前端用 `formatToolError` 配合 antd toast 与表单内联标红。原则是不伪造成功，坏文件明确报错（`scenario.ts:parseScenario`），可选数据可以软失败降级（如 `moonTrackFromResponse` 返回 null）。
 - 异步。Python 纯同步，不用 asyncio。Rust 用 tokio，配合 mpsc 与 oneshot，sidecar 单任务串行，MCP 按 id 多路复用并发，进程级配置经 `OnceLock` 在 app setup 注入。前端用 async/await，Tauri API 动态 import，在 effect 里处理竞态取消。
-- 依赖注入与状态。Rust 用 Tauri managed state（`SidecarState`、`ProjectState`、`AssistantState`）加 `State<'_>`。Python 用构造器注入（`FacadeBridge(kernel_dir, catalog_dir)`、`CatalogService(bridge)`）。前端没有 store 库，`App.tsx` 用单组件 `useState` 集中管理状态，持久化走 `localStorage` 的 `tod-*` 键。
+- 依赖注入与状态。Rust 用 Tauri 托管状态（`SidecarState`、`ProjectState`、`AssistantState`）加 `State<'_>`。Python 用构造器注入（`FacadeBridge(kernel_dir, catalog_dir)`、`CatalogService(bridge)`）。前端没有 store 库，`App.tsx` 用单组件 `useState` 集中管理状态，持久化走 `localStorage` 的 `tod-*` 键。
 
 ## 测试标准
 
-- 三套栈并存：pytest（`tests/`）、cargo test（`src-tauri/tests/` 加源文件尾的 `#[cfg(test)]`）、vitest（`frontend/src/` 同目录的 `*.test.ts(x)`）。命令见 README 的测试与代码标准一节。
+- 三套栈并存：pytest（`tests/`）、cargo test（`src-tauri/tests/` 加源文件尾的 `#[cfg(test)]`）、vitest（`frontend/src/` 同目录的 `*.test.ts(x)`）。命令见 README 的测试与静态检查一节。
 - marker 只有 `spice`（需要 SPICE 内核真算）与 `slow`。日常跑 `-m "not spice"`，真路径冒烟用 `uv run pytest tests/engine/test_facade_bridge_e2m2e_smoke.py -m spice`。
-- CI 只跑 Python（`-m "not spice"`）。cargo test 与 npm test 不在任何 workflow 里，改 Rust 或前端必须本地跑对应测试。Rust 侧没有 Python 环境时用 `cargo test --manifest-path src-tauri/Cargo.toml -- --skip sidecar`。`assistant_pi_rpc` 用例依赖本仓 uv 环境（`uv run python` 拉起 fake 服务端，缺 uv 时自动跳过并打印原因，见 #502），必须串行跑。
+- CI 只跑 Python 测试与静态检查（pytest `-m "not spice"`，外加 ruff 与 pyright）。cargo test 与 npm test 不在任何 workflow 里，改 Rust 或前端必须本地跑对应测试。Rust 侧没有 Python 环境时用 `cargo test --manifest-path src-tauri/Cargo.toml -- --skip sidecar`。`assistant_pi_rpc` 用例依赖本仓 uv 环境（`uv run python` 拉起 fake 服务端，缺 uv 时自动跳过并打印原因，见 #502），必须串行跑。
 - 命名与组织。Python 用 `test_<module>.py` 镜像 `src/` 的布局，方法名是 `test_<行为>_<期望>`。前端 `describe` 与 `it` 用中文并带 issue 号。Rust 集成测试一文件一主题，放在 `src-tauri/tests/`，golden 夹具在 `src-tauri/tests/fixtures/`。
 - 断言。标量用 `pytest.approx`，数组用 `np.testing.assert_allclose`（atol 1e-6 量级），Rust 的 f32 容差取 1e-6。随机数不设种子，不断言随机值，只断言形状或由输入推导出的期望。
 - 共享设施。`tests/conftest.py` 注入 `SPICE_KERNEL_DIR`、Agg 后端与隔离的 `CATALOG_DIR`，`tests/engine/conftest.py` 提供 fake e2m2e 结果族与 `mock_design_orbit`。打包冒烟 `scripts/smoke_mcp_serve.py`（release 发布闸）与 `scripts/smoke_pi_rpc.py`（pi RPC 链路）在手工或发布期跑，不进测试套件。
